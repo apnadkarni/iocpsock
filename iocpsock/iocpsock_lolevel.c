@@ -1906,7 +1906,6 @@ HandleIo (
 	    }
 	}
     }
-    return;
 }
 
 /*
@@ -2058,7 +2057,10 @@ IocpLLCreate ()
 BOOL 
 IocpLLDestroy (
     LPLLIST ll)
-{   
+{
+    if (!ll) {
+	return FALSE;
+    }
     DeleteCriticalSection(&ll->lock);
     return IocpFree(ll);
 }
