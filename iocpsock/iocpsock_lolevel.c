@@ -1530,8 +1530,9 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	 * See
 	 * http://support.microsoft.com/default.aspx?scid=kb;en-us;Q315669
 	 * http://www.microsoft.com/windows2000/techinfo/howitworks/communications/networkbasics/tcpip_implement.asp
-	 * for how to slowdown NFD.sys with SynAttackProtect.  Use the
-	 * second link for registry key details.
+	 * for how to slowdown AFD.sys with SynAttackProtect.  Use the
+	 * second link for registry key details.  I highly recommend
+	 * a SynAttackProtect setting that is not zero.
 	 */
 
 	 /*
