@@ -1,4 +1,4 @@
-iocpsock.dll -- ver 0.99 a/k/a "release candidate" (11:23 AM 3/1/2003)
+iocpsock.dll -- ver 1.0 a/k/a "it's done!" (10:36 PM 4/29/2003)
 
 http://sf.net/project/showfiles.php?group_id=73356
 http://sf.net/projects/iocpsock
@@ -62,6 +62,10 @@ address.
   A: Yes.  Just Win2K and WinXP.  It might work on NT4, though.  It
      can't work any of the Win9x flavors because completion ports are
      an operating system feature of NT.
+
+* CHANGES from 0.99:
+  - [read] bug fixed where if the there was nothing to read, bytes read
+    returned zero bytes rather than -1 with EAGAIN, oops.
 
 * CHANGES from 0.5:
   - *ALL* resource leaks plugged.
