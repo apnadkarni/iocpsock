@@ -812,8 +812,8 @@ IocpCloseProc (
 
 	if (infoPtr->proto->type == SOCK_STREAM) {
 	    WSAerr = winSock.WSASendDisconnect(infoPtr->socket, NULL);
-	    if (WSAerr) {
-		IocpWinConvertWSAError(WSAerr);
+	    if (WSAerr == SOCKET_ERROR) {
+		IocpWinConvertWSAError(winSock.WSAGetLastError());
 		errorCode = Tcl_GetErrno();
 	    }
 	}
