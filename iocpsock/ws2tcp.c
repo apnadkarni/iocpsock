@@ -7,6 +7,8 @@ static WS2ProtocolData tcp4ProtoData = {
     sizeof(SOCKADDR_IN),
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -15,6 +17,8 @@ static WS2ProtocolData tcp6ProtoData = {
     SOCK_STREAM,
     IPPROTO_TCP,
     sizeof(SOCKADDR_IN6),
+    NULL,
+    NULL,
     NULL,
     NULL,
     NULL
@@ -222,23 +226,36 @@ CreateTcpSocket(
     if (pdata->AcceptEx == NULL) {
 	/* Get the LSP specific functions. */
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-		&gAcceptExGuid, sizeof(GUID),
+		&AcceptExGuid, sizeof(GUID), 
 		&pdata->AcceptEx,
 		sizeof(pdata->AcceptEx),
 		&bytes, NULL, NULL);
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-               &gGetAcceptExSockaddrsGuid, sizeof(GUID),
+               &GetAcceptExSockaddrsGuid, sizeof(GUID),
                &pdata->GetAcceptExSockaddrs,
 	       sizeof(pdata->GetAcceptExSockaddrs),
                &bytes, NULL, NULL);
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-               &gConnectExGuid, sizeof(GUID),
+               &ConnectExGuid, sizeof(GUID),
                &pdata->ConnectEx,
 	       sizeof(pdata->ConnectEx),
                &bytes, NULL, NULL);
 	if (pdata->ConnectEx == NULL) {
 	    pdata->ConnectEx = OurConnectEx;
 	}
+        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+               &DisconnectExGuid, sizeof(GUID),
+               &pdata->DisconnectEx,
+	       sizeof(pdata->DisconnectEx),
+               &bytes, NULL, NULL);
+	if (pdata->DisconnectEx == NULL) {
+	    pdata->DisconnectEx = NULL;
+	}
+        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+               &TransmitFileGuid, sizeof(GUID),
+               &pdata->TransmitFile,
+	       sizeof(pdata->TransmitFile),
+               &bytes, NULL, NULL);
     }
 
     /*

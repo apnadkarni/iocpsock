@@ -8,5 +8,7 @@ static WS2ProtocolData isoProtoData = {
     sizeof(SOCKADDR_TP),
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };

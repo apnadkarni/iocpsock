@@ -88,6 +88,9 @@ typedef struct {
     LPFN_WSAHTONS	    WSAHtons;
     LPFN_WSAIOCTL	    WSAIoctl;
     LPFN_WSAJOINLEAF	    WSAJoinLeaf;
+    LPFN_WSALOOKUPSERVICEBEGINA	WSALookupServiceBeginA;
+    LPFN_WSALOOKUPSERVICEEND	WSALookupServiceEnd;
+    LPFN_WSALOOKUPSERVICENEXTA	WSALookupServiceNextA;
     LPFN_WSANTOHL	    WSANtohl;
     LPFN_WSANTOHS	    WSANtohs;
     LPFN_WSAPROVIDERCONFIGCHANGE WSAProviderConfigChange;
@@ -147,6 +150,14 @@ typedef struct {
     LPFN_ACCEPTEX		AcceptEx;
     LPFN_GETACCEPTEXSOCKADDRS	GetAcceptExSockaddrs;
     LPFN_CONNECTEX		ConnectEx;
+    LPFN_DISCONNECTEX		DisconnectEx;
+    LPFN_TRANSMITFILE		TransmitFile;
+    /* The only caveat of using this TransmitFile extension API is that
+       on Windows NT Workstation or Windows 2000 Professional only two
+       requests will be processed at a time. You must be running on
+       Windows NT or Windows 2000 Server, Windows 2000 Advanced Server,
+       or Windows 2000 Data Center to get full usage of this specialized
+       APIs. */
 
 } WS2ProtocolData;
 
@@ -154,9 +165,11 @@ typedef struct {
  * GUIDs used for the WSAIoctl call to get the function address from the
  * LSP.
  */
-extern GUID gAcceptExGuid;		/* AcceptEx() */
-extern GUID gGetAcceptExSockaddrsGuid;	/* GetAcceptExSockaddrs() */
-extern GUID gConnectExGuid;		/* ConnectEx() */
+extern GUID AcceptExGuid;		/* AcceptEx() */
+extern GUID GetAcceptExSockaddrsGuid;	/* GetAcceptExSockaddrs() */
+extern GUID ConnectExGuid;		/* ConnectEx() */
+extern GUID DisconnectExGuid;		/* DisconnectEx() */
+extern GUID TransmitFileGuid;		/* TransmitFile() */
 
 /* Linked-List node object. */
 struct _ListNode;
@@ -194,8 +207,10 @@ typedef struct _BufferInfo {
 #   define OP_ACCEPT	0   /* AcceptEx() */
 #   define OP_READ	1   /* WSARecv()/WSARecvFrom() */
 #   define OP_WRITE	2   /* WSASend()/WSASendTo() */
-#   define OP_CONNECT	3   /* ConnectEx */
-#   define OP_LOOKUP	4   /* TODO: For future use */
+#   define OP_CONNECT	3   /* ConnectEx() */
+#   define OP_DISCONNECT 4  /* DisconnectEx() */
+#   define OP_TRANSMIT	5   /* TransmitFile() */
+#   define OP_LOOKUP	6   /* TODO: For future use */
     int operation;	    /* Type of operation issued */
     LPSOCKADDR addr;	    /* addr storage space for WSARecvFrom/WSASendTo. */
     ULONG IoOrder;	    /* Order in which this I/O was posted */
@@ -373,8 +388,8 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
 			    LPOVERLAPPED lpOverlapped);
 
 /* some stuff that needs to be switches or fconfigures, but aren't yet */
-#define IOCP_ACCEPT_COUNT	40
+#define IOCP_ACCEPT_COUNT	100
 #define IOCP_ACCEPT_BUFSIZE	0    /* more than zero means we want a receive with the accept */
 #define IOCP_RECV_COUNT		2
-#define IOCP_RECV_BUFSIZE	4064  /* 4096 - 32 (HeapAlloc contains some management code)*/
+#define IOCP_RECV_BUFSIZE	4096  /* use multiples of the page size only. */
 #define IOCP_SEND_CONCURRENCY	2
