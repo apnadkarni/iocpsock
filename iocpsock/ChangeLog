@@ -1,3 +1,61 @@
+2005-03-29  davygrvy
+	* dllmain.c:
+	* iocpsock.h:
+	* iocpsock_hilevel.c:
+	* ws2irda.c:
+		[irda::discovery] now operational!
+
+2005-03-24  davygrvy
+	* iocpsock_lolevel.c:
+		Remove IocpThreadActionProc entirely when TCL_CHANNEL_VERSION_4
+		is not defined
+
+	* ws2irda.c:
+		Added new Iocp_IrdaDiscovery(), but is untested whilst I wait
+		for hardware in the mail.
+
+	* ws2irda.c:
+		Fixed format of addr->irdaDeviceId so it is displayed similar
+		to a MAC address (XX-XX-XX-XX)
+
+	* ws2irda.c:
+		Added implementation of DecodeIrdaSockaddr().
+
+2005-03-23  davygrvy
+	* HttpdRead.c:
+		deleted) this file is not needed.  tclhttpd spends most of its
+		time in [Url_Dispatch] sourcing access files, not [HttpdRead]
+
+	* iocpsock.h:
+	* iocpsock_hilevel.c:
+	* iocpsock_lolevel.c:
+	* ws2apltalk.c:
+	* ws2atm.c:
+	* ws2decnet.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+	* ws2isotp4.c:
+	* ws2netbios.c:
+	* ws2tcp.c:
+	* ws2udp.c:
+	* ws2vines.c:
+		finalized IPv6 work for now.
+
+2005-03-22  davygrvy
+	* readme.txt:
+		speling
+
+	* ws2apltalk.c:
+	* ws2atm.c:
+	* ws2decnet.c:
+	* ws2ipx.c:
+		implementing WS2ProtocolData struct changes
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		better (umm.. working) IPv6 support in place.
+
 2004-11-25  davygrvy
 	* dllmain.c:
 	* hackersguide.txt:
@@ -11,6 +69,9 @@
 	* ws2tcp.c:
 		now supports [thread::transfer] if the TIP#218 patch is applied to the core.
 		I'm still testing this, but looks good so far.
+
+	* final_report.txt:
+		There's good info in here..  This should be saved.
 
 2004-05-08  davygrvy
 	* iocpsock.h:
