@@ -53,7 +53,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /dll /machine:I386
-# ADD LINK32 /nologo /dll /machine:I386 /out:"z:\public\tcl\lib\iocpsock\iocpsock.dll" /libpath:"\tcl_workspace\tcl_84_branch\win\Release" /opt:nowin98 /opt:icf,6
+# ADD LINK32 /nologo /dll /machine:I386 /libpath:"\tcl_workspace\tcl_84_branch\win\Release" /opt:nowin98 /opt:icf,6
 # SUBTRACT LINK32 /pdb:none
 
 !ELSEIF  "$(CFG)" == "iocpsock - Win32 Debug"
@@ -88,6 +88,26 @@ LINK32=link.exe
 
 # Name "iocpsock - Win32 Release"
 # Name "iocpsock - Win32 Debug"
+# Begin Group "tests"
+
+# PROP Default_Filter "test"
+# Begin Source File
+
+SOURCE=.\tests\all.tcl
+# End Source File
+# Begin Source File
+
+SOURCE=.\tests\socket2.test
+# End Source File
+# Begin Source File
+
+SOURCE=.\tests\test_client.tcl
+# End Source File
+# Begin Source File
+
+SOURCE=.\tests\test_server.tcl
+# End Source File
+# End Group
 # Begin Source File
 
 SOURCE=.\dllmain.c
