@@ -1,0 +1,139 @@
+2003-02-11  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Pending accepts now stored in a linked-list.  Later when the watchdog
+		thread is made, we can traverse the lists.
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2apltalk.c:
+	* ws2atm.c:
+	* ws2decnet.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+	* ws2isotp4.c:
+	* ws2netbios.c:
+	* ws2tcp.c:
+	* ws2udp.c:
+	* ws2vines.c:
+		Removed DisconnectEx() from the WS2ProtocolData struct.  We won
+		t be using it.
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		Removed llPendingSend member of the SocketInfo struct.  It wasn't needed.
+		Winsock itself acts as the queue.
+
+2003-02-10  daveg
+	* ws2tcp.c:
+		Added blocking connect().
+
+	* dllmain.c:
+	* readme.txt:
+		moved version up to 0.2
+
+	* ws2tcp.c:
+		Double HandleIo() call following immediate ConnectEx() return
+		fixed.
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* readme.txt:
+		SocketInfo clean-up now working properly.
+
+2003-02-06  daveg
+	* ws2tcp.c:
+		removed some cruft.
+
+	* bits.txt:
+	* dllmain.c:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		receive overlapped stuffing and TCL_WRITABLE issues resolved. 
+		Works nice.
+
+2003-02-05  daveg
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Found ConnectEx problem...  What to do???
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		More ConnectEx work.
+
+2003-02-04  daveg
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		error handling addressed, but unknown working status.  EOF
+		works...
+
+	* iocpsock.dsp:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2apltalk.c:
+	* ws2atm.c:
+	* ws2decnet.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+	* ws2isotp4.c:
+	* ws2netbios.c:
+	* ws2tcp.c:
+	* ws2udp.c:
+	* ws2vines.c:
+		starting to add ConnectEx and DisconnectEx.  Worked on comment
+		blocks.
+
+2003-02-03  daveg
+	* iocpsock.dsp:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* iocpsock_util.c:
+	* iocpsock_util.h:
+	* ws2apltalk.c:
+	* ws2atm.c:
+	* ws2decnet.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+	* ws2isotp4.c:
+	* ws2netbios.c:
+	* ws2tcp.c:
+	* ws2udp.c:
+	* ws2vines.c:
+		works nice.  need to get square on error handling.
+
+2003-02-02  daveg
+	* .cvsignore:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* iocpsock_util.c:
+	* iocpsock_util.h:
+	* ws2tcp.c:
+		In a good state.  accept fires the accept proc in Tcl.  receives untested.  free
+		buffer stack 1/2 implimented.  Tcl_DriverInputProc looks good, untested.
+		Can't send yet.  Socket error handling needs to be addressed.
+
+2003-01-22  daveg
+	* dllmain.c:
+	* iocpsock.dsp:
+	* iocpsock.dsw:
+	* iocpsock.h:
+	* iocpsock_hilevel.c:
+	* iocpsock_lolevel.c:
+	* iocpsock_util.c:
+	* iocpsock_util.h:
+	* ws2apltalk.c:
+	* ws2atm.c:
+	* ws2decnet.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+	* ws2isotp4.c:
+	* ws2netbios.c:
+	* ws2tcp.c:
+	* ws2udp.c:
+	* ws2vines.c:
+		initial population
+
