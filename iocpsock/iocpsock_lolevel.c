@@ -1566,7 +1566,7 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 }
 
 DWORD
-PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
+PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr, int useBurst)
 {
     WSABUF wbuf;
     DWORD bytes = 0, flags, WSAerr;
@@ -1623,7 +1623,7 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	}
     }
 #if IOCP_USE_BURST_DETECTION
-    else if (bytes > 0) {
+    else if (bytes > 0 && useBurst) {
 	BufferInfo *newBufPtr;
 
 	/*
@@ -1642,7 +1642,7 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, wbuf.len);
-	return PostOverlappedRecv(infoPtr, newBufPtr);
+	return PostOverlappedRecv(infoPtr, newBufPtr, 1);
     }
 #endif
 
@@ -1892,7 +1892,7 @@ HandleIo (
 	    /* post IOCP_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
 		newBufPtr = GetBufferObj(newInfoPtr, IOCP_RECV_BUFSIZE);
-		if (PostOverlappedRecv(newInfoPtr, newBufPtr)
+		if (PostOverlappedRecv(newInfoPtr, newBufPtr, 0)
 			!= NO_ERROR) {
 		    break;
 		}
@@ -1954,7 +1954,7 @@ HandleIo (
 	     */
 
 	    newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-	    PostOverlappedRecv(infoPtr, newBufPtr);
+	    PostOverlappedRecv(infoPtr, newBufPtr, 1);
 	}
 	break;
 
@@ -2004,7 +2004,7 @@ HandleIo (
 	    /* post IOCP_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
 		newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-		if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
+		if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != NO_ERROR) {
 		    break;
 		}
 	    }

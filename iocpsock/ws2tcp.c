@@ -277,7 +277,7 @@ CreateTcpSocket(
 
     i = 0;
     if (winSock.setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
-	    (const char *) &i, sizeof(int))  == SOCKET_ERROR) {
+	    (const char *) &i, sizeof(int)) == SOCKET_ERROR) {
 	goto error;
     }
 
@@ -400,7 +400,7 @@ CreateTcpSocket(
 	    /* post IOCP_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
 		bufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-		PostOverlappedRecv(infoPtr, bufPtr);
+		PostOverlappedRecv(infoPtr, bufPtr, 0);
 	    }
 	}
 	FreeSocketAddress(hostaddr);

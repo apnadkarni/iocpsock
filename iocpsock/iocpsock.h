@@ -339,7 +339,7 @@ extern Tcl_Channel	Iocp_OpenTcpServer (Tcl_Interp *interp,
 extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
 			    BufferInfo *acceptobj);
 extern DWORD		PostOverlappedRecv (SocketInfo *infoPtr,
-			    BufferInfo *recvobj);
+			    BufferInfo *recvobj, int useBurst);
 extern void		HandleIo(SocketInfo *infoPtr, BufferInfo *bufPtr,
 			    HANDLE compPort, DWORD bytes, DWORD error,
 			    DWORD flags);
