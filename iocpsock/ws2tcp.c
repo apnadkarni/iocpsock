@@ -173,7 +173,7 @@ CreateTcpSocket(
     SOCKET sock = INVALID_SOCKET;
     SocketInfo *infoPtr = NULL;	/* The returned value. */
     BufferInfo *bufPtr;		/* The returned value. */
-    DWORD bytes, WSAerr;
+    DWORD bytes;
     BOOL code;
     int i;
     WS2ProtocolData *pdata;
