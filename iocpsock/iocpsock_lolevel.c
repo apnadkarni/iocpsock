@@ -564,8 +564,8 @@ HasSockets(Tcl_Interp *interp)
 		break;
 	    case TCL_WSE_CANTSTARTHANDLERTHREAD:
 		Tcl_AppendResult(interp,
-			"The Windows Sockets completion thread(s) "
-			"were unable to start.", NULL);
+			"The worker thread to service the completion port "
+			"was unable to start.", NULL);
 		break;
 	    default:
 		Tcl_AppendObjToObj(Tcl_GetObjResult(interp),
