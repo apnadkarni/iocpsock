@@ -1,4 +1,4 @@
-iocpsock.dll -- ver 0.3 (5:32 PM 2/13/2003)
+iocpsock.dll -- ver 0.3 (Thu Feb 13 03:08:48 2003)
 
 This is the first release of a new sockets channel driver for windows.
 The aim is to get it ready for inclusion in the core.  It's main
