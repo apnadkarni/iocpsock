@@ -117,6 +117,7 @@ InitSockets()
     OSVERSIONINFO os;
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
+    /* global/once init */
     if (!initialized) {
 	initialized = 1;
 
@@ -410,6 +411,7 @@ InitSockets()
 	}
     }
 
+    /* per thread init */
     if (tsdPtr->threadId == 0) {
 	Tcl_CreateEventSource(IocpEventSetupProc, IocpEventCheckProc, NULL);
 	Tcl_CreateThreadExitHandler(IocpThreadExitHandler, tsdPtr);
@@ -692,43 +694,32 @@ IocpEventProc (
 	return 0;
     }
 
-    __try {
-	if (infoPtr->channel == NULL) {
-	    /* The event became stale.  How did we get here? */
-	    return 1;
-	}
-
-	/*
-	 * If an accept is ready, pop just one.  We can't pop all of them
-	 * or it would be greedy to the event loop and cause the granularity
-	 * to increase -- which is bad and holds back Tk from doing redraws
-	 * should a listening socket be in a situation where work is coming
-	 * in faster than Tcl is able to service it.
-	 */
-
-	if (infoPtr->readyAccepts != NULL
-		&& IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
-	    IocpAcceptOne(infoPtr);
-	    return 1;
-	}
-
-	if (infoPtr->watchMask & TCL_READABLE && IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
-	    readyMask |= TCL_READABLE;
-	}
-
-	if (infoPtr->watchMask & TCL_WRITABLE && infoPtr->readyMask & TCL_WRITABLE) {
-	    readyMask |= TCL_WRITABLE;
-	    infoPtr->readyMask &= ~(TCL_WRITABLE);
-	}
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-	/*
-	 * Protect from access violations, just in case -- a belt and
-	 * suspenders safety precaution.  I'm protecting the event loop as
-	 * best I can from leaving a dangling pointer in it (see
-	 * IocpRemovePendingEvents called from IocpCloseProc), but some have
-	 * gotten through and this is the last resort protection from this.
-	 */
+    if (infoPtr->channel == NULL) {
+	/* The event became stale.  How did we get here? */
 	return 1;
+    }
+
+    /*
+     * If an accept is ready, pop just one.  We can't pop all of them
+     * or it would be greedy to the event loop and cause the granularity
+     * to increase -- which is bad and holds back Tk from doing redraws
+     * should a listening socket be in a situation where work is coming
+     * in faster than Tcl is able to service it.
+     */
+
+    if (infoPtr->readyAccepts != NULL
+	    && IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
+	IocpAcceptOne(infoPtr);
+	return 1;
+    }
+
+    if (infoPtr->watchMask & TCL_READABLE && IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
+	readyMask |= TCL_READABLE;
+    }
+
+    if (infoPtr->watchMask & TCL_WRITABLE && infoPtr->readyMask & TCL_WRITABLE) {
+	readyMask |= TCL_WRITABLE;
+	infoPtr->readyMask &= ~(TCL_WRITABLE);
     }
 
     if (readyMask) Tcl_NotifyChannel(infoPtr->channel, readyMask);
@@ -835,7 +826,10 @@ IocpCloseProc (
     // The core wants to close channels after the exit handler!
     // Our heap is gone!
     if (initialized) {
-	EnterCriticalSection(&infoPtr->critSec);
+
+	/* artificially increment the count. */
+	InterlockedIncrement(&infoPtr->OutstandingOps);
+
 	infoPtr->flags |= IOCP_CLOSING;
 	infoPtr->channel = NULL;
 
@@ -843,31 +837,31 @@ IocpCloseProc (
 	    err = winSock.WSASendDisconnect(infoPtr->socket, NULL);
 	}
 	err = winSock.closesocket(infoPtr->socket);
+	infoPtr->socket = INVALID_SOCKET;
 	if (err == SOCKET_ERROR) {
 	    IocpWinConvertWSAError(winSock.WSAGetLastError());
 	    errorCode = Tcl_GetErrno();
 	}
-	infoPtr->socket = INVALID_SOCKET;
+
+	/*
+	 * Block waiting for all the pending operations to finish before
+	 * deleting the SocketInfo structure.  The main intent is to delete
+	 * it here and we must wait for all pending operation to complete
+	 * to do this.
+	 */
+
+	if (InterlockedDecrement(&infoPtr->OutstandingOps) > 0) {
+	    WaitForSingleObject(infoPtr->allDone, INFINITE);
+	}
 
 	/*
 	 * Remove all events queued in the event loop for this socket.
+	 * Ie. backwalk the bucket brigade, by goly.
 	 */
 
 	Tcl_DeleteEvents(IocpRemovePendingEvents, infoPtr);
 
-	/*
-	 * If there are no outstanding operations, lazy delete will not work.
-	 */
-	if (infoPtr->OutstandingOps <= 0) {
-	    FreeSocketInfo(infoPtr);
-	} else {
-	    LeaveCriticalSection(&infoPtr->critSec);
-	}
-
-	/*
-	 * Upon letting go of our lock, infoPtr can dissapear out from
-	 * under us!
-	 */
+	FreeSocketInfo(infoPtr);
     }
 
     return errorCode;
@@ -974,7 +968,6 @@ IocpOutputProc (
     WSAerr = PostOverlappedSend(infoPtr, bufPtr);
 
     if (WSAerr != NO_ERROR) {
-	// TODO: what SHOULD go here?
 	FreeBufferObj(bufPtr);
 	infoPtr->lastError = WSAerr;
 	IocpWinConvertWSAError(WSAerr);
@@ -1083,11 +1076,13 @@ IocpGetOptionProc (
 		infoPtr->lastError = NO_ERROR;
 	    }
 	    return TCL_OK;
+#if 0   /* for debugging only */
 	} else if ((optionName[1] == 'a') &&
 	    (strncmp(optionName, "-acceptors", len) == 0)) {
 	    TclFormatInt(buf, infoPtr->llPendingAccepts->lCount);
 	    Tcl_DStringAppendElement(dsPtr, buf);
 	    return TCL_OK;
+#endif
 	}
     }
 
@@ -1358,8 +1353,8 @@ NewSocketInfo (SOCKET socket)
     infoPtr->maxOutstandingSends = IOCP_SEND_CONCURRENCY;
 
     infoPtr->OutstandingOps = 0;
+    infoPtr->allDone = CreateEvent(NULL, TRUE, FALSE, NULL); /* manual reset */
     infoPtr->node.ll = NULL;
-    InitializeCriticalSectionAndSpinCount(&infoPtr->critSec, 4000);
     return infoPtr;
 }
 
@@ -1369,8 +1364,6 @@ FreeSocketInfo (SocketInfo *infoPtr)
     BufferInfo *bufPtr;
 
     if (!infoPtr) return;
-
-    DeleteCriticalSection(&infoPtr->critSec);
 
     /*
      * Remove all pending ready socket notices that have yet to be queued
@@ -1410,6 +1403,7 @@ FreeSocketInfo (SocketInfo *infoPtr)
 	}
 	IocpLLDestroy(infoPtr->llPendingRecv);
     }
+    CloseHandle(infoPtr->allDone);
     IocpFree(infoPtr);
 }
 
@@ -1452,16 +1446,16 @@ FreeBufferObj (BufferInfo *bufPtr)
 }
 
 SocketInfo *
-NewAcceptSockInfo (SOCKET s, SocketInfo *infoPtr)
+NewAcceptSockInfo (SOCKET socket, SocketInfo *infoPtr)
 {
     SocketInfo *newInfoPtr;
 
-    newInfoPtr = NewSocketInfo(s);
+    newInfoPtr = NewSocketInfo(socket);
     if (newInfoPtr == NULL) {
 	return NULL;
     }
 
-    /* Initialize the members. */
+    /* Initialize some members (partial cloning to the parent). */
     newInfoPtr->proto = infoPtr->proto;
     newInfoPtr->tsdHome = infoPtr->tsdHome;
     newInfoPtr->llPendingRecv = IocpLLCreate();
@@ -1531,7 +1525,7 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	/*
 	 * Tested under extreme listening socket abuse it was found that
 	 * this logic condition is never met.  AcceptEx _never_ completes
-	 * immediatly.  It is always returns WSA_IO_PENDING.  Too bad,
+	 * immediatly.  It always returns WSA_IO_PENDING.  Too bad,
 	 * as this was looking like a good way to detect and handle burst
 	 * conditions.
 	 */
@@ -1541,8 +1535,10 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	/*
 	 * The AcceptEx() has completed now, and was posted to the port.
 	 * Keep giving more AcceptEx() calls to drain the internal
-	 * backlog.  Why should we wait for the completion to run if we
-	 * know the listening socket can take another right now?
+	 * backlog.  Why should we wait for the time when the completion
+	 * routine is run if we know the listening socket can take another
+	 * right now?  IOW, keep recursing until the WSA_IO_PENDING 
+	 * condition is achieved.
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, buflen);
@@ -1594,8 +1590,12 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	BufferInfo *newBufPtr;
 
 	/*
-	 * The WSARecv() completed now, instead of getting posted.
-	 * Keep adding more to counter-act the current load.
+	 * The WSARecv/From has completed now, and was posted to the port.
+	 * Keep giving more WSARecv/From calls to drain the internal
+	 * buffer (AFD.sys).  Why should we wait for the time when the
+	 * completion routine is run if we know the connected socket can
+	 * take another right now?  IOW, keep recursing until the
+	 * WSA_IO_PENDING condition is achieved.
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, wbuf.len);
@@ -1642,21 +1642,21 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	}
     } else {
 	/*
-	 * The WSASend(To) completed now, instead of getting posted.
+	 * The WSASend/To completed now, instead of getting posted.
 	 * Zap an extra TCL_WRITABLE event to push the send buffers in
 	 * winsock until we get them posting and keep them full.  This
 	 * seems to be greedy if the peer is on localhost.
 	 *
 	 * TODO: study this problem.  We need to put a cap on the
 	 * concurency allowed.  Sounds like an fconfigure is needed.
+	 * The logic below isn't thread-safe, but that's ok as perfection
+	 * isn't required.
 	 */
-	EnterCriticalSection(&infoPtr->critSec);
 	if (infoPtr->outstandingSends
 		< infoPtr->maxOutstandingSends) {
 	    infoPtr->outstandingSends++;
 	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
 	}
-	LeaveCriticalSection(&infoPtr->critSec);
     }
 
     return NO_ERROR;
@@ -1715,7 +1715,7 @@ CompletionThreadProc (LPVOID lpParam)
 	 * Use the pointer to the overlapped structure and derive from it
 	 * the top of the parent BufferInfo structure it sits in.  If the
 	 * position of the overlapped structure moves around within the
-	 * BufferInfo structure declaration, this function does _not_ need
+	 * BufferInfo structure declaration, this logic does _not_ need
 	 * to be modified.
 	 */
 
@@ -1752,8 +1752,7 @@ CompletionThreadProc (LPVOID lpParam)
  *	None.
  *
  * Side effects:
- *	Either deletes the buffer handed to it, or processes it.  Can
- *	close a SocketInfo struct if this is the last operation.
+ *	Either deletes the buffer handed to it, or processes it.
  *
  *----------------------------------------------------------------------
  */
@@ -1774,32 +1773,19 @@ HandleIo (
     SIZE_T addr_storage;
     int localLen, remoteLen;
 
-    EnterCriticalSection(&infoPtr->critSec);
 
-    if (WSAerr == WSA_OPERATION_ABORTED
-	    || infoPtr->flags & IOCP_CLOSING) {
-	/* Reclaim overlapped buffer objects. */
-        FreeBufferObj(bufPtr);
-    }
-
-    if (InterlockedDecrement(&infoPtr->OutstandingOps) <= 0
+    if (WSAerr == WSA_OPERATION_ABORTED 
 	    && infoPtr->flags & IOCP_CLOSING) {
-	LeaveCriticalSection(&infoPtr->critSec);
-	/* Free the SocketInfo struct.  This is the last operation. */
-	FreeSocketInfo(infoPtr);
-	return;
-    }
-
-    LeaveCriticalSection(&infoPtr->critSec);
-
-    if (WSAerr == WSA_OPERATION_ABORTED
-	    || infoPtr->flags & IOCP_CLOSING) {
-	return;
+	/* Reclaim cancelled overlapped buffer objects. */
+        FreeBufferObj(bufPtr);
+	goto done;
     }
 
     bufPtr->used = bytes;
     /* An error stored in the buffer object takes precedence. */
-    if (bufPtr->WSAerr == NO_ERROR) bufPtr->WSAerr = WSAerr;
+    if (bufPtr->WSAerr == NO_ERROR) {
+	bufPtr->WSAerr = WSAerr;
+    }
 
     switch (bufPtr->operation) {
     case OP_ACCEPT:
@@ -1885,7 +1871,9 @@ HandleIo (
 		    break;
 		}
 	    }
+
 	} else {
+	    /* WSA_OPERATION_ABORTED appears to be the only error ever. */
 	    FreeBufferObj(bufPtr);
 	}
     
@@ -1991,6 +1979,13 @@ HandleIo (
 	/* For future use. */
 	break;
     }
+
+done:
+    if (InterlockedDecrement(&infoPtr->OutstandingOps) <= 0
+	    && infoPtr->flags & IOCP_CLOSING) {
+	/* This is the last operation. */
+	SetEvent(infoPtr->allDone);
+    }
 }
 
 /*
@@ -1998,16 +1993,18 @@ HandleIo (
  * WatchDogThreadProc --
  *
  *	This prevents denial-of-service attacks by cleaning-up accepted
- *	sockets that have not received data yet.  AcceptEx is optimized
- *	to only fire after data is received on the new connection. IOW,
- *	the peer must talk first.  This only true when
+ *	sockets that have not received data yet.  AcceptEx can be
+ *	optimized to only fire after data is received on the new
+ *	connection. IOW, the peer must talk first.  This only true when
  *	PostOverlappedAccept() is called with a buffer size greater than
  *	zero to indicate a receive is desired too.
  *
  * Results:
+ *
  *	None.
  *
  * Side effects:
+ *
  *	Can close a socket on a listener's llPendingAccepts list.
  *
  *----------------------------------------------------------------------
@@ -2074,11 +2071,7 @@ __inline LPVOID
 IocpAlloc (SIZE_T size)
 {
     LPVOID p;
-    __try {
-	p = HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, size);
-    } __except (EXCEPTION_EXECUTE_HANDLER) {
-	p = NULL;
-    }
+    p = HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, size);
     return p;
 }
 

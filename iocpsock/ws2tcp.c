@@ -27,7 +27,8 @@ static WS2ProtocolData tcp6ProtoData = {
 static SocketInfo *	CreateTcpSocket(Tcl_Interp *interp,
 				CONST char *port, CONST char *host,
 				int server, CONST char *myaddr,
-				CONST char *myport, int async);
+				CONST char *myport, int async,
+				int overlappedCount);
 
 /*
  *----------------------------------------------------------------------
@@ -63,7 +64,7 @@ Iocp_OpenTcpClient(
      * Create a new client socket and wrap it in a channel.
      */
 
-    infoPtr = CreateTcpSocket(interp, port, host, 0, myaddr, myport, async);
+    infoPtr = CreateTcpSocket(interp, port, host, 0, myaddr, myport, async, 0);
     if (infoPtr == NULL) {
 	return NULL;
     }
@@ -116,7 +117,8 @@ Iocp_OpenTcpServer(
     Tcl_TcpAcceptProc *acceptProc,
 				/* Callback for accepting connections
 				 * from new clients. */
-    ClientData acceptProcData)	/* Data for the callback. */
+    ClientData acceptProcData,	/* Data for the callback. */
+    int overlappedCount)
 {
     SocketInfo *infoPtr;
     char channelName[16 + TCL_INTEGER_SPACE];
@@ -125,7 +127,7 @@ Iocp_OpenTcpServer(
      * Create a new client socket and wrap it in a channel.
      */
 
-    infoPtr = CreateTcpSocket(interp, port, host, 1, NULL, 0, 0);
+    infoPtr = CreateTcpSocket(interp, port, host, 1, NULL, 0, 0, overlappedCount);
     if (infoPtr == NULL) {
 	return NULL;
     }
@@ -162,8 +164,10 @@ CreateTcpSocket(
 				 * else 0 for a client socket. */
     CONST char *myaddr,		/* Optional client-side address */
     CONST char *myport,		/* Optional client-side port */
-    int async)			/* If nonzero, connect client socket
+    int async,			/* If nonzero, connect client socket
 				 * asynchronously. */
+    int overlappedCount)	/* How many overlapped AcceptEx calls do
+				 * we want? */
 {
     u_long flag = 1;		/* Indicates nonblocking mode. */
     int asyncConnect = 0;	/* Will be 1 if async connect is
@@ -173,7 +177,7 @@ CreateTcpSocket(
     SOCKET sock = INVALID_SOCKET;
     SocketInfo *infoPtr = NULL;	/* The returned value. */
     BufferInfo *bufPtr;		/* The returned value. */
-    DWORD bytes;
+    DWORD bytes, WSAerr;
     BOOL code;
     int i;
     WS2ProtocolData *pdata;
@@ -226,7 +230,7 @@ CreateTcpSocket(
     if (pdata->AcceptEx == NULL) {
 	/* Get the LSP specific functions. */
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-		&AcceptExGuid, sizeof(GUID), 
+		&AcceptExGuid, sizeof(GUID),
 		&pdata->AcceptEx,
 		sizeof(pdata->AcceptEx),
 		&bytes, NULL, NULL);
@@ -271,16 +275,16 @@ CreateTcpSocket(
     /* Info needed to get back to this thread. */
     infoPtr->tsdHome = tsdPtr;
 
-
-    /* Associate the socket and its SocketInfo struct to the completion
-     * port.  Implies an automatic set to non-blocking. */
-    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
-	    (ULONG_PTR)infoPtr, 0) == NULL) {
-	winSock.WSASetLastError(GetLastError());
-	goto error;
-    }
-
     if (server) {
+
+	/* Associate the socket and its SocketInfo struct to the completion
+	 * port.  Implies an automatic set to non-blocking. */
+	if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
+		(ULONG_PTR)infoPtr, 0) == NULL) {
+	    winSock.WSASetLastError(GetLastError());
+	    goto error;
+	}
+
 	/*
 	 * Bind to the specified port.  Note that we must not call
 	 * setsockopt with SO_REUSEADDR because Microsoft allows
@@ -317,7 +321,7 @@ CreateTcpSocket(
 	IocpLLPushBack(IocpSubSystem.listeningSockets, infoPtr, &infoPtr->node);
 
 	/* post IOCP_ACCEPT_COUNT accepts. */
-        for(i=0; i < IOCP_ACCEPT_COUNT ;i++) {
+        for(i=0; i < overlappedCount ;i++) {
 	    BufferInfo *bufPtr;
 	    bufPtr = GetBufferObj(infoPtr, IOCP_ACCEPT_BUFSIZE);
 	    if (PostOverlappedAccept(infoPtr, bufPtr) != NO_ERROR) {
@@ -347,11 +351,19 @@ CreateTcpSocket(
 	    bufPtr = GetBufferObj(infoPtr, 0);
 	    bufPtr->operation = OP_CONNECT;
 
+	    /* Associate the socket and its SocketInfo struct to the completion
+	     * port.  Implies an automatic set to non-blocking. */
+	    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
+		    (ULONG_PTR)infoPtr, 0) == NULL) {
+		winSock.WSASetLastError(GetLastError());
+		goto error;
+	    }
+
 	    code = pdata->ConnectEx(sock, addr->ai_addr,
 		    addr->ai_addrlen, NULL, 0, &bytes, &bufPtr->ol);
 
 	    if (code == FALSE) {
-		if (winSock.WSAGetLastError() != WSA_IO_PENDING) {
+		if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
 		    FreeBufferObj(bufPtr);
 		    FreeSocketAddress(hostaddr);
 		    goto error;
@@ -365,7 +377,15 @@ CreateTcpSocket(
 		goto error;
 	    }
 
-    	    infoPtr->llPendingRecv = IocpLLCreate();
+	    /* Associate the socket and its SocketInfo struct to the completion
+	     * port.  Implies an automatic set to non-blocking. */
+	    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
+		    (ULONG_PTR)infoPtr, 0) == NULL) {
+		winSock.WSASetLastError(GetLastError());
+		goto error;
+	    }
+
+	    infoPtr->llPendingRecv = IocpLLCreate();
 
 	    /* post IOCP_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {

@@ -207,7 +207,7 @@ typedef struct _BufferInfo {
 #   define OP_ACCEPT	0   /* AcceptEx() */
 #   define OP_READ	1   /* WSARecv()/WSARecvFrom() */
 #   define OP_WRITE	2   /* WSASend()/WSASendTo() */
-#   define OP_CONNECT	3   /* ConnectEx() */
+#   define OP_CONNECT	3   /* ConnectEx */
 #   define OP_DISCONNECT 4  /* DisconnectEx() */
 #   define OP_TRANSMIT	5   /* TransmitFile() */
 #   define OP_LOOKUP	6   /* TODO: For future use */
@@ -259,7 +259,6 @@ typedef struct SocketInfo {
     SOCKET socket;		    /* Windows SOCKET handle. */
     DWORD flags;
     WS2ProtocolData *proto;	    /* Network protocol info. */
-    CRITICAL_SECTION critSec;	    /* Accessor lock. */
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
 				     * origin. */
     /* For listening sockets: */
@@ -274,11 +273,11 @@ typedef struct SocketInfo {
 
     int watchMask;		    /* Tcl events we are interested in. */
     int readyMask;
-    DWORD lastError;		    /* Error code from last message. */
-    DWORD writeError;		    /* Error code from last Send(To). */
+    DWORD lastError;		    /* Error code from last operation. */
     short outstandingSends;
     short maxOutstandingSends;
-    volatile LONG OutstandingOps;	    
+    volatile LONG OutstandingOps;
+    HANDLE allDone;		    /* manual reset event */
     LPLLIST llPendingRecv;	    /* Our pending recv list. */
     LLNODE node;
 
@@ -331,7 +330,7 @@ extern Tcl_Channel	Iocp_OpenTcpClient (Tcl_Interp *interp,
 extern Tcl_Channel	Iocp_OpenTcpServer (Tcl_Interp *interp,
 			    CONST char *port, CONST char *host,
 			    Tcl_TcpAcceptProc *acceptProc,
-			    ClientData acceptProcData);
+			    ClientData acceptProcData, int overlappedCount);
 extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
 			    BufferInfo *acceptobj);
 extern DWORD		PostOverlappedRecv (SocketInfo *infoPtr,
@@ -387,9 +386,47 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
 			    LPDWORD lpdwBytesSent,
 			    LPOVERLAPPED lpOverlapped);
 
-/* some stuff that needs to be switches or fconfigures, but aren't yet */
-#define IOCP_ACCEPT_COUNT	100
-#define IOCP_ACCEPT_BUFSIZE	0    /* more than zero means we want a receive with the accept */
+/*
+ * ----------------------------------------------------------------------
+ * Some stuff that needs to be switches or fconfigures, but aren't yet.
+ * ----------------------------------------------------------------------
+ */
+
+/*
+ * The count of pending AcceptEx calls to place on a listening socket.
+ * Too low would be a value of 5 (many WSAECONREFUSED errors).  Too high
+ * a value and it reserves resources that aren't used effectively.
+ * Unfortunately, burst conditions can not be detected for the system
+ * to grow the actual count based on need.
+ */
+/*#define IOCP_ACCEPT_COUNT	200*/
+
+/*
+ * AcceptEx can return recieved data along with the connect.  Set this
+ * either zero or a multiple of the page size (4096).  A value of zero
+ * indicates we don't want this feature.
+ */
+#define IOCP_ACCEPT_BUFSIZE	0
+
+/*
+ * Initial count of how many WSARecv(From) calls to place on a connected
+ * socket.  The actual count can grow automatically based on burst
+ * activity (See the recursion used in PostOverlappedRecv for details).
+ */
 #define IOCP_RECV_COUNT		1
-#define IOCP_RECV_BUFSIZE	4096  /* use multiples of the page size only. */
+
+/*
+ * How large do we want the receive buffers?  Use multiples of the
+ * page size only (4096) as windows will lock this on page boundaries
+ * anyways.
+ */
+#define IOCP_RECV_BUFSIZE	4096
+
+/*
+ * Count of how many active WSASend(to) calls do we want.  Too high a
+ * value can cause gross memory eating behavior when the socket is
+ * attached localhost.  As far as I can tell, both sides go wild in a
+ * state which doesn't seem to move much data quickly.  This must be
+ * capped.
+ */
 #define IOCP_SEND_CONCURRENCY	2

@@ -53,10 +53,11 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
     Tcl_Obj *CONST objv[];		/* Argument objects. */
 {
     static CONST char *socketOptions[] = {
-	"-async", "-myaddr", "-myport","-server", (char *) NULL
+	"-async", "-myaddr", "-myport","-server", "-ovlpd", (char *) NULL
     };
     enum socketOptions {
-	SKT_ASYNC,      SKT_MYADDR,      SKT_MYPORT,      SKT_SERVER  
+	SKT_ASYNC,      SKT_MYADDR,      SKT_MYPORT,      SKT_SERVER,
+	SKT_OVLPD
     };
     int optionIndex, a, server;
     char *arg, *copyScript, *host, *script;
@@ -66,13 +67,10 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
     int async = 0;
     Tcl_Channel chan;
     AcceptCallback *acceptCallbackPtr;
+    int overlappedCount = 20;
     
     server = 0;
     script = NULL;
-
-    //if (TclpHasSockets(interp) != TCL_OK) {
-//	return TCL_ERROR;
-    //}
 
     for (a = 1; a < objc; a++) {
 	arg = Tcl_GetString(objv[a]);
@@ -134,6 +132,26 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
                 script = Tcl_GetString(objv[a]);
 		break;
 	    }
+	    case SKT_OVLPD: {
+		a++;
+                if (a >= objc) {
+		    Tcl_AppendResult(interp,
+			    "no argument given for -ovlpd option",
+                            (char *) NULL);
+		    return TCL_ERROR;
+		}
+		if (Tcl_GetIntFromObj(interp, objv[a], &overlappedCount)
+			== TCL_ERROR) {
+		    return TCL_ERROR;
+		}
+		if (overlappedCount < 1) {
+		    Tcl_AppendResult(interp,
+			    "-ovlpd option must be a positive number greater than zero.",
+                            (char *) NULL);
+		    return TCL_ERROR;
+		}
+		break;
+	    }
 	    default: {
 		panic("Iocp_SocketObjCmd: bad option index to SocketOptions");
 	    }
@@ -155,7 +173,7 @@ wrongNumArgs:
 		Tcl_GetString(objv[0]),
                 " ?-myaddr addr? ?-myport myport? ?-async? host port\n",
 		Tcl_GetString(objv[0]),
-                " -server command ?-myaddr addr? port",
+                " -server command ?-ovlpd count? ?-myaddr addr? port",
                 (char *) NULL);
         return TCL_ERROR;
     }
@@ -174,7 +192,7 @@ wrongNumArgs:
         acceptCallbackPtr->script = copyScript;
         acceptCallbackPtr->interp = interp;
         chan = Iocp_OpenTcpServer(interp, portName, host, AcceptCallbackProc,
-                (ClientData) acceptCallbackPtr);
+                (ClientData) acceptCallbackPtr, overlappedCount);
         if (chan == (Tcl_Channel) NULL) {
             ckfree(copyScript);
             ckfree((char *) acceptCallbackPtr);
