@@ -664,7 +664,7 @@ IocpEventCheckProc (
     evCount = IocpLLGetCount(tsdPtr->readySockets);
 
     while (evCount--) {
-	infoPtr = IocpLLPopFront(tsdPtr->readySockets, 0, 0);
+	infoPtr = IocpLLPopFront(tsdPtr->readySockets, 0, 0 /*no wait*/);
 	if (infoPtr == NULL) break;
 	evPtr = (SocketEvent *) ckalloc(sizeof(SocketEvent));
 	evPtr->header.proc = IocpEventProc;
@@ -707,9 +707,14 @@ IocpEventProc (
      * in faster than Tcl is able to service it.
      */
 
-    if (infoPtr->readyAccepts != NULL
-	    && IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
-	IocpAcceptOne(infoPtr);
+    if (infoPtr->readyAccepts != NULL) {
+	if (IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
+	    IocpAcceptOne(infoPtr);
+	}
+	/*
+	 * Listening sockets never become readable or writable for the
+	 * tests below, so leave now.
+	 */
 	return 1;
     }
 
@@ -823,8 +828,10 @@ IocpCloseProc (
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     int errorCode = 0, err;
 
-    // The core wants to close channels after the exit handler!
-    // Our heap is gone!
+    /*
+     * The core wants to close channels after the exit handler!
+     * Our heap is gone!
+     */
     if (initialized) {
 
 	/* artificially increment the count. */
@@ -856,7 +863,7 @@ IocpCloseProc (
 
 	/*
 	 * Remove all events queued in the event loop for this socket.
-	 * Ie. backwalk the bucket brigade, by goly.
+	 * Ie. backwalk the bucket brigade.
 	 */
 
 	Tcl_DeleteEvents(IocpRemovePendingEvents, infoPtr);
@@ -1079,7 +1086,11 @@ IocpGetOptionProc (
 #if 0   /* for debugging only */
 	} else if ((optionName[1] == 'a') &&
 	    (strncmp(optionName, "-acceptors", len) == 0)) {
-	    TclFormatInt(buf, infoPtr->llPendingAccepts->lCount);
+	    if (infoPtr->llPendingAccepts) {
+		TclFormatInt(buf, infoPtr->llPendingAccepts->lCount);
+	    } else {
+		buf = "unknown";
+	    }
 	    Tcl_DStringAppendElement(dsPtr, buf);
 	    return TCL_OK;
 #endif
@@ -1382,13 +1393,16 @@ FreeSocketInfo (SocketInfo *infoPtr)
     if (infoPtr->localAddr) IocpFree(infoPtr->localAddr);
     if (infoPtr->remoteAddr) IocpFree(infoPtr->remoteAddr);
 
+#if IOCP_ACCEPT_BUFSIZE > 0
     if (infoPtr->llPendingAccepts) {
 	/*
 	 * We can let the list go.  All buffers are (had been) removed by
-	 * the completion thread.
+	 * the completion routine.
 	 */
 	IocpLLDestroy(infoPtr->llPendingAccepts);
     }
+#endif
+
     if (infoPtr->readyAccepts) {
 	while ((bufPtr = IocpLLPopFront(infoPtr->readyAccepts,
 		IOCP_LL_NODESTROY, 0)) != NULL) {
@@ -1503,7 +1517,9 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
      * the operation because it might complete instead of posting.
      */
     InterlockedIncrement(&infoPtr->OutstandingOps);
+#if IOCP_ACCEPT_BUFSIZE > 0
     IocpLLPushBack(infoPtr->llPendingAccepts, bufPtr, &bufPtr->node);
+#endif
 
     /*
      * Use the special function for overlapped accept() that is provided
@@ -1703,6 +1719,7 @@ CompletionThreadProc (LPVOID lpParam)
 	WSAerr = NO_ERROR;
 	flags = 0;
 
+	/* Wait here (forever) for the port to become signaled. */
 	ok = GetQueuedCompletionStatus(cpinfo->port, &bytes,
 		(PULONG_PTR) &infoPtr, &ol, INFINITE);
 
@@ -1776,7 +1793,10 @@ HandleIo (
 
     if (WSAerr == WSA_OPERATION_ABORTED 
 	    && infoPtr->flags & IOCP_CLOSING) {
-	/* Reclaim cancelled overlapped buffer objects. */
+	/*
+	 * Reclaim cancelled overlapped buffer objects, but only here
+	 * when the socket is tagged for closing.
+	 */
         FreeBufferObj(bufPtr);
 	goto done;
     }
@@ -1789,11 +1809,13 @@ HandleIo (
 
     switch (bufPtr->operation) {
     case OP_ACCEPT:
+#if IOCP_ACCEPT_BUFSIZE > 0
 	/*
 	 * Remove this from the 'pending accepts' list of the
 	 * listening socket.  It isn't pending anymore.
 	 */
 	IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
+#endif
 
 	if (bufPtr->WSAerr == NO_ERROR) {
 	    addr_storage = infoPtr->proto->addrLen + 16;
@@ -1835,12 +1857,12 @@ HandleIo (
 	    newInfoPtr->remoteAddr = IocpAlloc(remoteLen);
 	    memcpy(newInfoPtr->remoteAddr, remote, remoteLen);
 
-	    /* Alert Tcl to this new connection. */
-	    IocpAlertToTclNewAccept(infoPtr, newInfoPtr);
-
 	    /* Associate the new socket to our completion port. */
 	    CreateIoCompletionPort((HANDLE) newInfoPtr->socket, CompPort,
 		    (ULONG_PTR) newInfoPtr, 0);
+
+	    /* Alert Tcl to this new connection. */
+	    IocpAlertToTclNewAccept(infoPtr, newInfoPtr);
 
 	    if (bytes > 0) {
 		/* (takes buffer ownership) */
@@ -1857,7 +1879,10 @@ HandleIo (
 		/* Should the notifier be asleep, zap it awake. */
 		Tcl_ThreadAlert(newInfoPtr->tsdHome->threadId);
 	    } else {
-		/* No data received from AcceptEx(). */
+		/*
+		 * No data received from AcceptEx().  We are done with
+		 * the buffer object.
+		 */
 		FreeBufferObj(bufPtr);
 	    }
 
@@ -1988,6 +2013,7 @@ done:
     }
 }
 
+#if IOCP_ACCEPT_BUFSIZE > 0
 /*
  *----------------------------------------------------------------------
  * WatchDogThreadProc --
@@ -2044,8 +2070,9 @@ WatchDogThreadProc (LPVOID lpParam)
                     }
                     /*
 		     * If the socket has been connected for more than 2 minutes,
-		     * close it. If closed, the AcceptEx call will fail in the
-		     * completion thread and get replaced with a new one.
+		     * close it. If closed, the AcceptEx call will get queued to
+		     * the port with a WSA_OPERATION_ABORTED and then get replaced
+		     * with a new one.
 		     */
 		    if (optval != 0xFFFFFFFF && optval > 120) {
 			EnterCriticalSection(&infoPtr->llPendingAccepts->lock);
@@ -2063,6 +2090,7 @@ WatchDogThreadProc (LPVOID lpParam)
 
     return 0;
 }
+#endif
 
 /* =================================================================== */
 /* ====================== Private memory heap ======================== */

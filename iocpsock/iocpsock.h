@@ -403,7 +403,7 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
 
 /*
  * AcceptEx can return recieved data along with the connect.  Set this
- * either zero or a multiple of the page size (4096).  A value of zero
+ * to either zero or a multiple of the page size (4096).  A value of zero
  * indicates we don't want this feature.
  */
 #define IOCP_ACCEPT_BUFSIZE	0
@@ -423,7 +423,7 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
 #define IOCP_RECV_BUFSIZE	4096
 
 /*
- * Count of how many active WSASend(to) calls do we want.  Too high a
+ * Count of how many active WSASend(To) calls do we want.  Too high a
  * value can cause gross memory eating behavior when the socket is
  * attached localhost.  As far as I can tell, both sides go wild in a
  * state which doesn't seem to move much data quickly.  This must be
