@@ -947,14 +947,14 @@ IocpCloseProc (
 	     * a listening socket */
 	    if (infoPtr->proto->type == SOCK_STREAM && !infoPtr->acceptProc) {
 		err = winSock.WSASendDisconnect(infoPtr->socket, NULL);
+	    } else {
+		err = winSock.closesocket(infoPtr->socket);
+		infoPtr->socket = INVALID_SOCKET;
 	    }
-	    err = winSock.closesocket(infoPtr->socket);
 	    if (err == SOCKET_ERROR) {
 		IocpWinConvertWSAError(winSock.WSAGetLastError());
 		errorCode = Tcl_GetErrno();
 	    }
-	    infoPtr->socket = INVALID_SOCKET;
-
 
 	    /*
 	     * Block waiting for all the pending operations to finish before
@@ -997,7 +997,7 @@ IocpCloseProc (
 		    bufPtr = GetBufferObj(infoPtr, 0);
 		    PostOverlappedDisconnect(infoPtr, bufPtr);
 		} else {
-		    infoPtr->flags |= IOCP_CLOSABLE;
+		    winSock.WSASendDisconnect(infoPtr->socket, NULL);
 		}
 	    } else {
 		/* All pending operations have ended. */
@@ -2333,14 +2333,6 @@ HandleIo (
 	/* Decrement the count of pending recvs from the total. */
 	InterlockedDecrement(&infoPtr->outstandingRecvs);
 
-	if (infoPtr->flags & IOCP_CLOSING) {
-	    FreeBufferObj(bufPtr);
-	    break;
-	}
-
-	/* Takes buffer ownership. */
-	IocpPushRecvAlertToTcl(infoPtr, bufPtr);
-
 	if (bytes > 0) {
 	    if (infoPtr->outstandingRecvCap > 1) {
 		/*
@@ -2357,7 +2349,14 @@ HandleIo (
 		    FreeBufferObj(newBufPtr);
 		}
 	    }
+	} else if (infoPtr->flags & IOCP_CLOSING && infoPtr->flags & IOCP_ASYNC) {
+	    infoPtr->flags |= IOCP_CLOSABLE;
+	    FreeBufferObj(bufPtr);
+	    break;
 	}
+
+	/* Takes buffer ownership. */
+	IocpPushRecvAlertToTcl(infoPtr, bufPtr);
 
 	break;
 
@@ -2431,7 +2430,7 @@ done:
     if (InterlockedDecrement(&infoPtr->outstandingOps) <= 0
 	    && infoPtr->flags & IOCP_CLOSING) {
 	/* This is the last operation. */
-	if (infoPtr->flags & (IOCP_ASYNC | IOCP_CLOSABLE)) {
+	if (infoPtr->flags & IOCP_ASYNC && infoPtr->flags & IOCP_CLOSABLE) {
 	    FreeSocketInfo(infoPtr);
 	} else {
 	    SetEvent(infoPtr->allDone);
@@ -2867,7 +2866,7 @@ OurDisonnectEx (
 {
     BufferInfo *bufPtr;
     bufPtr = CONTAINING_RECORD(lpOverlapped, BufferInfo, ol);
-    CancelIo((HANDLE)hSocket);
+    winSock.WSASendDisconnect(hSocket, NULL);
     PostQueuedCompletionStatus(IocpSubSystem.port, 0,
 	    (ULONG_PTR) bufPtr->parent, lpOverlapped);
     return TRUE;
