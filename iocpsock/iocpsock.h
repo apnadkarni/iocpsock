@@ -242,9 +242,8 @@ typedef struct SocketInfo {
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
 				     * origin. */
     /* For listening sockets: */
-    LPLLIST readyAccepts;	    /* Ready accepts() in queue (used for
-				     * listening sockets only) */
-    LPLLIST llPendingAccepts;	    /* List of pending accepts() */
+    LPLLIST readyAccepts;	    /* Ready accepts() in queue. */
+    LPLLIST llPendingAccepts;	    /* List of pending accepts(). */
     Tcl_TcpAcceptProc *acceptProc;  /* Proc to call on accept. */
     ClientData acceptProcData;	    /* The data for the accept proc. */
 
@@ -254,17 +253,15 @@ typedef struct SocketInfo {
 
     int watchMask;		    /* Tcl events we are interested in. */
     int readyMask;
-
     DWORD lastError;		    /* Error code from last message. */
-
     DWORD writeError;		    /* Error code from last Send(To). */
     short outstandingSends;
     short maxOutstandingSends;
-
     volatile LONG OutstandingOps;	    
 //    ULONG LastSendIssued; // Last sequence number sent
 //    ULONG IoCountIssued;
     LPLLIST llPendingRecv; //Our pending recv list.
+    LLNODE node;
 
 } SocketInfo;
 
@@ -295,6 +292,7 @@ typedef struct CompletionPortInfo {
 			    /* The array of threads for handling the
 			     * completion routines. */
     HANDLE watchDogThread;  /* Used for cleaning up halfway accepted sockets */
+    LPLLIST listeningSockets;  /* list for where we store all listening sockets. */
 
 } CompletionPortInfo;
 
@@ -340,7 +338,7 @@ extern __inline BOOL	IocpFree (LPVOID block);
 #define IOCP_LL_NODESTROY	(1<<1)
 
 extern LPLLIST		IocpLLCreate();
-extern BOOL		IocpLLDestroy(LPLLIST ll, DWORD dwState);
+extern BOOL		IocpLLDestroy(LPLLIST ll);
 extern LPLLNODE		IocpLLPushBack(LPLLIST ll, LPVOID lpItem,
 				LPLLNODE pnode);
 extern LPLLNODE		IocpLLPushFront(LPLLIST ll, LPVOID lpItem,
@@ -348,8 +346,8 @@ extern LPLLNODE		IocpLLPushFront(LPLLIST ll, LPVOID lpItem,
 extern BOOL		IocpLLPop(LPLLNODE node, DWORD dwState);
 extern BOOL		IocpLLPopAll(LPLLIST ll, LPLLNODE snode, DWORD dwState);
 extern BOOL		IocpLLPopAllCompare(LPLLIST ll, LPVOID lpItem, DWORD dwState);
-extern LPVOID		IocpLLPopBack(LPLLIST ll, DWORD dwState);
-extern LPVOID		IocpLLPopFront(LPLLIST ll, DWORD dwState);
+extern LPVOID		IocpLLPopBack(LPLLIST ll, DWORD dwState, DWORD timeout);
+extern LPVOID		IocpLLPopFront(LPLLIST ll, DWORD dwState, DWORD timeout);
 extern BOOL		IocpLLIsNotEmpty(LPLLIST ll);
 extern BOOL		IocpLLNodeDestroy(LPLLNODE node);
 
