@@ -688,8 +688,8 @@ IocpEventSetupProc (
     }
 
     /*
-     * If any ready events exist now, avoid waiting in the notifier.
-     * This function call is very inexpensive.
+     * If any ready events exist now, don't let the notifier go into it's
+     * wait state.  This function call is very inexpensive.
      */
 
     if (IocpLLIsNotEmpty(tsdPtr->readySockets)) {
@@ -997,7 +997,7 @@ IocpCloseProc (
 		    bufPtr = GetBufferObj(infoPtr, 0);
 		    PostOverlappedDisconnect(infoPtr, bufPtr);
 		} else {
-		    /* TODO: untested */
+		    /* TODO: untested. */
 		    CancelIo((HANDLE)infoPtr->socket);
 		}
 	    } else {
@@ -1058,8 +1058,6 @@ IocpInputProc (
 		/* Too large or have EOF.  Push it back on for later. */
 		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
 			&bufPtr->node, 0);
-		/* instance is still readable, validate the instance is on the ready list. */
-		IocpZapTclNotifier(infoPtr);
 		break;
 	    }
 	    if (bufPtr->WSAerr != NO_ERROR) {
