@@ -1,3 +1,55 @@
+2003-03-15  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Tried to add a socket recyclebin, but the complexity is a bit
+		much for now.  Maybe later I'll add it.  Not now.
+
+2003-03-14  davygrvy
+	* iocpsock.h:
+	* ws2apltalk.c:
+	* ws2atm.c:
+	* ws2decnet.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+	* ws2isotp4.c:
+	* ws2netbios.c:
+	* ws2tcp.c:
+	* ws2udp.c:
+	* ws2vines.c:
+		WS2ProtoData struct changed to add DisconnectEx and
+		TransmitFile().
+
+	* bits.txt:
+		just some test scripts.
+
+	* iocpsock_static.dsp:
+		new static build project
+
+	* .cvsignore:
+		more globs
+
+	* ws2tcp.c:
+		Tested under WinXP, fixed all ConnectEx problems.
+
+	* dllmain.c:
+		set project version to 1.0
+
+2003-03-02  davygrvy
+	* iocpsock_lolevel.c:
+		replaced inet_ntoa() with WSAAddressToString for -sockname and
+		-peername fconfigures.  More work needed to neutralize these.
+
+	* .cvsignore:
+		added UI resource temp file to glob list.
+
+2003-03-01  davygrvy
+	* dllmain.c:
+	* iocpsock.rc:
+	* iocpsock_lolevel.c:
+	* readme.txt:
+		preparing for the 0.99 release.
+
 2003-03-01  davygrvy
 
 	== TAGGED iocpsock_0_99 ==
