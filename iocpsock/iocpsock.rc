@@ -1,104 +1,53 @@
-//Microsoft Developer Studio generated resource script.
+// RCS: @(#) $Id$
 //
-#include "resource.h"
-
-#define APSTUDIO_READONLY_SYMBOLS
-/////////////////////////////////////////////////////////////////////////////
+// Version resource script.
 //
-// Generated from the TEXTINCLUDE 2 resource.
+
+#include <winver.h>
+#define __WIN32__
+#include <tcl.h>
+#include <iocpsock.h>
+
 //
-#include "afxres.h"
-
-/////////////////////////////////////////////////////////////////////////////
-#undef APSTUDIO_READONLY_SYMBOLS
-
-/////////////////////////////////////////////////////////////////////////////
-// English (U.S.) resources
-
-#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
-#ifdef _WIN32
-LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
-#pragma code_page(1252)
-#endif //_WIN32
-
-#ifndef _MAC
-/////////////////////////////////////////////////////////////////////////////
+// build-up the name suffix that defines the type of build this is.
 //
-// Version
-//
+#if DEBUG && !UNCHECKED
+#define SUFFIX_DEBUG	    "g"
+#else
+#define SUFFIX_DEBUG	    ""
+#endif
+
+#define SUFFIX		    SUFFIX_DEBUG
+
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,9,9,0
- PRODUCTVERSION 0,9,9,0
- FILEFLAGSMASK 0x3fL
-#ifdef _DEBUG
- FILEFLAGS 0x1L
+ FILEVERSION	IOCPSOCK_MAJOR_VERSION,IOCPSOCK_MINOR_VERSION,IOCPSOCK_RELEASE_LEVEL,IOCPSOCK_RELEASE_SERIAL
+ PRODUCTVERSION	IOCPSOCK_MAJOR_VERSION,IOCPSOCK_MINOR_VERSION,IOCPSOCK_RELEASE_LEVEL,IOCPSOCK_RELEASE_SERIAL
+ FILEFLAGSMASK	0x3fL
+#ifdef DEBUG
+ FILEFLAGS 	VS_FF_DEBUG
 #else
- FILEFLAGS 0x0L
+ FILEFLAGS 	0x0L
 #endif
- FILEOS 0x40000L
- FILETYPE 0x2L
- FILESUBTYPE 0x0L
+ FILEOS 	VOS__WINDOWS32
+ FILETYPE 	VFT_DLL
+ FILESUBTYPE	0x0L
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "040904b0"
-        BEGIN
+	BLOCK "040904b0"
+	BEGIN
             VALUE "Comments", "http://sf.net/projects/iocpsock\0"
             VALUE "CompanyName", "Lyris Technologies, Inc.\0"
-            VALUE "FileDescription", "IOCP sockets channel driver for Tcl\0"
-            VALUE "FileVersion", "0.99\0"
+            VALUE "FileDescription", "IOCP " IOCPSOCK_VERSION "socket channel driver for Tcl\0"
+            VALUE "FileVersion", IOCPSOCK_PATCH_LEVEL
             VALUE "InternalName", "iocpsock\0"
-            VALUE "LegalCopyright", "Copyright © 2003 by David Gravereaux under BSD license\0"
-            VALUE "OriginalFilename", "iocpsock.dll\0"
-        END
+            VALUE "LegalCopyright", "Copyright © 2003-2004 by David Gravereaux under BSD license\0"
+            VALUE "OriginalFilename", "iocpsock" STRINGIFY(IOCPSOCK_MAJOR_VERSION) STRINGIFY(IOCPSOCK_MINOR_VERSION) SUFFIX ".dll\0"
+	END
     END
     BLOCK "VarFileInfo"
     BEGIN
-        VALUE "Translation", 0x409, 1200
+	VALUE "Translation", 0x409, 1200
     END
 END
-
-#endif    // !_MAC
-
-
-#ifdef APSTUDIO_INVOKED
-/////////////////////////////////////////////////////////////////////////////
-//
-// TEXTINCLUDE
-//
-
-1 TEXTINCLUDE DISCARDABLE 
-BEGIN
-    "resource.h\0"
-END
-
-2 TEXTINCLUDE DISCARDABLE 
-BEGIN
-    "#include ""afxres.h""\r\n"
-    "\0"
-END
-
-3 TEXTINCLUDE DISCARDABLE 
-BEGIN
-    "\r\n"
-    "\0"
-END
-
-#endif    // APSTUDIO_INVOKED
-
-#endif    // English (U.S.) resources
-/////////////////////////////////////////////////////////////////////////////
-
-
-
-#ifndef APSTUDIO_INVOKED
-/////////////////////////////////////////////////////////////////////////////
-//
-// Generated from the TEXTINCLUDE 3 resource.
-//
-
-
-/////////////////////////////////////////////////////////////////////////////
-#endif    // not APSTUDIO_INVOKED
-
