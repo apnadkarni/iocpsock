@@ -2596,32 +2596,39 @@ static int wsaErrorTable1[] = {
 };
 
 /*
- * These error code are very windows specific and have no POSIX
+ * These error codes are very windows specific and have no POSIX
  * translation, yet.
  *
  * TODO: Fixme!
  */
 
 static int wsaErrorTable2[] = {
-    EINVAL,		/* WSASYSNOTREADY */
-    EINVAL,		/* WSAVERNOTSUPPORTED */
-    EINVAL,		/* WSANOTINITIALISED */
-    EINVAL,		/* WSAEDISCON */
-    EINVAL,		/* WSAENOMORE */
-    EINVAL,		/* WSAECANCELLED */
-    EINVAL,		/* WSAEINVALIDPROCTABLE */
-    EINVAL,		/* WSAEINVALIDPROVIDER */
-    EINVAL,		/* WSAEPROVIDERFAILEDINIT */
-    EINVAL,		/* WSASYSCALLFAILURE */
-    EINVAL,		/* WSASERVICE_NOT_FOUND */
-    EINVAL,		/* WSATYPE_NOT_FOUND */
-    EINVAL,		/* WSA_E_NO_MORE */
-    EINVAL,		/* WSA_E_CANCELLED */
-    EINVAL,		/* WSAEREFUSED */
+    EINVAL,		/* WSASYSNOTREADY	    WSAStartup cannot function at this time because the underlying system it uses to provide network services is currently unavailable. */
+    EINVAL,		/* WSAVERNOTSUPPORTED	    The Windows Sockets version requested is not supported. */
+    EINVAL,		/* WSANOTINITIALISED	    Either the application has not called WSAStartup, or WSAStartup failed. */
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    EINVAL,		/* WSAEDISCON		    Returned by WSARecv or WSARecvFrom to indicate the remote party has initiated a graceful shutdown sequence. */
+    EINVAL,		/* WSAENOMORE		    No more results can be returned by WSALookupServiceNext. */
+    EINVAL,		/* WSAECANCELLED	    A call to WSALookupServiceEnd was made while this call was still processing. The call has been canceled. */
+    EINVAL,		/* WSAEINVALIDPROCTABLE	    The procedure call table is invalid. */
+    EINVAL,		/* WSAEINVALIDPROVIDER	    The requested service provider is invalid. */
+    EINVAL,		/* WSAEPROVIDERFAILEDINIT   The requested service provider could not be loaded or initialized. */
+    EINVAL,		/* WSASYSCALLFAILURE	    A system call that should never fail has failed. */
+    EINVAL,		/* WSASERVICE_NOT_FOUND	    No such service is known. The service cannot be found in the specified name space. */
+    EINVAL,		/* WSATYPE_NOT_FOUND	    The specified class was not found. */
+    EINVAL,		/* WSA_E_NO_MORE	    No more results can be returned by WSALookupServiceNext. */
+    EINVAL,		/* WSA_E_CANCELLED	    A call to WSALookupServiceEnd was made while this call was still processing. The call has been canceled. */
+    EINVAL,		/* WSAEREFUSED		    A database query failed because it was actively refused. */
 };
 
 /*
- * These error code are very windows specific and have no POSIX
+ * These error codes are very windows specific and have no POSIX
  * translation, yet.
  *
  * TODO: Fixme!
