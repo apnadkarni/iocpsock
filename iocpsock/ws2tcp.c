@@ -368,6 +368,18 @@ CreateTcpSocket(
 		FreeSocketAddress(hostaddr);
 		goto error;
 	    }
+
+    	    infoPtr->llPendingRecv = IocpLLCreate();
+
+	    /* post IOCP_RECV_COUNT recvs. */
+	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
+		bufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
+		if (PostOverlappedRecv(infoPtr, bufPtr) != NO_ERROR) {
+		    /* Oh no, the WSARecv failed. */
+		    FreeBufferObj(bufPtr);
+		    break;
+		}
+	    }
 	}
 	FreeSocketAddress(hostaddr);
     }
