@@ -13,26 +13,30 @@ available.
 
 It works great with tclhttpd, but its limits haven't been discovered
 yet.  As a server, the front-end just DOES NOT get over-run.  In the
-performance tests i've run, I just can't get the listening socket to
+performance tests I've run, I just can't get the listening socket to
 ever fail!  With the stock channel driver, connect errors begin around
 30 connections per second.  Right now, I can do 80/sec with zero errors
 and push it well over that.  How far above that I'm pushing it, I can't
 tell as I need to build a better test environment next week to see,
 but it flat-lines early.
 
+SYN attacks show an interesting behavior.  I didn't think an AcceptEx
+could fail, but they do with a SYN from a spoofed IP and error with
+same errors a failed connect() can.  Hmm..  If the AcceptEx pool is
+large enough this should not impact valid connections during the DoS
+attack.  Condition that you are under "attack" could be returned to
+the user..  I'm comtemplating this feature for a future release.
+
 It's fun in that the bottleneck is now tclhttpd (the script) itself
 and user-mode CPU time handling sockets is now non-existent which lets
 tclhttpd max-out at a lower input load.  Either sockets are 50% faster
 or 33% more time is available to the script.  Either view seems valid.
 In theory, 50K+ concurrent sockets are possible.  The only limitation
-is available memory (~8K per socket of the non-paged pool is reserved,
+is available memory (~500 bytes per socket of the non-paged pool is reserved,
 which limits at about 1/4 of the physical memory: YMMV).
 
-More development is needed.  It's amazingly stable.  Sockets are always
-created in non-blocking mode.  There is *no* blocking mode yet.  This
-will get fixed, eventually.  It provides one command called [socket2]
-and behaves just like the stock one, except for the lack of blocking
-mode.
+It's amazingly stable.  It provides one command called [socket2] and
+behaves just like the stock one.
 
 It does IPv6, btw.  The -sockname and -peername fconfigures don't do
 IPv6 yet, though, but you can create IPv6 sockets just by using an IPv6
@@ -61,15 +65,17 @@ address.
   Q: Does this only work on NT?
   A: Yes.  Just Win2K and WinXP.  It might work on NT4, though.  It
      can't work any of the Win9x flavors because completion ports are only
-     an operating system feature of NT.
+     an operating system feature of the NT flavors.
 
 * CHANGES from 1.0:
   - Use of the event loop made more efficient.  All polling behavior
-    eradicated forever..  Pure feed-forward.
+    eradicated forever..  Pure feed-forward.  Now does blocking mode,
+    too.
 
 * CHANGES from 0.99:
   - [read] bug fixed where if the there was nothing to read, bytes read
-    returned zero bytes rather than -1 with EAGAIN, oops.
+    returned zero bytes rather than -1 with EWOULDBLOCK, oops.  Resulted
+    in the generic layer thinking the connection gracefully closed.
 
 * CHANGES from 0.5:
   - *ALL* resource leaks plugged.
@@ -109,13 +115,14 @@ address.
     conversation -- HTTP would be an example.
 
 * TODO:
-  - Manage out-of-order receives so that additional completion threads can
-    be used -- one per CPU is said to be most efficient.
-  - Make the linkedlist routines waitable so blocking can be emulated.
   - Add special fconfigures for all the iocp stuff such as recv buffer
     size/count, accept buffer size/count and write concurrency.
+  - As above, but move the -ovlpd option to an fconfigure.
   - Begin on UDP, IPX, IrDA, AppleTalk, DecNet, etc... support.
-  - Test ConnectEx behavior on WinXP.
+  - Test ConnectEx behavior more thoroughly on WinXP.
+  - RAW sockets?  ICMP, IGMP?  multicast?  Hmm..
+  - Add a trace feature for debugging purposes of internal behavior
+    so odd things aren't silent.
 
 --
 David Gravereaux <davygrvy@pobox.com>
