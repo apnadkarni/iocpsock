@@ -1272,11 +1272,22 @@ IocpSetOptionProc (
 	    }
 	    return TCL_ERROR;
 	}
-	InterlockedExchange(&infoPtr->outstandingRecvCap, Integer);
+	if (InterlockedExchange(&infoPtr->outstandingRecvCap, Integer)
+		== 1 && Integer > 1) {
+	    BufferInfo *newBufPtr;
+	    newBufPtr = GetBufferObj(infoPtr, 0);
+	    /* Bump it out of it's trap. */
+	    if (PostOverlappedRecv(infoPtr, newBufPtr, 1) != NO_ERROR) {
+		/* TODO: return this error. */
+		FreeBufferObj(newBufPtr);
+	    }
+	} else {
+	    InterlockedExchange(&infoPtr->outstandingRecvCap, Integer);
+	}
 	return TCL_OK;
     }
 
-// TODO: pass this also to a protocol specific option routine.
+/* TODO: pass this also to a protocol specific option routine. */
 
     if (infoPtr->acceptProc) {
 	return Tcl_BadChannelOption(interp, optionName,
@@ -1836,7 +1847,7 @@ IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr)
     /*
      * Let IocpCheckProc() know this new channel has a ready
      * event (a recv) that needs servicing.  That is, if Tcl
-     * interested in knowing about it.
+     * is interested in knowing about it.
      */
     if (infoPtr->watchMask & TCL_READABLE) {
 	IocpZapTclNotifier(infoPtr);
@@ -2174,7 +2185,7 @@ CompletionThreadProc (LPVOID lpParam)
     DWORD bytes, flags, WSAerr, error = NO_ERROR;
     BOOL ok;
 
-#if 1
+#if 0
 #else
     __try {
 #endif
@@ -2187,7 +2198,7 @@ again:
 
 	if (ok && !infoPtr) {
 	    /* A NULL key indicates closure time for this thread. */
-#if 1
+#if 0
 	    return error;
 #else
 	    __leave;
@@ -2222,7 +2233,7 @@ again:
 	/* Go handle the IO operation. */
 	HandleIo(infoPtr, bufPtr, cpinfo->port, bytes, WSAerr, flags);
 	goto again;
-#if 1
+#if 0
 #else
     }
     __except (error = GetExceptionCode(), EXCEPTION_EXECUTE_HANDLER) {
