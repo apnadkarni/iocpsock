@@ -2157,7 +2157,7 @@ PostOverlappedDisconnect (SocketInfo *infoPtr, BufferInfo *bufPtr)
  *----------------------------------------------------------------------
  * CompletionThread --
  *
- *	The "main" for the I/O handling thread(s).  One thread per CPU.
+ *	The "main" for the I/O handling thread.  One thread only.
  *
  * Results:
  *
@@ -2945,6 +2945,7 @@ OurDisonnectEx (
     winSock.WSASendDisconnect(hSocket, NULL);
     PostQueuedCompletionStatus(IocpSubSystem.port, 0,
 	    (ULONG_PTR) bufPtr->parent, lpOverlapped);
-    return TRUE;
+    winSock.WSASetLastError(WSA_IO_PENDING);
+    return FALSE;
 }
 
