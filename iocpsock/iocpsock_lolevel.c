@@ -813,6 +813,9 @@ IocpCloseProc (
 	infoPtr->flags |= IOCP_CLOSING;
 	infoPtr->channel = NULL;
 
+	if (infoPtr->proto->type == SOCK_STREAM) {
+	    err = winSock.WSASendDisconnect(infoPtr->socket, NULL);
+	}
 	err = winSock.closesocket(infoPtr->socket);
 	if (err == SOCKET_ERROR) {
 	    IocpWinConvertWSAError(winSock.WSAGetLastError());
@@ -825,7 +828,15 @@ IocpCloseProc (
 	 */
 
 	Tcl_DeleteEvents(IocpRemovePendingEvents, infoPtr);
-	LeaveCriticalSection(&infoPtr->critSec);
+
+	/*
+	 * If there are no outstanding operations, lazy delete will not work.
+	 */
+	if (infoPtr->OutstandingOps <= 0) {
+	    FreeSocketInfo(infoPtr);
+	} else {
+	    LeaveCriticalSection(&infoPtr->critSec);
+	}
 
 	/*
 	 * Upon letting go of our lock, infoPtr can dissapear out from
@@ -883,6 +894,7 @@ IocpInputProc (
 	    IocpWinConvertWSAError(bufPtr->WSAerr);
 	    *errorCodePtr = Tcl_GetErrno();
 	    bytesRead = -1;
+	    FreeBufferObj(bufPtr);
 	    break;
 	} else {
 	    memcpy(bufPos, bufPtr->buf, bufPtr->used);
@@ -937,7 +949,8 @@ IocpOutputProc (
 
     if (WSAerr != NO_ERROR) {
 	// TODO: what SHOULD go here?
-	infoPtr->lastError = bufPtr->WSAerr;
+	FreeBufferObj(bufPtr);
+	infoPtr->lastError = WSAerr;
 	IocpWinConvertWSAError(WSAerr);
 	goto error;
     }
@@ -1335,6 +1348,7 @@ FreeSocketInfo (SocketInfo *infoPtr)
     /* Remove ourselves from the global listening list, if we are on it. */
     IocpLLPop(&infoPtr->node, IOCP_LL_NODESTROY);
 
+    /* Just in case... */
     if (infoPtr->socket != INVALID_SOCKET) {
 	winSock.closesocket(infoPtr->socket);
     }
