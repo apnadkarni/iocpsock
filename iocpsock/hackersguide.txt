@@ -1,0 +1,11 @@
+This document will evolve.
+
+First start in iocpsock_lolevel.c:InitializeIocpSubSystem().  The completion port
+is created there along with the threads to service it.
+
+Jump down to CompletionThread().  Each thread idles in GetQueuedCompletionStatus()
+waiting for work.
+
+Next look at HandleIo().  The guts are all here.  Unlike WSAAsyncSelect() where all
+you'd get is a notice to read from an FD_READ, completion ports give you result of
+the read operation in the buffer you handed it when the operation was posted.
