@@ -710,7 +710,7 @@ IocpEventProc (
 
     if (infoPtr->watchMask & TCL_WRITABLE && infoPtr->readyMask & TCL_WRITABLE) {
 	readyMask |= TCL_WRITABLE;
-	infoPtr->readyMask ^= TCL_WRITABLE;
+	infoPtr->readyMask &= ~(TCL_WRITABLE);
     }
 
     if (readyMask) Tcl_NotifyChannel(infoPtr->channel, readyMask);
@@ -810,18 +810,12 @@ IocpCloseProc (
 	infoPtr->flags |= IOCP_CLOSING;
 	infoPtr->channel = NULL;
 
-	if (infoPtr->proto->type == SOCK_STREAM) {
-	    err = winSock.WSASendDisconnect(infoPtr->socket, NULL);
-//	    CancelIo((HANDLE)infoPtr->socket);
-	} else {
-	    err = winSock.closesocket(infoPtr->socket);
-	    infoPtr->socket = INVALID_SOCKET;
-	}
-
+	err = winSock.closesocket(infoPtr->socket);
 	if (err == SOCKET_ERROR) {
 	    IocpWinConvertWSAError(winSock.WSAGetLastError());
 	    errorCode = Tcl_GetErrno();
 	}
+	infoPtr->socket = INVALID_SOCKET;
 
 	/*
 	 * Remove all events queued in the event loop for this socket.
@@ -1230,7 +1224,7 @@ IocpBlockProc (
     if (mode == TCL_MODE_BLOCKING) {
 	infoPtr->flags |= IOCP_BLOCKING;
     } else {
-	infoPtr->flags ^= IOCP_BLOCKING;
+	infoPtr->flags &= ~(IOCP_BLOCKING);
     }
     return 0;
 }
@@ -2046,7 +2040,7 @@ IocpFree (LPVOID block)
 
 /* Bitmask macros. */
 #define mask_a( mask, val ) if ( ( mask & val ) != val ) { mask |= val; }
-#define mask_d( mask, val ) if ( ( mask & val ) == val ) { mask ^= val; }
+#define mask_d( mask, val ) if ( ( mask & val ) == val ) { mask &= ~(val); }
 #define mask_y( mask, val ) ( mask & val ) == val
 #define mask_n( mask, val ) ( mask & val ) != val
 
