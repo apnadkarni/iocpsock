@@ -1,9 +1,64 @@
+2003-02-14  davygrvy
+
+	== Tagged iocpsock_0_3 ==
+
+	* readme.txt:
+		Moving to version 0.3
+
+2003-02-13  davygrvy
+	* ws2tcp.c:
+	* ws2udp.c:
+		Do proper clean-up on errors.
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		Watchdog DOS thread turned on.
+
+	* iocpsock_lolevel.c:
+		Moved the critical section locks in the watchdog routine to just where it was
+		needed.
+
+	* ws2tcp.c:
+		server sockets will add themselves to the global list of
+		listening sockets.
+
+	* ws2udp.c:
+		a scratchpad of ideas.
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		watchdog DOS thread almost ready to be turned on.
+
+	* iocpsock_lolevel.c:
+		When closing an infoPtr, we must pop itself off the global
+		listening list, too.
+
+	* dllmain.c:
+		write a load notice to stderr.
+
+	* bits.txt:
+		scratchpad.
+
+2003-02-12  davygrvy
+	* iocpsock_lolevel.c:
+		Added socket cleanup in FreeBufferObj() for when pending listening sockets
+		come back with WSA_OPERATION_ABORTED.
+
+	* iocpsock_lolevel.c:
+		FreeBufferObj() needed to pop itself off any pending lists it
+		may be on!
+
 2003-02-11  davygrvy
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
 	* ws2tcp.c:
 		Pending accepts now stored in a linked-list.  Later when the watchdog
 		thread is made, we can traverse the lists.
+
+	* hackersguide.txt:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		WatchDogThread partially added, but not turned on, yet.
 
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
@@ -24,6 +79,9 @@
 	* iocpsock_lolevel.c:
 		Removed llPendingSend member of the SocketInfo struct.  It wasn't needed.
 		Winsock itself acts as the queue.
+
+	* hackersguide.txt:
+		new file
 
 2003-02-10  daveg
 	* ws2tcp.c:
