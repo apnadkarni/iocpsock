@@ -205,7 +205,7 @@ CreateTcpSocket(
 	    ! CreateSocketAddress(myaddr, myport, addr,
 	    &mysockaddr)) {
 	goto error;
-    } else if (! CreateSocketAddress(NULL, "0", addr,
+    } else if (!server && !CreateSocketAddress(NULL, "0", addr,
 	    &mysockaddr)) {
 	goto error;
     }
