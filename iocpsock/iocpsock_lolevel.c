@@ -68,7 +68,7 @@ static Tcl_ChannelTypeVersion   IocpGetTclMaxChannelVer (
 static void			IocpZapTclNotifier (SocketInfo *infoPtr);
 static void			IocpAlertToTclNewAccept (SocketInfo *infoPtr,
 				    SocketInfo *newClient);
-static int			IocpAcceptOne (SocketInfo *infoPtr);
+static void			IocpAcceptOne (SocketInfo *infoPtr);
 static void			IocpPushRecvAlertToTcl(SocketInfo *infoPtr,
 				    BufferInfo *bufPtr);
 static DWORD			PostOverlappedSend (SocketInfo *infoPtr,
@@ -745,35 +745,40 @@ IocpEventProc (
 	return 0;
     }
 
-    if (infoPtr->channel == NULL) {
-	/* The event became stale.  How did we get here? */
+    /*
+     * If an accept is ready, pop one only.
+     */
+
+    if (infoPtr->readyAccepts != NULL) {
+	IocpAcceptOne(infoPtr);
 	return 1;
     }
 
     /*
      * Flop the ready toggle.  This is used to improve event loop
-     * efficiency to avoid unneccesary events being queued from the 
+     * efficiency to avoid unneccesary events being queued into the 
      * readySockets list.
      */
+    
     InterlockedExchange(&infoPtr->ready, 0);
 
     /*
-     * If an accept is ready, pop them all.
+     * If there is at least one entry on the infoPtr->llPendingRecv list,
+     * and the watch mask is set to notify for readable, the channel is
+     * readable.
      */
-
-    if (IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
-	/* load in all new connections from our listening socket. */
-	while (IocpAcceptOne(infoPtr));
-	return 1;
-    }
-
+    
     if (infoPtr->watchMask & TCL_READABLE &&
 	    IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
 	readyMask |= TCL_READABLE;
     }
 
-    if (infoPtr->watchMask & TCL_WRITABLE &&
-	    infoPtr->llPendingRecv /* connected */) {
+    /*
+     * If the watch mask is set to notify for writable events and the
+     * socket is connected, the channel is writable, always.
+     */
+
+    if (infoPtr->watchMask & TCL_WRITABLE && infoPtr->llPendingRecv) {
 	readyMask |= TCL_WRITABLE;
     }
 
@@ -786,16 +791,18 @@ IocpEventProc (
     return 1;
 }
 
-int
+static void
 IocpAcceptOne (SocketInfo *infoPtr)
 {
     char channelName[16 + TCL_INTEGER_SPACE];
     IocpAcceptInfo *acptInfo;
+    int more;
 
     acptInfo = IocpLLPopFront(infoPtr->readyAccepts, IOCP_LL_NODESTROY, 0);
 
     if (acptInfo == NULL) {
-	return 0;
+	/* Don't barf if the counts don't match. */
+	return;
     }
 
     wsprintf(channelName, "iocp%lu", acptInfo->clientInfo->socket);
@@ -804,12 +811,14 @@ IocpAcceptOne (SocketInfo *infoPtr)
     if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-translation",
 	    "auto crlf") == TCL_ERROR) {
 	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
-	return 1;
+	IocpFree(acptInfo);
+	goto error;
     }
     if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-eofchar", "")
 	    == TCL_ERROR) {
 	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
-	return 1;
+	IocpFree(acptInfo);
+	goto error;
     }
 
     /*
@@ -828,7 +837,26 @@ IocpAcceptOne (SocketInfo *infoPtr)
     }
 
     IocpFree(acptInfo);
-    return 1;
+
+error:
+    /* TODO: return error info to the trace routine. */
+
+    /*
+     * Use the fact that more might be ready too, as the condition
+     * to make another event source.  Hold the lock on infoPtr->readyAccepts
+     * to make sure we don't miss letting IocpZapTclNotifier see it can queued
+     * into.
+     */
+
+    EnterCriticalSection(&infoPtr->readyAccepts->lock);
+    more = (infoPtr->readyAccepts->lCount != 0);
+    if (more) {
+	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+    } else {
+	InterlockedExchange(&infoPtr->ready, 0);
+    }
+    LeaveCriticalSection(&infoPtr->readyAccepts->lock);
+    return;
 }
 
 static int
@@ -865,8 +893,10 @@ IocpCloseProc (
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     int errorCode = 0, err;
 
-    // The core wants to close channels after the exit handler!
-    // Our heap is gone!
+    /*
+     * The core wants to close channels after the exit handler!
+     * Our heap is gone!
+     */
     if (initialized) {
 
 	/* artificially increment the count. */
@@ -1353,68 +1383,6 @@ IocpSpliceProc (ClientData instanceData)
 /* =================================================================== */
 /* ============== Lo-level buffer and state manipulation ============= */
 
-/*
- *  Only zap the notifier when the notifier is waiting and this request
- *  has not already been made previously.
- */
-
-static void
-IocpZapTclNotifier (SocketInfo *infoPtr)
-{
-    DWORD dwWait;
-    LONG wasAlreadyPosted = InterlockedExchange(&infoPtr->ready, 1);
-
-    /*
-     * If we are in the middle of a thread transfer on the channel,
-     * infoPtr->tsdHome will be NULL.
-     */
-    if (infoPtr->tsdHome) {
-	if (!wasAlreadyPosted) {
-	    /* No entry on ready list.  Insert one. */
-	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
-	}
-	dwWait = WaitForSingleObject(infoPtr->tsdHome->needAwake, 0);
-	/* if the notifier is waiting, zap it awake. */
-	if (dwWait == WAIT_OBJECT_0) {
-	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
-	}
-    }
-}
-
-/* takes buffer ownership */
-void
-IocpAlertToTclNewAccept (
-    SocketInfo *infoPtr,
-    SocketInfo *newClient)
-{
-    IocpAcceptInfo *acptInfo;
-
-    acptInfo = IocpAlloc(sizeof(IocpAcceptInfo));
-    if (acptInfo == NULL) {
-	return;
-    }
-
-    memcpy(&acptInfo->local, newClient->localAddr,
-	    newClient->proto->addrLen);
-    acptInfo->localLen = newClient->proto->addrLen;
-    memcpy(&acptInfo->remote, newClient->remoteAddr,
-	    newClient->proto->addrLen);
-    acptInfo->remoteLen = newClient->proto->addrLen;
-    acptInfo->clientInfo = newClient;
-
-    /*
-     * Queue this accept's data into the listening channel's info block.
-     */
-    IocpLLPushBack(infoPtr->readyAccepts, acptInfo, &acptInfo->node);
-
-    /*
-     * Let IocpCheckProc() know this channel has an accept ready
-     * that needs servicing.
-     */
-    IocpZapTclNotifier(infoPtr);
-}
-
-
 SocketInfo *
 NewSocketInfo (SOCKET socket)
 {
@@ -1535,7 +1503,68 @@ NewAcceptSockInfo (SOCKET socket, SocketInfo *infoPtr)
     return newInfoPtr;
 }
 
-void
+/*
+ *  Only zap the notifier when the notifier is waiting and this request
+ *  has not already been made previously.
+ */
+
+static void
+IocpZapTclNotifier (SocketInfo *infoPtr)
+{
+    DWORD dwWait;
+    LONG wasAlreadyPosted = InterlockedExchange(&infoPtr->ready, 1);
+
+    /*
+     * If we are in the middle of a thread transfer on the channel,
+     * infoPtr->tsdHome will be NULL.
+     */
+    if (infoPtr->tsdHome) {
+	if (!wasAlreadyPosted) {
+	    /* No entry on ready list.  Insert one. */
+	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+	}
+	dwWait = WaitForSingleObject(infoPtr->tsdHome->needAwake, 0);
+	/* if the notifier is waiting, zap it awake. */
+	if (dwWait == WAIT_OBJECT_0) {
+	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+	}
+    }
+}
+
+/* takes buffer ownership */
+static void
+IocpAlertToTclNewAccept (
+    SocketInfo *infoPtr,
+    SocketInfo *newClient)
+{
+    IocpAcceptInfo *acptInfo;
+
+    acptInfo = IocpAlloc(sizeof(IocpAcceptInfo));
+    if (acptInfo == NULL) {
+	return;
+    }
+
+    memcpy(&acptInfo->local, newClient->localAddr,
+	    newClient->proto->addrLen);
+    acptInfo->localLen = newClient->proto->addrLen;
+    memcpy(&acptInfo->remote, newClient->remoteAddr,
+	    newClient->proto->addrLen);
+    acptInfo->remoteLen = newClient->proto->addrLen;
+    acptInfo->clientInfo = newClient;
+
+    /*
+     * Queue this accept's data into the listening channel's info block.
+     */
+    IocpLLPushBack(infoPtr->readyAccepts, acptInfo, &acptInfo->node);
+
+    /*
+     * Let IocpCheckProc() know this channel has an accept ready
+     * that needs servicing.
+     */
+    IocpZapTclNotifier(infoPtr);
+}
+
+static void
 IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
     /* (takes buffer ownership) */
@@ -1765,22 +1794,8 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
     } else {
 	/*
 	 * The WSASend/To completed now, instead of getting posted.
-	 * Zap an extra TCL_WRITABLE event to push the send buffers in
-	 * winsock until we get them posting and keep them full.  This
-	 * seems to be greedy if the peer is on localhost.
-	 *
-	 * TODO: study this problem.  We need to put a cap on the
-	 * concurency allowed.  Sounds like an fconfigure is needed.
-	 * The logic below isn't thread-safe, but that's ok as perfection
-	 * isn't required.
 	 */
 	__asm nop;
-	/*
-	if (infoPtr->outstandingSends
-		< infoPtr->maxOutstandingSends) {
-	    infoPtr->outstandingSends++;
-	    IocpZapTclNotifier(infoPtr);
-	}*/
     }
 
     return NO_ERROR;
@@ -2297,7 +2312,7 @@ static int wsaErrorTable2[] = {
     0,
     0,
     0,
-    EINVAL,		/* WSAEDISCON		    Returned by WSARecv or WSARecvFrom to indicate the remote party has initiated a graceful shutdown sequence. */
+    ENOTCONN,		/* WSAEDISCON		    Returned by WSARecv or WSARecvFrom to indicate the remote party has initiated a graceful shutdown sequence. */
     EINVAL,		/* WSAENOMORE		    No more results can be returned by WSALookupServiceNext. */
     EINVAL,		/* WSAECANCELLED	    A call to WSALookupServiceEnd was made while this call was still processing. The call has been canceled. */
     EINVAL,		/* WSAEINVALIDPROCTABLE	    The procedure call table is invalid. */
