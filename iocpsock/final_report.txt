@@ -1,0 +1,170 @@
+What: final report for the windows socket code used by the tcl webserver.
+When: 2:49 PM 5/11/2004
+Why:  you need this summary even though it wasn't asked of me.
+Who:  David Gravereaux <davygrvy@pobox.com>  510-601-7245
+
+The socket code (IOCPSOCK) that drives not only the port 80 listening socket and
+connected children, is also used for TclPort connections to ListManager.
+
+IOCPSOCK exports 2 commands:
+
+1) [socket2] which is identical to the core's socket in calling syntax.
+2) [iocp_stats] that returns the results of internal counters for the server's
+    /status page.
+
+Rather than describe what IOCPSOCK is (just a socket replacement channel
+driver) I'll document the limitations, or the "what's left" aspects.  This
+note to the tclhttpd mailing list describes it well, so here it is:
+
+To: <tclhttpd-users@lists.sourceforge.net>
+Subject: Re: [Tclhttpd-users] ANNC:  Iocpsock v2.0.1 -- maintenence release.
+From: David Gravereaux <davygrvy@pobox.com>
+Date: Fri, 07 May 2004 15:48:02 -0700
+
+"Jeff Rankin" <Jrankin@oneil.com> wrote:
+
+>David -
+>
+>I believe the problem was the version of patch that I was using (the
+>version that ships with Windows SFU). I tried a different version and
+>the patch was applied properly. 
+>
+>I'm running some benchmarks with Apache's ab tool, and the results look
+>good. I'm able to serve hundreds of concurrent requests (currently up to
+>300) on Windows 2003.
+>
+>Is my perception correct in that Iocpsock will enable much higher
+>performance in terms of concurrency, but not speed of TcHttpd? Are there
+>other areas where performance might be improved?
+>
+>Thanks for the terrific tool -
+>
+>W. Jeffrey Rankin
+>Lead Web Application Developer
+
+Good question!  I found that the speed of tclhttpd is not fully related to
+network speed, but the speed of Tcl itself.
+
+A year or so ago, I was doing some timing tests and found (on a 500MHz
+test box) that the fastest Tcl could process its event loop was around
+1500 iterations per second for a 'fileevent readable' that did essentially
+nothing.  The amount of iterations my completion thread could do was over
+3500 per second (I couldn't get an actual number, though, but was at least
+as high).  Which is fine, as IOCPSOCK can stock pile buffers until Tcl is
+ready to consume them (if used in that mode).
+
+Where IOCPSOCK shines is how indestructible the listening socket is.  Even
+with running a spoofed SYN attack on it, sockets are still available to
+valid connections.  You can even trim the backlog size to adjust the
+hardness of it on the fly.  Though, I couldn't figure out a way to do an
+auto-detect for a SYN attack and raise the backlog.  An open-ended SYN can
+hold a socket for a couple minutes until it times out for the worst case,
+yet most didn't seem to hit that.
+
+For IOCPSOCK to work well in the 60K concurrent socket range, a zerobyte
+WSARecv feature will need to get added.  A per socket memory lock on the
+-buffersize setting is no good in that range as the memory needed gets
+extreme (60,000 sockets X 16,000 bytes/socket = 960,000,000 bytes).
+
+I haven't tested IOCPSOCK on a gigabit network, but would love to.  I can
+max a 100Mb/s one with the -sendcap fconfigure set to around 12 and only a
+4096 -buffersize with only 35% CPU usage on the receiver (sender was
+around 60%).  Bus/memory speed of the motherboard would probably be the
+limiter with a gigabit card.  IOCP scales beautifully.  The speed of the
+sockets themselves are ungodly doing 1315 exchanges (simulated hits) per
+second on my 2.4GHz test box, but in context with tclhttpd, the company's
+product backend (SQL delays), and some URLs that are labor intensive, 70
+hits/sec was the lowest found for doing an image grab with the highest @
+420 hits/sec (strong use of server-side caching in the page gen scripts).
+And if I try, I can access some URLs in the product that take minutes to
+return, yet it isn't tclhttpd churning the CPU time.  When you have so
+much stuff that comprise the whole picture, things can get blurry.
+
+Although HttpdRead is the most called procedure in tclhttpd, Url_Dispatch
+appears to have a bottleneck processing the access hooks.  All out speed
+soars if you comment that out, though like anything is removing features
+which is not say I think it should be removed..  Maybe the use of [eval]
+is being harsh to performance?
+-- 
+David Gravereaux <davygrvy@pobox.com>
+[species: human; planet: earth,milkyway(western spiral arm),alpha sector]
+
+
+
+Here's a more detailed description of the memory limitation as it exists
+for you.  If one runs this in a tclsh shell:
+
+C:\WINNT\system32>tclsh84
+% for {set i 0} {$i < 10000} {incr i} {socket localhost 80}
+% foreach s [file channels] {if {[string match sock* $s]} {close $s}; after 5}
+% exit
+
+With those 10,000 sockets connected (no data transfer), you'll see on the
+status page that "General pool bytes in use" will be 1,800,516 bytes and
+"Special pool bytes in use" will be at 41,755,025 bytes.
+
+Previously, I had been using what I called a "burst-detection" algorithm
+for how to handle the receiving, but discovered over late 2003 it wasn't
+the best choice for how to run a webserver.  This following note to the
+tclhttpd mailing describes it well:
+
+To: <tclhttpd-users@lists.sourceforge.net>
+Subject: Re: [Tclhttpd-users] ANNC:  Iocpsock v2.0.1 -- maintenence release.
+From: David Gravereaux <davygrvy@pobox.com>
+Date: Sat, 08 May 2004 13:17:22 -0700
+
+David Gravereaux <davygrvy@pobox.com> wrote:
+
+>For IOCPSOCK to work well in the 60K concurrent socket range, a zerobyte
+>WSARecv feature will need to get added.  A per socket memory lock on the
+>-buffersize setting is no good in that range as the memory needed gets
+>extreme (60,000 sockets X 16,000 bytes/socket = 960,000,000 bytes).
+
+IOCPSOCK has two recv modes already.
+
+The first is normal flow-controlled behavior where I post a buffer equal
+to the channel's -buffersize with WSARecv.  It is only replaced to winsock
+when Tcl consumes it into the channel.  Proper TCP flow behavior is
+maintained.  This what I'm using with tclhttpd.
+
+The second is what I call "automatic burst detection" which is analogous
+to a shop vac sucking winsock dry.  The count of overlapped WSARecv calls
+will increase depending on instantaneous need and will continue to drain
+the socket without the need for Tcl to consume what had already been
+posted.  Eventually when Tcl can come around to service the channel, a
+whole lot of buffers could be ready to be consumed.  The count of
+concurrent WSARecv calls is capped and settable, but NOT how large a
+backlog of ready buffers they create.  This mode rides the edge of a
+denial-of-service and should be used with caution only when serious
+throughput is desired or when the network is very bursty.  This is *NOT* a
+mode that should be used for HTTPD.  FTPD maybe, but not HTTPD.  Note that
+data could be arriving faster than Tcl can read it and IOCPSOCK can
+support that dangerous behavior until all memory is exhausted.  Needless
+to say, I haven't perfected it yet.
+
+Many short-lived sockets that transfer very little is the mode we want for
+HTTPD.
+
+I'm looking at doing the zero-byte mode so I can raise the realistic
+concurrency to max sockets for the OS.  I think I can do it.  After I do,
+I sure hope I can still be able to read my source..  It's getting rather
+complex now...
+-- 
+David Gravereaux <davygrvy@pobox.com>
+[species: human; planet: earth,milkyway(western spiral arm),alpha sector]
+
+
+Using a zero-byte receiving algorithm, and the 10,000 socket connection
+script, I can lower the "Special pool bytes in use" to a mere 774,472 bytes.
+Regarding the math and why 41Mbytes isn't really 16Kbytes X 10K (it's
+4Kbytes) is because the initially posted WSARecv uses a 4K buffer.  Once a
+first read() is done on the socket it aquires the -buffersize setting of the
+channel which is 16K for tclhttpd. So if each of those 10,000 sockets had
+been read into the server, "Special pool bytes in use" would have become
+160,000,000 or so.
+
+I can change the receive algo to a "zero-byte" mode if you desire more
+efficient memory usage for the webserver.  BTW, Phil is constantly remarking
+on the webserver bloat.  Do you want this improved?  Please speak with me
+about the price as I can do this for you "per job" rather than "per hour"
+which I'm almost positive fits your business model more appropriatly.
