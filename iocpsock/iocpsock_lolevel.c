@@ -318,6 +318,12 @@ InitSockets()
 		    GetProcAddress(winSock.hModule, "WSAIoctl");
 	    winSock.WSAJoinLeaf = (LPFN_WSAJOINLEAF)
 		    GetProcAddress(winSock.hModule, "WSAJoinLeaf");
+	    winSock.WSALookupServiceBeginA = (LPFN_WSALOOKUPSERVICEBEGINA)
+		    GetProcAddress(winSock.hModule, "WSALookupServiceBeginA");
+	    winSock.WSALookupServiceEnd = (LPFN_WSALOOKUPSERVICEEND)
+		    GetProcAddress(winSock.hModule, "WSALookupServiceEnd");
+	    winSock.WSALookupServiceNextA = (LPFN_WSALOOKUPSERVICENEXTA)
+		    GetProcAddress(winSock.hModule, "WSALookupServiceNextA");
 	    winSock.WSANtohl = (LPFN_WSANTOHL)
 		    GetProcAddress(winSock.hModule, "WSANtohl");
 	    winSock.WSANtohs = (LPFN_WSANTOHS)
@@ -363,6 +369,9 @@ InitSockets()
 		    (winSock.WSAHtons == NULL) ||
 		    (winSock.WSAIoctl == NULL) ||
 		    (winSock.WSAJoinLeaf == NULL) ||
+		    (winSock.WSALookupServiceBeginA == NULL) ||
+		    (winSock.WSALookupServiceEnd == NULL) ||
+		    (winSock.WSALookupServiceNextA == NULL) ||
 		    (winSock.WSANtohl == NULL) ||
 		    (winSock.WSANtohs == NULL) ||
 		    (winSock.WSAProviderConfigChange == NULL) ||
