@@ -1,7 +1,83 @@
+2004-05-06  davygrvy
+	* iocpsock_lolevel.c:
+		Corrected an error message to return a more exact condition of
+		the failure.
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		When/if the completion thread dies with an exception, call Tcl_Panic
+
+2004-05-05  davygrvy
+	* iocpsock_static.dsp:
+		resource.h removed
+
+	* dllmain.c:
+		[iocp_stats] command now outputs html
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		partial reads now supported.  The old limit where the -buffersize couldn't be
+		less than 4096 is now removed.  IOCPSOCK can now be used with the TLS
+		extension.
+
+	* testme.cmd:
+		more tunable for the user
+
+	* tests/all.tcl:
+		request the user to exit the test suite when done (UI friendly)
+
+	* HttpdRead.c:
+		This is an unfinished experiment.
+
+	* ws2tcp.c:
+		QOS support is currently turned off.
+
+	* tests/test_client.tcl:
+	* tests/test_server.tcl:
+		some dumb errors fixed.
+
+2004-04-06  davygrvy
+	* tests/socket2.test:
+		Changes for 2.0.1 release
+
+2004-04-05  davygrvy
+	* dllmain.c:
+	* iocpsock.dsp:
+	* iocpsock.h:
+	* iocpsock_hilevel.c:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Changes for 2.0.1 release
+
+	* iocpsock.dsp:
+		drop warning level to 3 from 4
+
+2004-03-28  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		Added FindProtocolInfo() to begin support for QoS.
+
+2004-03-27  davygrvy
+	* iocpsock_lolevel.c:
+		HandleIo() wasn't respecting an error of WSAENOBUFFS and falling into an
+		infinite loop trying to overcome the system resource limit.  cap limits are now
+		reduced.  If you ask for a -backlog beyond what the system can do, it will
+		now accept that limit and keep dropping the cap to reach an equilibrium.
+
+2004-03-25  davygrvy
+	* iocpsock_lolevel.c:
+		very minor memory leak in IocpAcceptOne() repaired.
+
+	* readme.txt:
+		more new stuff that leads the iocpsock_2_0 tag, unfortunately.
+
 2004-03-24  davygrvy
 	* iocpsock_lolevel.c:
 		Big bug in IocpInputProc() fixed.  Upon receiving the graceful
 		close indication, I had forgotten to free the buffer.
+
+	* readme.txt:
+		edited for 2.0
 
 2004-03-23  davygrvy
 	* iocpsock_lolevel.c:
@@ -43,26 +119,26 @@
 		Now that SocketInfo is restricted to only ever one entry on readySockets,
 		use a node in the struct itself and stop using dynamic ones.
 
-	* tests/test_client.tcl:
-	* tests/test_server.tcl:
-		use new fconfigures
-
 	* iocpsock_lolevel.c:
 		validated formatting such that no line are > 74 characters.  Changed my
 		mind about how to close a non-stream socket in async mode (yet again).
 		Made sure the -backlog server fconfigure isn't seen or accepted for non-
 		server sockets.
 
-	* tests/socket2.test:
-		new test to verify we need to keep calling the readable handler
-		until EOF is serviced (unfinshed)
+	* tests/test_client.tcl:
+	* tests/test_server.tcl:
+		use new fconfigures
+
+	* iocpsock_lolevel.c:
+		had some logic inversion in the Get/SetOptionProcs
 
 	* iocpsock_lolevel.c:
 		PostOverlappedSend needs to return an error if over the sendcap value
 		so the core can schedule a background flush.  Now does this.
 
-	* iocpsock_lolevel.c:
-		had some logic inversion in the Get/SetOptionProcs
+	* tests/socket2.test:
+		new test to verify we need to keep calling the readable handler
+		until EOF is serviced (unfinshed)
 
 2004-03-13  davygrvy
 	* license.terms:
@@ -116,7 +192,10 @@
 		IocpInputProc to verify through IocpWatchProc that the channel's
 		ready state, therefore the TclZapNotifier call in IocpInputProc after the
 		IocpLLPushFront was removed.  This was a false impression given to
-		me by someone.
+		me by Klaus Suetterlin <robert@mpe.mpg.de> for which he was incorrect.
+		
+		Dude, I don't mind the code reveiw, but its rather impolite to place someone
+		who is providing FREE software in a defensive position.  Wake up.
 
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
@@ -207,11 +286,11 @@
 		Use version macro in iocpsock.h for call to Tcl_PkgProvide
 
 2004-02-28  davygrvy
-	* iocpsock.rc:
-		modernized to follow the Tcl style
-
 	* dllmain.c:
 		Restrict to load into 8.3+ for the Tcl Channel APIs in use.
+
+	* iocpsock.rc:
+		modernized to follow the Tcl style
 
 	* ws2tcp.c:
 		need to respect the difference between AF_INET and AF_INET6
@@ -535,14 +614,14 @@
 	* ws2tcp.c:
 		Now supports ipv6
 
+	* iocpsock.h:
+		Fixed most all C++ style comments.
+
 	* license.terms:
 		new
 
 	* readme.txt:
 		speling
-
-	* iocpsock.h:
-		Fixed most all C++ style comments.
 
 	* ws2irda.c:
 		added some sample code for future reference.
@@ -601,18 +680,18 @@
 	* hackersguide.txt:
 		CompletionThread name changed to CompletionThreadProc
 
-	* readme.txt:
-		Moving to version 0.3
-
-	* tclhttpd.patch.txt:
-		new file
-
 	* iocpsock_lolevel.c:
 		OP_ACCEPT logic in HandleIo changed to report a zero byte read, but only
 		post another WSARecv when more than zero bytes -- just like OP_READ.
 
 	* readme.txt:
 		update the prose, again edited.
+
+	* readme.txt:
+		Moving to version 0.3
+
+	* tclhttpd.patch.txt:
+		new file
 
 	* readme.txt:
 		update the prose, again.
