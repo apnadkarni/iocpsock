@@ -1,4 +1,4 @@
-iocpsock.dll -- ver 0.3 (Thu Feb 13 03:08:48 2003)
+iocpsock.dll -- ver 0.4 (Fri Feb 14 19:17:13 2003)
 
 http://sf.net/project/showfiles.php?group_id=73356
 http://sf.net/projects/iocpsock
@@ -36,6 +36,17 @@ called [socket2] and behaves just like the stock one.
      http://www.sysinternals.com/ntw2k/info/comport.shtml
      http://tangentsoft.net/wskfaq/articles/io-strategies.html
      http://msdn.microsoft.com/library/en-us/winsock/winsock/overlapped_i_o_2.asp
+
+  Q: Does this only work on NT?
+  A: Yes.  Win2K and WinXP.  It might work on NT4, though.  It can't
+     work any of the Win9x flavors because completion ports are an OS
+     feature of NT.
+
+* CHANGES from 0.3:
+  - properly works under threads.  Tcl_DeleteEventSource called in
+    the threadexithandler and readyEvents linkedlist in the tsdPtr set
+    to NULL so modifying it by sockets in the middle of closing will do
+    nothing.
 
 * CHANGES from 0.2:
   - Better tracking and clean-up of resources.  Memory use is tight.
