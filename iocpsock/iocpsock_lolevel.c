@@ -1318,12 +1318,12 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
 {
     BufferInfo *bufPtr;
 
-    // Allocate the object
+    /* Allocate the object. */
     bufPtr = IocpAlloc(sizeof(BufferInfo));
     if (bufPtr == NULL) {
 	return NULL;
     }
-    // Allocate the buffer
+    /* Allocate the buffer. */
     bufPtr->buf = IocpAlloc(sizeof(BYTE)*buflen);
     if (bufPtr->buf == NULL) {
 	IocpFree(bufPtr);
@@ -1343,6 +1343,11 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
 void
 FreeBufferObj (BufferInfo *bufPtr)
 {
+    /* Pop itself off any linked-list it may be on. */
+    if (bufPtr->node.ll != NULL) {
+	IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
+    }
+    /* If we have a socket for AcceptEx(), close it. */
     if (bufPtr->socket != INVALID_SOCKET) {
 	winSock.closesocket(bufPtr->socket);
     }
