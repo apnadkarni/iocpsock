@@ -396,6 +396,8 @@ extern BufferInfo *	GetBufferObj (SocketInfo *infoPtr,
 			    SIZE_T buflen);
 extern SocketInfo *	NewSocketInfo (SOCKET socket);
 extern void		FreeSocketInfo (SocketInfo *infoPtr);
+extern BOOL		FindProtocolInfo(int af, int type, int protocol,
+			    DWORD flags, WSAPROTOCOL_INFO *pinfo);
 extern int		HasSockets (Tcl_Interp *interp);
 extern char *		GetSysMsg (DWORD id);
 extern Tcl_Obj *	GetSysMsgObj (DWORD id);

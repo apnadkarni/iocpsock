@@ -2743,6 +2743,73 @@ FreeSocketAddress (LPADDRINFO addrinfo)
     freeaddrinfo(addrinfo);
 }
 
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * FindProtocolInfo --
+ *
+ *	This function searches the Winsock catalog for a provider of the
+ *	given address family, socket type, protocol and flags. The flags
+ *	field is a bitwise OR of all the attributes that you request
+ *	such as multipoint or QOS support.
+ *
+ * Results:
+ *	TRUE if pinfo was set or FALSE for an error.
+ *
+ * Side effects:
+ *	None known.
+ *
+ *----------------------------------------------------------------------
+ */
+
+BOOL FindProtocolInfo(int af, int type, 
+    int protocol, DWORD flags, WSAPROTOCOL_INFO *pinfo)
+{
+    DWORD protosz = 0, nprotos, i;
+    WSAPROTOCOL_INFO *buf = NULL;
+    int ret;
+
+    /*
+     * Find out the size of the buffer needed to enumerate
+     * all entries.
+     */
+    ret = winSock.WSAEnumProtocols(NULL, NULL, &protosz);
+    if (ret != SOCKET_ERROR) {
+        return FALSE;  
+    }
+    /* Allocate the necessary buffer */
+    buf = (WSAPROTOCOL_INFO *) IocpAlloc(protosz);
+    if (!buf) {
+        return FALSE;
+    }
+    nprotos = protosz / sizeof(WSAPROTOCOL_INFO);
+    /* Make the real call */
+    ret = winSock.WSAEnumProtocols(NULL, buf, &protosz);
+    if (ret == SOCKET_ERROR) {
+        IocpFree(buf);
+        return FALSE;
+    }
+    /*
+     * Search throught the catalog entries returned for the 
+     * requested attributes.
+     */
+    for(i=0; i < nprotos ;i++) {
+        if ((buf[i].iAddressFamily == af) &&
+		(buf[i].iSocketType == type) &&
+		(buf[i].iProtocol == protocol)) {
+            if ((buf[i].dwServiceFlags1 & flags) == flags) {
+                memcpy(&pinfo, &buf[i], sizeof(WSAPROTOCOL_INFO));
+                IocpFree(buf);
+                return TRUE;
+            }
+        }
+    }
+    IocpFree(buf);
+    return FALSE;
+}
+
+
 /* =================================================================== */
 /* ========================= Error mappings ========================== */
 
