@@ -544,7 +544,7 @@ IocpExitHandler (ClientData clientData)
 
     if (initialized) {
 	for (i = 0, j = numCPUs; i < numCPUs; i++, j--) {
-	    /* Cause one of the waiting I/O handler threads to exit. */
+	    /* Cause one of the completion threads to exit. */
 	    PostQueuedCompletionStatus(IocpSubSystem.port, 0, 0, 0);
 
 	    /* Wait for one to exit from the group. */
