@@ -154,7 +154,7 @@ InitSockets()
 	iocpModule = TclWinGetTclInstance();
 #endif
 
-	ZeroMemory(&winSock, sizeof(WinsockProcs));
+//	ZeroMemory(&winSock, sizeof(winSock));
 
 	/*
 	 * Try ws2_32.dll first, if available.
@@ -788,7 +788,7 @@ IocpEventProc (
      * and the watch mask is set to notify for readable, the channel is
      * readable.
      */
-    
+
     if (infoPtr->watchMask & TCL_READABLE &&
 	    IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
 	readyMask |= TCL_READABLE;
@@ -930,8 +930,10 @@ IocpCloseProc (
      */
     if (initialized) {
 
+	EnterCriticalSection(&infoPtr->tsdHome->readySockets->lock);
 	/* Flip the bit so no new stuff can ever come in again. */
 	InterlockedExchange(&infoPtr->markedReady, 1);
+	LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
 
 	/* Setting this means all returning operations will get
 	 * trashed. */
@@ -944,10 +946,8 @@ IocpCloseProc (
 	 * dangle. */
 	infoPtr->channel = NULL;
 
-	/* Remove all pending ready socket notices that have yet to
-	 * be queued into Tcl's event loop. */
-	IocpLLPopAllCompare(infoPtr->tsdHome->readySockets, infoPtr,
-		IOCP_LL_NODESTROY);
+	/* Remove ourselves from the readySockets list, if we're on it. */
+	IocpLLPop(&infoPtr->node, IOCP_LL_NODESTROY);
 
 	/* Remove all events queued in the event loop for this socket. */
 	Tcl_DeleteEvents(IocpRemovePendingEvents, infoPtr);
@@ -1149,6 +1149,7 @@ IocpOutputProc (
     memcpy(bufPtr->buf, buf, toWrite);
     if (PostOverlappedSend(infoPtr, bufPtr) == WSAENOBUFS) {
 	/* Would have been over the sendcap restriction. */
+	FreeBufferObj(bufPtr);
 	*errorCodePtr = EWOULDBLOCK;
 	return -1;
     }
@@ -1697,27 +1698,34 @@ FreeSocketInfo (SocketInfo *infoPtr)
 
     if (!infoPtr) return;
 
-    /*
-     * Remove all pending ready socket notices that have yet to be queued
-     * into Tcl's event loop.
-     */
-    IocpLLPopAllCompare(infoPtr->tsdHome->readySockets, infoPtr,
-	    IOCP_LL_NODESTROY);
+    /* Remove us from the readySockets list, if on it. */
+    IocpLLPop(&infoPtr->node, IOCP_LL_NODESTROY);
 
     /* Just in case... */
     if (infoPtr->socket != INVALID_SOCKET) {
 	winSock.closesocket(infoPtr->socket);
+	infoPtr->socket = INVALID_SOCKET;
     }
 
-    if (infoPtr->localAddr) IocpFree(infoPtr->localAddr);
-    if (infoPtr->remoteAddr) IocpFree(infoPtr->remoteAddr);
+    if (infoPtr->localAddr) {
+	IocpFree(infoPtr->localAddr);
+	infoPtr->localAddr = NULL;
+    }
+    if (infoPtr->remoteAddr) {
+	IocpFree(infoPtr->remoteAddr);
+	infoPtr->remoteAddr = NULL;
+    }
 
     if (infoPtr->readyAccepts) {
-	while ((bufPtr = IocpLLPopFront(infoPtr->readyAccepts,
+	IocpAcceptInfo *acptInfo;
+	while ((acptInfo = IocpLLPopFront(infoPtr->readyAccepts,
 		IOCP_LL_NODESTROY, 0)) != NULL) {
-	    FreeBufferObj(bufPtr);
+	    /* Recursion, but can't be a server socket.. So this is safe. */
+	    FreeSocketInfo(acptInfo->clientInfo);
+	    IocpFree(acptInfo);
 	}
 	IocpLLDestroy(infoPtr->readyAccepts);
+	infoPtr->readyAccepts = NULL;
     }
     if (infoPtr->llPendingRecv) {
 	while ((bufPtr = IocpLLPopFront(infoPtr->llPendingRecv,
@@ -1725,6 +1733,7 @@ FreeSocketInfo (SocketInfo *infoPtr)
 	    FreeBufferObj(bufPtr);
 	}
 	IocpLLDestroy(infoPtr->llPendingRecv);
+	infoPtr->llPendingRecv = NULL;
     }
     CloseHandle(infoPtr->allDone);
     IocpFree(infoPtr);
@@ -2367,6 +2376,7 @@ HandleIo (
 		newBufPtr = GetBufferObj(newInfoPtr, IOCP_RECV_BUFSIZE);
 		if (PostOverlappedRecv(newInfoPtr, newBufPtr, 0)
 			!= NO_ERROR) {
+		    FreeBufferObj(newBufPtr);
 		    break;
 		}
 	    }
