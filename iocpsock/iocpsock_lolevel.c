@@ -1481,7 +1481,9 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, buflen);
-	return PostOverlappedAccept(infoPtr, newBufPtr);
+	if (PostOverlappedAccept(infoPtr, newBufPtr) != NO_ERROR) {
+	    FreeBufferObj(newBufPtr);
+	}
     }
 
     return NO_ERROR;
@@ -1530,7 +1532,9 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, wbuf.len);
-	return PostOverlappedRecv(infoPtr, newBufPtr);
+	if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
+	    FreeBufferObj(newBufPtr);
+	}
     }
 
     return NO_ERROR;
