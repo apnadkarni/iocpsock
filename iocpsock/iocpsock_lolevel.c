@@ -1748,6 +1748,13 @@ HandleIo (
 	    bufPtr->socket = INVALID_SOCKET;
 
 	    /*
+	     * Remove this from the 'pending accepts' list of the
+	     * listening socket.  It isn't pending anymore.
+	     */
+
+	    IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
+
+	    /*
 	     * Save the remote and local SOCKADDRs to its SocketInfo struct.
 	     */
 
@@ -1756,13 +1763,6 @@ HandleIo (
 	    newInfoPtr->remoteAddr = IocpAlloc(remoteLen);
 	    memcpy(newInfoPtr->remoteAddr, remote, remoteLen);
 
-	    /*
-	     * First, remove this from the 'pending accepts' list of the
-	     * listening socket.  It isn't pending anymore.
-	     */
-
-	    IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
-
 	    /* Alert Tcl to this new connection. */
 	    IocpAlertToTclNewAccept(infoPtr, newInfoPtr);
 
@@ -1770,28 +1770,27 @@ HandleIo (
 	    CreateIoCompletionPort((HANDLE) newInfoPtr->socket, CompPort,
 		    (ULONG_PTR) newInfoPtr, 0);
 
+	    /* (takes buffer ownership) */
+	    IocpLLPushBack(newInfoPtr->llPendingRecv, bufPtr, &bufPtr->node);
+
+	    /*
+	     * Let IocpCheckProc() know this new channel has a ready read
+	     * that needs servicing.
+	     */
+	    IocpLLPushBack(newInfoPtr->tsdHome->readySockets, newInfoPtr, NULL);
+
+	    /* Should the notifier be asleep, zap it awake. */
+	    Tcl_ThreadAlert(newInfoPtr->tsdHome->threadId);
+
 	    if (bytes > 0) {
-		/* (takes buffer ownership) */
-		IocpLLPushBack(newInfoPtr->llPendingRecv, bufPtr, &bufPtr->node);
-
-		/*
-		 * Let IocpCheckProc() know this new channel has a ready read
-		 * that needs servicing.
-		 */
-		IocpLLPushBack(newInfoPtr->tsdHome->readySockets, newInfoPtr, NULL);
-
-		/* Should the notifier be asleep, zap it awake. */
-		Tcl_ThreadAlert(newInfoPtr->tsdHome->threadId);
-	    } else {
-		FreeBufferObj(bufPtr);
+		/* Now post a receive on this new connection. */
+		newBufPtr = GetBufferObj(newInfoPtr, 4096);
+		if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
+		    /* Oh no, the WSARecv failed. */
+		    FreeBufferObj(newBufPtr);
+		}
 	    }
 
-	    /* Now post a receive on this new connection. */
-	    newBufPtr = GetBufferObj(newInfoPtr, 4096);
-	    if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
-		/* Oh no, the WSARecv failed. */
-		FreeBufferObj(newBufPtr);
-	    }
 	} else {
 	    FreeBufferObj(bufPtr);
 	}
