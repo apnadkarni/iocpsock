@@ -1,4 +1,55 @@
+2004-03-19  davygrvy
+	* iocpsock_lolevel.c:
+		Changing -recvburst bynamically from flow-controlled to burst
+		mode doesn't seem to be acting correctly.
+
+2004-03-17  davygrvy
+	* iocpsock_lolevel.c:
+		OurDisonnectEx must return FALSE with WSA_IO_PENDING, whoops..
+
+2004-03-16  davygrvy
+	* iocpsock_lolevel.c:
+		When setting -recvburst from 1 to a greater cap, the setOptionProc needs
+		to queue a WSARecv to bump it out of flow-controled mode.
+
+	* iocpsock_lolevel.c:
+		Fixed some lack of check for watch masks.  Efficiency is
+		improving.
+
+2004-03-14  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		Now that SocketInfo is restricted to only ever one entry on readySockets,
+		use a node in the struct itself and stop using dynamic ones.
+
+	* tests/test_client.tcl:
+	* tests/test_server.tcl:
+		use new fconfigures
+
+	* iocpsock_lolevel.c:
+		validated formatting such that no line are > 74 characters.  Changed my
+		mind about how to close a non-stream socket in async mode (yet again).
+		Made sure the -backlog server fconfigure isn't seen or accepted for non-
+		server sockets.
+
+	* tests/socket2.test:
+		new test to verify we need to keep calling the readable handler
+		until EOF is serviced (unfinshed)
+
+	* iocpsock_lolevel.c:
+		PostOverlappedSend needs to return an error if over the sendcap value
+		so the core can schedule a background flush.  Now does this.
+
+	* iocpsock_lolevel.c:
+		had some logic inversion in the Get/SetOptionProcs
+
 2004-03-13  davygrvy
+	* license.terms:
+		"bitching rights" clause added
+
+	* testme.cmd:
+		grouped commands don't like comments.
+
 	* iocpsock_lolevel.c:
 		(IocpCloseProc): Should set flags to IOCP_CLOSABLE for non-stream
 		sockets before issuing CancelIo() for the async style close.
@@ -41,13 +92,10 @@
 
 	* iocpsock_lolevel.c:
 		DoReadChars() in generic/tclIO.c calls UpdateInterest() after calling
-		IocpInputProc to verify through IocpWatchProc the channel's
+		IocpInputProc to verify through IocpWatchProc that the channel's
 		ready state, therefore the TclZapNotifier call in IocpInputProc after the
 		IocpLLPushFront was removed.  This was a false impression given to
 		me by Klaus Suetterlin <robert@mpe.mpg.de> for which he was incorrect.
-		
-		Dude, I don't mind the code reveiw, but its rather impolite to place someone
-		who is providing FREE software in a defensive position.
 
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
