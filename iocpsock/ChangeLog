@@ -1,3 +1,54 @@
+2003-07-11  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		In a recent conversation with someone about details of IOCP, I found an
+		issue with the behavior in the burst detection.  Burst detection is bypassed
+		when setting-up a newly connected or accepted socket.
+		
+		Conceptually, it only makes sense to use the third return value of WSARecv
+		for burst detection only when _replacing_ overlapped calls.  It is quite natural
+		that a single WSARecv call might return completed when setting-up a new
+		socket for receiving.  Should save about 512 (non-paged) + 4096 bytes or so
+		of memory per socket per extra buffer used when started.
+
+2003-05-28  davygrvy
+	* ws2tcp.c:
+		Second CreateSocketAddress() call in CreateTcpSocket() wasn't needed.
+		This was causing server sockets to fail when the address data that errored
+		wasn't needed anyways.
+
+	* iocpsock.h:
+	* ws2tcp.c:
+		Turned off the internal send buffers and raised the send conccurency
+		count from 2 to 20.  Overlapped WSASends act like the internal buffers
+		anyway.  Seems natural to turn off the internal ones as this will reduce
+		memcpy operations by user our user buffers directly.
+
+	* iocpsock.h:
+		200 is much better.  Worth testing on various systems to
+		understand this more.
+
+2003-05-08  davygrvy
+	* iocpsock_lolevel.c:
+		some more accurate commentary.
+
+	* iocpsock_lolevel.c:
+		Replaced three function pointers accidentally removed.  They
+		aren't used yet anyways.
+
+2003-05-03  davygrvy
+	* iocpsock_lolevel.c:
+		A couple small bugs.  Nothing major that would impact usability.  AcceptEx
+		that came back with WSA_OPERATION_ABORTED was being replaced.
+		That was wrong, just absorb the used buffer and bail.  It also seems that a
+		cancelled listening socket caused the posted AcceptEx calls to fail with
+		WSAENOTSOCK.  Odd, it isn't documented to return this error.
+
+2003-04-30  davygrvy
+	* readme.txt:
+		updated version
+
 2003-04-30  davygrvy
 
 	=== TAGGED for version 1.0 ===
