@@ -1272,6 +1272,7 @@ IocpSetOptionProc (
 	    }
 	    return TCL_ERROR;
 	}
+#if 0
 	if (InterlockedExchange(&infoPtr->outstandingRecvCap, Integer)
 		== 1 && Integer > 1) {
 	    BufferInfo *newBufPtr;
@@ -1282,8 +1283,11 @@ IocpSetOptionProc (
 		FreeBufferObj(newBufPtr);
 	    }
 	} else {
+#endif
 	    InterlockedExchange(&infoPtr->outstandingRecvCap, Integer);
+#if 0
 	}
+#endif
 	return TCL_OK;
     }
 
@@ -1518,10 +1522,17 @@ IocpGetOptionProc (
 	if (len == 0 || !strncmp(optionName, "-backlog", len)) {
 	    if (len == 0) {
 		Tcl_DStringAppendElement(dsPtr, "-backlog");
+		Tcl_DStringStartSublist(dsPtr);
 	    }
+	    TclFormatInt(buf, infoPtr->outstandingAcceptCap);
+	    Tcl_DStringAppendElement(dsPtr, buf);
 	    TclFormatInt(buf, infoPtr->outstandingAccepts);
 	    Tcl_DStringAppendElement(dsPtr, buf);
-	    if (len > 0) return TCL_OK;
+	    if (len == 0) {
+		Tcl_DStringEndSublist(dsPtr);
+	    } else {
+		return TCL_OK;
+	    }
 	}
     }
 
@@ -2157,7 +2168,7 @@ PostOverlappedDisconnect (SocketInfo *infoPtr, BufferInfo *bufPtr)
  *----------------------------------------------------------------------
  * CompletionThread --
  *
- *	The "main" for the I/O handling thread.  One thread only.
+ *	The "main" for the I/O handling thread.  Only one thread is used.
  *
  * Results:
  *
@@ -2918,7 +2929,7 @@ OurConnectEx (
     job->name = IocpAlloc(namelen);
     memcpy(job->name, name, namelen);
     job->namelen = namelen;
-    job->lpSendBuffer = lpSendBuffer;
+//    job->lpSendBuffer = lpSendBuffer;    Not supported here.
     job->lpOverlapped = lpOverlapped;
 
     thread = CreateThread(NULL, 256, ConnectThread, job, 0, &dummy);
