@@ -196,8 +196,8 @@ typedef struct _BufferInfo {
     SOCKET socket;	    // Used for AcceptEx client socket
     DWORD WSAerr;	    // Any error that occured for this operation.
     BYTE *buf;		    // Buffer for recv/send/AcceptEx
-    size_t buflen;	    // Length of the buffer
-    size_t used;	    /* Length of the buffer used (post operation) */
+    SIZE_T buflen;	    // Length of the buffer
+    SIZE_T used;	    /* Length of the buffer used (post operation) */
 #   define OP_ACCEPT	0   /* AcceptEx() */
 #   define OP_READ	1   /* WSARecv()/WSARecvFrom() */
 #   define OP_WRITE	2   /* WSASend()/WSASendTo() */
@@ -258,7 +258,10 @@ typedef struct SocketInfo {
     LPSOCKADDR localAddr;	    /* Local sockaddr. */
     LPSOCKADDR remoteAddr;	    /* Remote sockaddr. */
 
+    int watchMask;		    /* Tcl events we are interested in. */
+
     DWORD lastError;		    /* Error code from last message. */
+    DWORD writeError;		    /* Error code from last Send(To). */
     BOOL bClosing;
     volatile LONG OutstandingOps;	    
     ULONG LastSendIssued; // Last sequence number sent
@@ -277,6 +280,7 @@ typedef struct IocpAcceptInfo {
     SOCKADDR_STORAGE remote;
     int remoteLen;
     SocketInfo *clientInfo;
+    LLNODE node;
 } IocpAcceptInfo;
 
 extern Tcl_ChannelType IocpChannelType;
@@ -352,7 +356,9 @@ extern LPVOID		IocpLLPopFront(LPLLIST ll, DWORD dwState);
 extern BOOL		IocpLLIsNotEmpty(LPLLIST ll);
 extern BOOL		IocpLLNodeDestroy(LPLLNODE node);
 
-/* special hack job! */
+/* special hack jobs! */
 extern BOOL PASCAL	OurConnectEx(SOCKET s, const struct sockaddr* name,
 			    int namelen, PVOID lpSendBuffer, DWORD dwSendDataLength,
 			    LPDWORD lpdwBytesSent, LPOVERLAPPED lpOverlapped);
+extern BOOL PASCAL	OurDisconnectEx(SOCKET s, LPOVERLAPPED lpOverlapped,
+			    DWORD dwFlags, DWORD reserved);

@@ -1,0 +1,19 @@
+proc accept {s addr port} {
+    puts "new connection from $addr:$port on $s"
+    fconfigure $s -blocking no
+    fileevent $s readable [list gotRead $s]
+}
+proc gotRead {s} {
+    if {[string length [set e [fconfigure $s -error]]]} {
+	puts "error: $s: $e"
+	close $s
+	return
+    }
+    puts "$s: got >>[gets $s]<<"
+    if {[eof $s]} {
+	puts "$s: eof reached"
+	close $s
+    }
+}
+load iocpsock.dll
+set s [socket2 -server accept -myaddr [info hostname] 1234]

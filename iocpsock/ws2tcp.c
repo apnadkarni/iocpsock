@@ -225,6 +225,9 @@ CreateTcp4Socket(
                &tcp4ProtoData.DisconnectEx,
 	       sizeof(tcp4ProtoData.DisconnectEx),
                &bytes, NULL, NULL);
+	if (tcp4ProtoData.DisconnectEx == NULL) {
+	    tcp4ProtoData.DisconnectEx = OurDisconnectEx;
+	}
     }
 
     /*
@@ -283,7 +286,7 @@ CreateTcp4Socket(
 	/* pre-queue 20 accepts. */
         for(i=0; i < 20 ;i++) {
 	    BufferInfo *acceptobj;
-	    acceptobj = GetBufferObj(infoPtr, 512);
+	    acceptobj = GetBufferObj(infoPtr, 4096);
             infoPtr->PendingAccepts[i] = acceptobj;
             PostOverlappedAccept(infoPtr, acceptobj);
         }
