@@ -931,16 +931,18 @@ IocpCloseProc (
     if (initialized) {
 
 	EnterCriticalSection(&infoPtr->tsdHome->readySockets->lock);
+	
 	/* Flip the bit so no new stuff can ever come in again. */
 	InterlockedExchange(&infoPtr->markedReady, 1);
+
+	/* artificially increment the count. */
+	InterlockedIncrement(&infoPtr->outstandingOps);
+
 	LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
 
 	/* Setting this means all returning operations will get
 	 * trashed. */
 	infoPtr->flags |= IOCP_CLOSING;
-
-	/* artificially increment the count. */
-	InterlockedIncrement(&infoPtr->outstandingOps);
 
 	/* Tcl now doesn't recognize us anymore, so don't let this
 	 * dangle. */
@@ -986,9 +988,11 @@ IocpCloseProc (
 
 	} else {
 
-	    /* The non-blocking close.  We don't return any errors to Tcl
+	    /*
+	     * The non-blocking close.  We don't return any errors to Tcl
 	     * and allow the instance to auto-destory itself.  Listening
-	     * sockets are NEVER non-blocking. */
+	     * sockets are NEVER non-blocking.
+	     */
 
 	    BufferInfo *bufPtr;
 
