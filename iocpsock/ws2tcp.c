@@ -27,7 +27,7 @@ static SocketInfo *	CreateTcp4Socket(Tcl_Interp *interp,
 static SocketInfo *	CreateTcp6Socket(Tcl_Interp *interp,
 				CONST char *port, CONST char *host,
 				int server, CONST char *myaddr,
-				int myport, int async);
+				CONST char *myport, int async);
 
 /*
  *----------------------------------------------------------------------
@@ -267,18 +267,20 @@ CreateTcp4Socket(
 	    goto error;
 	}
 
-        // Keep track of the pending AcceptEx operations
+        /* Keep track of the pending AcceptEx operations */
         infoPtr->llPendingAccepts = IocpLLCreate();
 
-	/* pre-queue 20 accepts. */
+	/* create the queue for holding ready ones */
+	infoPtr->readyAccepts = IocpLLCreate();
+
+	IocpLLPushBack(IocpSubSystem.listeningSockets, infoPtr, &infoPtr->node);
+
+	/* post 20 accepts. */
         for(i=0; i < 20 ;i++) {
 	    BufferInfo *acceptobj;
 	    acceptobj = GetBufferObj(infoPtr, 4096);
             PostOverlappedAccept(infoPtr, acceptobj);
         }
-
-	/* create the queue for holding ready ones */
-	infoPtr->readyAccepts = IocpLLCreate();
 
     } else {
 
