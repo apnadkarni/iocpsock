@@ -23,6 +23,6 @@ proc GotRead {s} {
     }
 }
 set s [socket2 -server accept -myaddr [info hostname] 5150]
-fconfigure $s -backlog 500
+fconfigure $s -backlog 500 -sendcap 1 -recvburst 1
 
 catch {console show}

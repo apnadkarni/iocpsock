@@ -1,7 +1,6 @@
 console show
 
 package require Iocpsock
-set server {216.91.56.64}
 set server 192.168.0.102
 
 proc TestClientRead {s i} {
@@ -11,12 +10,14 @@ proc TestClientRead {s i} {
 	return
     }
     if {![catch {read $s} reply]} {
-        #puts "recieved"
+        #puts "recieved: $reply"
 	catch {close $s}
 	return
     }
     if {[eof $s]} {
-	#puts "closing"
+	puts "closing?.. Why?"
+	close $s
+    } else {
 	close $s
     }
 }
@@ -26,7 +27,7 @@ proc TestClientWrite {s i} {
 	close $s
 	return
     }
-    catch {puts -nonewline $s "hello?"}
+    puts -nonewline $s "hello?"
     fileevent $s writable {}
 }
 
@@ -37,10 +38,10 @@ proc connect {{howmany {1}}} {
 	    return "Barfed at $a with $msg"
 	}
 	fconfigure $s -blocking 0 -buffering none -translation binary
-	fconfigure $s -sendcap 2 -recvburst 3
+	fconfigure $s -sendcap 2 -recvburst 2
 	fileevent $s readable [list TestClientRead $s $a]
 	fileevent $s writable [list TestClientWrite $s $a]
-	if {$a % 200} {update}
+	if {$a / 20} {update}
     }
     return
 }
