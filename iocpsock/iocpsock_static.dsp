@@ -66,7 +66,7 @@ LIB32=link.exe -lib
 # ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
 # ADD CPP /nologo /MTd /W3 /Gm /GX /ZI /Od /I "..\tcl\generic" /D "WIN32" /D "_DEBUG" /D "STATIC_BUILD" /YX /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
-# ADD RSC /l 0x409 /d "_DEBUG"
+# ADD RSC /l 0x409 /i "..\tcl\generic" /d "DEBUG"
 BSC32=bscmake.exe
 # ADD BASE BSC32 /nologo
 # ADD BSC32 /nologo
@@ -91,6 +91,7 @@ SOURCE=.\iocpsock.h
 # Begin Source File
 
 SOURCE=.\iocpsock.rc
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
@@ -99,6 +100,10 @@ SOURCE=.\iocpsock_hilevel.c
 # Begin Source File
 
 SOURCE=.\iocpsock_lolevel.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\linkedlist.c
 # End Source File
 # Begin Source File
 

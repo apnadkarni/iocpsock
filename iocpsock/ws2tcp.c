@@ -183,7 +183,7 @@ CreateTcpSocket(
     WS2ProtocolData *pdata;
     ADDRINFO hints;
     LPADDRINFO addr;
-    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+    ThreadSpecificData *tsdPtr = InitSockets();
 
     ZeroMemory(&hints, sizeof(hints));
     hints.ai_socktype = SOCK_STREAM;
@@ -220,7 +220,7 @@ CreateTcpSocket(
 	Tcl_Panic("very bad protocol family returned from getaddrinfo()");
     }
 
-    sock = winSock.WSASocketA(pdata->af, pdata->type,
+    sock = winSock.WSASocket(pdata->af, pdata->type,
 	    pdata->protocol, NULL, 0, WSA_FLAG_OVERLAPPED);
     if (sock == INVALID_SOCKET) {
 	goto error2;

@@ -37,7 +37,6 @@ GUID TransmitFileGuid		= WSAID_TRANSMITFILE;
 Tcl_ThreadDataKey dataKey;
 
 /* local prototypes */
-static ThreadSpecificData *	InitSockets();
 static DWORD			InitializeIocpSubSystem();
 static Tcl_ExitProc		IocpExitHandler;
 static Tcl_ExitProc		IocpThreadExitHandler;
@@ -55,31 +54,32 @@ static Tcl_DriverGetOptionProc	IocpGetOptionProc;
 static Tcl_DriverWatchProc	IocpWatchProc;
 static Tcl_DriverGetHandleProc	IocpGetHandleProc;
 static Tcl_DriverBlockModeProc	IocpBlockProc;
+
 #ifdef TCL_CHANNEL_VERSION_4
 static Tcl_DriverCutProc	IocpCutProc;
 static Tcl_DriverSpliceProc	IocpSpliceProc;
 #else
-static void IocpCutProc _ANSI_ARGS_((ClientData instanceData));
-static void IocpSpliceProc _ANSI_ARGS_((ClientData instanceData));
+static void			IocpCutProc (ClientData instanceData);
+static void			IocpSpliceProc (ClientData instanceData);
 #endif
 
 static Tcl_ChannelTypeVersion   IocpGetTclMaxChannelVer (
 				    Tcl_ChannelTypeVersion maxAllowed);
+static void			IocpZapTclNotifier (SocketInfo *infoPtr);
 static void			IocpAlertToTclNewAccept (SocketInfo *infoPtr,
 				    SocketInfo *newClient);
-static void			IocpAcceptOne (SocketInfo *infoPtr);
+static int			IocpAcceptOne (SocketInfo *infoPtr);
 static void			IocpPushRecvAlertToTcl(SocketInfo *infoPtr,
 				    BufferInfo *bufPtr);
-static void			IocpZapTclNotifier (SocketInfo *infoPtr);
 static DWORD			PostOverlappedSend (SocketInfo *infoPtr,
 				    BufferInfo *sendobj);
 static DWORD WINAPI		CompletionThreadProc (LPVOID lpParam);
 
 /*
- * This structure describes the channel type structure to Tcl's generic layer
- * for winsock based I/O using the native overlapped interface along with
- * completion ports for maximum efficiency so that most operation are done
- * entirely in kernel-mode.
+ * This structure describes the channel type structure for TCP socket
+ * based I/O using the native overlapped interface along with completion
+ * ports for maximum efficiency so that most operation are done entirely
+ * in kernel-mode.
  */
 
 Tcl_ChannelType IocpChannelType = {
@@ -101,7 +101,6 @@ Tcl_ChannelType IocpChannelType = {
     IocpBlockProc,	    /* Set socket into (non-)blocking mode. */
     NULL,		    /* flush proc. */
     NULL,		    /* handler proc. */
-    NULL,		    /* wide seek proc. */
 #ifdef TCL_CHANNEL_VERSION_4
     IocpCutProc,	    /* cut proc. */
     IocpSpliceProc,	    /* splice proc. */
@@ -112,7 +111,7 @@ Tcl_ChannelType IocpChannelType = {
 typedef struct SocketEvent {
     Tcl_Event header;		/* Information that is standard for
 				 * all events. */
-    SocketInfo *infoPtr;	/* Socket data structure. */
+    SocketInfo *infoPtr;
 } SocketEvent;
 
 
@@ -123,14 +122,12 @@ typedef struct SocketEvent {
 
 
 
-static ThreadSpecificData *
+ThreadSpecificData *
 InitSockets()
 {
     WSADATA wsaData;
     OSVERSIONINFO os;
-    ThreadSpecificData *tsdPtr;
-
-    tsdPtr = (ThreadSpecificData *) TCL_TSD_INIT(&dataKey);
+    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
     /* global/once init */
     if (!initialized) {
@@ -306,7 +303,7 @@ InitSockets()
 
 	    winSock.WSAAccept = (LPFN_WSAACCEPT)
 		    GetProcAddress(winSock.hModule, "WSAAccept");
-	    winSock.WSAAddressToStringA = (LPFN_WSAADDRESSTOSTRINGA)
+	    winSock.WSAAddressToString = (LPFN_WSAADDRESSTOSTRINGA)
 		    GetProcAddress(winSock.hModule, "WSAAddressToStringA");
 	    winSock.WSACloseEvent = (LPFN_WSACLOSEEVENT)
 		    GetProcAddress(winSock.hModule, "WSACloseEvent");
@@ -314,13 +311,13 @@ InitSockets()
 		    GetProcAddress(winSock.hModule, "WSAConnect");
 	    winSock.WSACreateEvent = (LPFN_WSACREATEEVENT)
 		    GetProcAddress(winSock.hModule, "WSACreateEvent");
-	    winSock.WSADuplicateSocketA = (LPFN_WSADUPLICATESOCKETA)
+	    winSock.WSADuplicateSocket = (LPFN_WSADUPLICATESOCKETA)
 		    GetProcAddress(winSock.hModule, "WSADuplicateSocketA");
-	    winSock.WSAEnumNameSpaceProvidersA = (LPFN_WSAENUMNAMESPACEPROVIDERSA)
+	    winSock.WSAEnumNameSpaceProviders = (LPFN_WSAENUMNAMESPACEPROVIDERSA)
 		    GetProcAddress(winSock.hModule, "WSAEnumNameSpaceProvidersA");
 	    winSock.WSAEnumNetworkEvents = (LPFN_WSAENUMNETWORKEVENTS)
 		    GetProcAddress(winSock.hModule, "WSAEnumNetworkEvents");
-	    winSock.WSAEnumProtocolsA = (LPFN_WSAENUMPROTOCOLSA)
+	    winSock.WSAEnumProtocols = (LPFN_WSAENUMPROTOCOLSA)
 		    GetProcAddress(winSock.hModule, "WSAEnumProtocolsA");
 	    winSock.WSAEventSelect = (LPFN_WSAEVENTSELECT)
 		    GetProcAddress(winSock.hModule, "WSAEventSelect");
@@ -328,20 +325,28 @@ InitSockets()
 		    GetProcAddress(winSock.hModule, "WSAGetOverlappedResult");
 	    winSock.WSAGetQOSByName = (LPFN_WSAGETQOSBYNAME)
 		    GetProcAddress(winSock.hModule, "WSAGetQOSByName");
+	    winSock.WSAGetServiceClassInfo = (LPFN_WSAGETSERVICECLASSINFO)
+		    GetProcAddress(winSock.hModule, "WSAGetServiceClassInfoA");
+	    winSock.WSAGetServiceClassNameByClassId = (LPFN_WSAGETSERVICECLASSNAMEBYCLASSIDA)
+		    GetProcAddress(winSock.hModule, "WSAGetServiceClassNameByClassIdA");
 	    winSock.WSAHtonl = (LPFN_WSAHTONL)
 		    GetProcAddress(winSock.hModule, "WSAHtonl");
 	    winSock.WSAHtons = (LPFN_WSAHTONS)
 		    GetProcAddress(winSock.hModule, "WSAHtons");
+	    winSock.WSAInstallServiceClass = (LPFN_WSAINSTALLSERVICECLASSA)
+		    GetProcAddress(winSock.hModule, "WSAInstallServiceClassA");
 	    winSock.WSAIoctl = (LPFN_WSAIOCTL)
 		    GetProcAddress(winSock.hModule, "WSAIoctl");
 	    winSock.WSAJoinLeaf = (LPFN_WSAJOINLEAF)
 		    GetProcAddress(winSock.hModule, "WSAJoinLeaf");
-	    winSock.WSALookupServiceBeginA = (LPFN_WSALOOKUPSERVICEBEGINA)
+	    winSock.WSALookupServiceBegin = (LPFN_WSALOOKUPSERVICEBEGINA)
 		    GetProcAddress(winSock.hModule, "WSALookupServiceBeginA");
 	    winSock.WSALookupServiceEnd = (LPFN_WSALOOKUPSERVICEEND)
 		    GetProcAddress(winSock.hModule, "WSALookupServiceEnd");
-	    winSock.WSALookupServiceNextA = (LPFN_WSALOOKUPSERVICENEXTA)
+	    winSock.WSALookupServiceNext = (LPFN_WSALOOKUPSERVICENEXTA)
 		    GetProcAddress(winSock.hModule, "WSALookupServiceNextA");
+	    winSock.WSANSPIoctl = (LPFN_WSANSPIOCTL)
+		    GetProcAddress(winSock.hModule, "WSANSPIoctl");
 	    winSock.WSANtohl = (LPFN_WSANTOHL)
 		    GetProcAddress(winSock.hModule, "WSANtohl");
 	    winSock.WSANtohs = (LPFN_WSANTOHS)
@@ -354,6 +359,8 @@ InitSockets()
 		    GetProcAddress(winSock.hModule, "WSARecvDisconnect");
 	    winSock.WSARecvFrom = (LPFN_WSARECVFROM)
 		    GetProcAddress(winSock.hModule, "WSARecvFrom");
+	    winSock.WSARemoveServiceClass = (LPFN_WSAREMOVESERVICECLASS)
+		    GetProcAddress(winSock.hModule, "WSARemoveServiceClass");
 	    winSock.WSAResetEvent = (LPFN_WSARESETEVENT)
 		    GetProcAddress(winSock.hModule, "WSAResetEvent");
 	    winSock.WSASend = (LPFN_WSASEND)
@@ -364,45 +371,53 @@ InitSockets()
 		    GetProcAddress(winSock.hModule, "WSASendTo");
 	    winSock.WSASetEvent = (LPFN_WSASETEVENT)
 		    GetProcAddress(winSock.hModule, "WSASetEvent");
-	    winSock.WSASocketA = (LPFN_WSASOCKETA)
+	    winSock.WSASetService = (LPFN_WSASETSERVICEA)
+		    GetProcAddress(winSock.hModule, "WSASetServiceA");
+	    winSock.WSASocket = (LPFN_WSASOCKETA)
 		    GetProcAddress(winSock.hModule, "WSASocketA");
-	    winSock.WSAStringToAddressA = (LPFN_WSASTRINGTOADDRESSA)
+	    winSock.WSAStringToAddress = (LPFN_WSASTRINGTOADDRESSA)
 		    GetProcAddress(winSock.hModule, "WSAStringToAddressA");
 	    winSock.WSAWaitForMultipleEvents= (LPFN_WSAWAITFORMULTIPLEEVENTS)
 		    GetProcAddress(winSock.hModule, "WSAWaitForMultipleEvents");
 
 	    if ((winSock.WSAAccept == NULL) ||
-		    (winSock.WSAAddressToStringA == NULL) ||
+		    (winSock.WSAAddressToString == NULL) ||
 		    (winSock.WSACloseEvent == NULL) ||
 		    (winSock.WSAConnect == NULL) ||
 		    (winSock.WSACreateEvent == NULL) ||
-		    (winSock.WSADuplicateSocketA == NULL) ||
-		    (winSock.WSAEnumNameSpaceProvidersA == NULL) ||
+		    (winSock.WSADuplicateSocket == NULL) ||
+		    (winSock.WSAEnumNameSpaceProviders == NULL) ||
 		    (winSock.WSAEnumNetworkEvents == NULL) ||
-		    (winSock.WSAEnumProtocolsA == NULL) ||
+		    (winSock.WSAEnumProtocols == NULL) ||
 		    (winSock.WSAEventSelect == NULL) ||
 		    (winSock.WSAGetOverlappedResult == NULL) ||
 		    (winSock.WSAGetQOSByName == NULL) ||
+		    (winSock.WSAGetServiceClassInfo == NULL) ||
+		    (winSock.WSAGetServiceClassNameByClassId == NULL) ||
 		    (winSock.WSAHtonl == NULL) ||
 		    (winSock.WSAHtons == NULL) ||
+		    (winSock.WSAInstallServiceClass == NULL) ||
 		    (winSock.WSAIoctl == NULL) ||
 		    (winSock.WSAJoinLeaf == NULL) ||
-		    (winSock.WSALookupServiceBeginA == NULL) ||
+		    (winSock.WSALookupServiceBegin == NULL) ||
 		    (winSock.WSALookupServiceEnd == NULL) ||
-		    (winSock.WSALookupServiceNextA == NULL) ||
+		    (winSock.WSALookupServiceNext == NULL) ||
+/* WinXP only, don't force a failure  (winSock.WSANSPIoctl == NULL) || */
 		    (winSock.WSANtohl == NULL) ||
 		    (winSock.WSANtohs == NULL) ||
 		    (winSock.WSAProviderConfigChange == NULL) ||
 		    (winSock.WSARecv == NULL) ||
 		    (winSock.WSARecvDisconnect == NULL) ||
 		    (winSock.WSARecvFrom == NULL) ||
+		    (winSock.WSARemoveServiceClass == NULL) ||
 		    (winSock.WSAResetEvent == NULL) ||
 		    (winSock.WSASend == NULL) ||
 		    (winSock.WSASendDisconnect == NULL) ||
 		    (winSock.WSASendTo == NULL) ||
 		    (winSock.WSASetEvent == NULL) ||
-		    (winSock.WSASocketA == NULL) ||
-		    (winSock.WSAStringToAddressA == NULL) ||
+		    (winSock.WSASetService == NULL) ||
+		    (winSock.WSASocket == NULL) ||
+		    (winSock.WSAStringToAddress == NULL) ||
 		    (winSock.WSAWaitForMultipleEvents == NULL)) {
 		winsockLoadErr = TCL_WSE_NOTALL2XFUNCS;
 		goto unloadLibrary;
@@ -439,7 +454,7 @@ InitSockets()
 	    /* winsockLoadErr = InitializeOldSubSystem(); */
 	    Tcl_Panic("Barf! Can't run IOCP on non-NT systems, sorry.");
 	}
-	if (winsockLoadErr != ERROR_SUCCESS) {
+	if (winsockLoadErr != NO_ERROR) {
 	    goto unloadLibrary;
 	}
     }
@@ -507,23 +522,23 @@ HasSockets(Tcl_Interp *interp)
 	    case TCL_WSE_CANTDOONEPOINTZERO:
 		Tcl_AppendResult(interp,
 			"The Windows Sockets version loaded by "
-			"WSAStartup is less than 1.1 and is not "
+			"WSAStartup is under 1.1 and is not "
 			"accepatable.", NULL);
 		break;
 	    case TCL_WSE_NOTALL11FUNCS:
 		Tcl_AppendResult(interp,
-			"The Windows Sockets library didn't have all the "
-			"needed exports for the 1.1 interface.", NULL);
+			"The Windows Sockets library didn't have all the"
+			" needed exports for the 1.1 interface.", NULL);
 		break;
 	    case TCL_WSE_NOTALL2XFUNCS:
 		Tcl_AppendResult(interp,
-			"The Windows Sockets library didn't have all the "
-			"needed exports for the 2.x interface.", NULL);
+			"The Windows Sockets library didn't have all the"
+			" needed exports for the 2.x interface.", NULL);
 		break;
 	    case TCL_WSE_CANTSTARTHANDLERTHREAD:
 		Tcl_AppendResult(interp,
-			"The Windows Sockets completion thread "
-			"was unable to start.", NULL);
+			"The Windows Sockets completion thread(s) "
+			"were unable to start.", NULL);
 		break;
 	    default:
 		Tcl_AppendObjToObj(Tcl_GetObjResult(interp),
@@ -538,7 +553,7 @@ static DWORD
 InitializeIocpSubSystem ()
 {
 #define IOCP_HEAP_START_SIZE	(si.dwPageSize*64)  /* about 256k */
-    DWORD error = ERROR_SUCCESS;
+    DWORD error = NO_ERROR;
     SYSTEM_INFO si;
 
     GetSystemInfo(&si);
@@ -568,8 +583,7 @@ InitializeIocpSubSystem ()
 	goto done;
     }
 
-    /* Create the one worker thread that services the completion port
-     * for all sockets. */
+    /* Create the thread to service the completion port. */
     IocpSubSystem.thread = CreateThread(NULL, 0, CompletionThreadProc,
 	    &IocpSubSystem, 0, NULL);
     if (IocpSubSystem.thread == NULL) {
@@ -591,12 +605,13 @@ void
 IocpExitHandler (ClientData clientData)
 {
     if (initialized) {
+
 	Tcl_DeleteEvents(IocpRemoveAllPendingEvents, NULL);
 
-	/* Cause the waiting I/O handler thread to exit. */
+	/* Cause the waiting I/O handler threads to exit. */
 	PostQueuedCompletionStatus(IocpSubSystem.port, 0, 0, 0);
 
-	/* Wait for it to exit. */
+	/* Wait for one to exit from the group. */
 	WaitForSingleObject(IocpSubSystem.thread, INFINITE);
 	CloseHandle(IocpSubSystem.thread);
 
@@ -646,10 +661,8 @@ IocpEventSetupProc (
     ClientData clientData,
     int flags)
 {
-    ThreadSpecificData *tsdPtr;
+    ThreadSpecificData *tsdPtr = InitSockets();
     Tcl_Time blockTime = {0, 0};
-
-    tsdPtr = InitSockets();
 
     if (!(flags & TCL_FILE_EVENTS)) {
 	return;
@@ -681,12 +694,10 @@ IocpEventCheckProc (
     ClientData clientData,
     int flags)
 {
-    ThreadSpecificData *tsdPtr;
+    ThreadSpecificData *tsdPtr = InitSockets();
     SocketInfo *infoPtr;
     SocketEvent *evPtr;
     int evCount;
-
-    tsdPtr = InitSockets();
 
     if (!(flags & TCL_FILE_EVENTS)) {
 	return;
@@ -740,16 +751,19 @@ IocpEventProc (
     }
 
     /*
-     * If an accept is ready, pop just one.  We can't pop all of them
-     * or it would be greedy to the event loop and cause the granularity
-     * to increase -- which is bad and holds back Tk from doing redraws
-     * should a listening socket be in a situation where work is coming
-     * in faster than Tcl is able to service it.
+     * Flop the ready toggle.  This is used to improve event loop
+     * efficiency to avoid unneccesary events being queued from the 
+     * readySockets list.
+     */
+    InterlockedExchange(&infoPtr->ready, 0);
+
+    /*
+     * If an accept is ready, pop them all.
      */
 
-    if (infoPtr->readyAccepts != NULL
-	    && IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
-	IocpAcceptOne(infoPtr);
+    if (IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
+	/* Drain all new connections to our listening socket. */
+	while (IocpAcceptOne(infoPtr));
 	return 1;
     }
 
@@ -759,60 +773,44 @@ IocpEventProc (
     }
 
     if (infoPtr->watchMask & TCL_WRITABLE &&
-	    infoPtr->readyMask & TCL_WRITABLE) {
+	    infoPtr->llPendingRecv /* connected */) {
 	readyMask |= TCL_WRITABLE;
     }
 
-    if (readyMask) Tcl_NotifyChannel(infoPtr->channel, readyMask);
+    if (readyMask) {
+	Tcl_NotifyChannel(infoPtr->channel, readyMask);
+    } else {
+	/* this was a useless queue.  I want to know why!!!! */
+	__asm nop;
+    }
     return 1;
 }
 
-void
+int
 IocpAcceptOne (SocketInfo *infoPtr)
 {
-    ThreadSpecificData *tsdPtr;
     char channelName[16 + TCL_INTEGER_SPACE];
     IocpAcceptInfo *acptInfo;
 
-    tsdPtr = InitSockets();
     acptInfo = IocpLLPopFront(infoPtr->readyAccepts, IOCP_LL_NODESTROY, 0);
 
-    /* if the actual count doesn't lineup with the notices, don't barf. */
     if (acptInfo == NULL) {
-	return;
+	return 0;
     }
 
-    /*
-     * Socket handles can be reused at the winsock level, but can be
-     * reused before the generic layer closes.  Hide the socket handle
-     * just in case we hit this issue.
-     */
-    wsprintfA(channelName, "iocp%p", acptInfo->clientInfo);
-    acptInfo->clientInfo->channel = Tcl_CreateChannel(&IocpChannelType,
-	    channelName, (ClientData) acptInfo->clientInfo,
-	    (TCL_READABLE | TCL_WRITABLE));
-    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel,
-	    "-translation", "auto crlf") == TCL_ERROR) {
+    wsprintf(channelName, "iocp%lu", acptInfo->clientInfo->socket);
+    acptInfo->clientInfo->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
+	    (ClientData) acptInfo->clientInfo, (TCL_READABLE | TCL_WRITABLE));
+    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-translation",
+	    "auto crlf") == TCL_ERROR) {
 	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
-	return;
+	return 1;
     }
-    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel,
-	    "-eofchar", "") == TCL_ERROR) {
+    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-eofchar", "")
+	    == TCL_ERROR) {
 	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
-	return;
+	return 1;
     }
-
-    // Had to add this!
-    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel,
-	    "-blocking", "0") == TCL_ERROR) {
-	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
-	return;
-    }
-
-    /* The client socket is connected, therefore it is writable
-     * (and the llPendingRecv list might have ready receives, too). */
-    acptInfo->clientInfo->readyMask |= TCL_WRITABLE;
-    IocpLLPushBack(tsdPtr->readySockets, acptInfo->clientInfo, NULL);
 
     /*
      * Invoke the accept callback procedure.
@@ -830,6 +828,7 @@ IocpAcceptOne (SocketInfo *infoPtr)
     }
 
     IocpFree(acptInfo);
+    return 1;
 }
 
 static int
@@ -866,12 +865,6 @@ IocpCloseProc (
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     int errorCode = 0, err;
 
-    if (IocpChannelType.version <= TCL_CHANNEL_VERSION_3 ||
-	    IocpChannelType.version ==
-	    (Tcl_ChannelTypeVersion) IocpBlockProc) {
-	IocpCutProc(instanceData);
-    }
-
     // The core wants to close channels after the exit handler!
     // Our heap is gone!
     if (initialized) {
@@ -882,7 +875,8 @@ IocpCloseProc (
 	infoPtr->flags |= IOCP_CLOSING;
 	infoPtr->channel = NULL;
 
-	/* Only on stream sockets that aren't listening */
+	/* Only send a disconnect when the socket a stream one and is not
+	 * a listening socket */
 	if (infoPtr->proto->type == SOCK_STREAM && !infoPtr->acceptProc) {
 	    err = winSock.WSASendDisconnect(infoPtr->socket, NULL);
 	}
@@ -930,9 +924,12 @@ IocpInputProc (
     int bytesRead = 0;
     DWORD timeout;
     BufferInfo *bufPtr;
-    int stillReadable = 0;
 
     *errorCodePtr = 0;
+
+    if (infoPtr->flags & IOCP_EOF) {
+	return 0;
+    }
 
     /*
      * Check for a background error on the last operations.
@@ -944,20 +941,15 @@ IocpInputProc (
 	goto error;
     }
 
-    if (infoPtr->flags & IOCP_EOF) {
-	/* force the generic layer into EOF. */
-	return 0;
-    }
-
     /* TODO: This is here, but blocking is not supported yet
      * by the queue. */
-    timeout = (infoPtr->flags & IOCP_BLOCKING ? INFINITE : 0);
+    timeout = (infoPtr->flags & IOCP_ASYNC ? 0 : INFINITE);
 
     /*
      * Merge in as much as toRead will allow.
      */
 
-    if (IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
+    if ((!(infoPtr->flags & IOCP_ASYNC)) || IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
 	while ((bufPtr = IocpLLPopFront(infoPtr->llPendingRecv,
 		IOCP_LL_NODESTROY, timeout)) != NULL) {
 	    if (bytesRead + (int) bufPtr->used > toRead || (bufPtr->used == 0 && bytesRead)) {
@@ -967,13 +959,9 @@ IocpInputProc (
 		/* Too large or have EOF.  Push it back on for later. */
 		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
 			&bufPtr->node);
-		/* stuff is left. */
-		stillReadable = 1;
-		IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
-			NULL);
 		break;
 	    }
-	    if (bufPtr->WSAerr != ERROR_SUCCESS) {
+	    if (bufPtr->WSAerr != NO_ERROR) {
 		infoPtr->lastError = bufPtr->WSAerr;
 		IocpWinConvertWSAError(infoPtr->lastError);
 		FreeBufferObj(bufPtr);
@@ -987,17 +975,13 @@ IocpInputProc (
 		bufPos += bufPtr->used;
 	    }
 	    FreeBufferObj(bufPtr);
-	    if (infoPtr->flags & IOCP_BLOCKING) break;
+	    /* When blocking, only read one. */
+	    if (!(infoPtr->flags & IOCP_ASYNC)) break;
 	}
-    } else  {
+    } else {
 	/* If there's nothing to get, return EWOULDBLOCK. */
 	*errorCodePtr = EWOULDBLOCK;
 	bytesRead = -1;
-    }
-
-    if (!stillReadable) {
-	/* All recv events were serviced, flop the bit. */
-	InterlockedExchange(&infoPtr->ready, 0);
     }
 
     return bytesRead;
@@ -1020,10 +1004,15 @@ IocpOutputProc (
 
     *errorCodePtr = 0;
 
+
     if (infoPtr->llPendingRecv == NULL) {
 	/* Not connected.  How did we get here? */
-	*errorCodePtr = EAGAIN;
+	*errorCodePtr = EWOULDBLOCK;
 	return -1;
+    }
+
+    if (infoPtr->flags & IOCP_EOF) {
+	return 0;
     }
 
     /*
@@ -1036,16 +1025,13 @@ IocpOutputProc (
 	goto error;
     }
 
-    if (infoPtr->flags & IOCP_EOF) {
-	/* force the generic layer into EOF. */
-	return 0;
-    }
-
     bufPtr = GetBufferObj(infoPtr, toWrite);
     memcpy(bufPtr->buf, buf, toWrite);
     WSAerr = PostOverlappedSend(infoPtr, bufPtr);
 
-    if (WSAerr != ERROR_SUCCESS) {
+    if (WSAerr != NO_ERROR) {
+	infoPtr->lastError = WSAerr;
+	infoPtr->flags |= IOCP_EOF;
 	IocpWinConvertWSAError(WSAerr);
 	goto error;
     }
@@ -1138,16 +1124,16 @@ IocpGetOptionProc (
     if (len > 1) {
 	if ((optionName[1] == 'e') &&
 	    (strncmp(optionName, "-error", len) == 0)) {
-	    if (infoPtr->lastError != ERROR_SUCCESS) {
+	    if (infoPtr->lastError != NO_ERROR) {
 		IocpWinConvertWSAError(infoPtr->lastError);
 		Tcl_DStringAppend(dsPtr, Tcl_ErrnoMsg(Tcl_GetErrno()), -1);
 		infoPtr->flags |= IOCP_EOF;
 	    }
 	    return TCL_OK;
-#if 0   /* for debugging only */
-	} else if ((optionName[1] == 'a') &&
-	    (strncmp(optionName, "-acceptors", len) == 0)) {
-	    TclFormatInt(buf, infoPtr->llPendingAccepts->lCount);
+#if 1   /* for debugging only */
+	} else if ((optionName[1] == 'o') &&
+	    (strncmp(optionName, "-ops", len) == 0)) {
+	    TclFormatInt(buf, infoPtr->OutstandingOps);
 	    Tcl_DStringAppendElement(dsPtr, buf);
 	    return TCL_OK;
 #endif
@@ -1305,12 +1291,12 @@ IocpWatchProc (
      * server socket. Fix for SF Tcl Bug #557878.
      */
 
-    if (!infoPtr->acceptProc) {    
+    if (!infoPtr->acceptProc) {
         infoPtr->watchMask = mask;
-	if ((mask & TCL_WRITABLE) || (mask & TCL_READABLE &&
-		IocpLLIsNotEmpty(infoPtr->llPendingRecv))) {
+	if ((mask & TCL_READABLE && IocpLLIsNotEmpty(infoPtr->llPendingRecv)) ||
+	    (mask & TCL_WRITABLE && infoPtr->llPendingRecv /* connected */)) {
 	    /* Can do stuff, mark it ready. */
-	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+	    IocpZapTclNotifier(infoPtr);
 	}
     }
 }
@@ -1323,10 +1309,12 @@ IocpBlockProc (
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
 
-    if (mode == TCL_MODE_BLOCKING) {
-	infoPtr->flags |= IOCP_BLOCKING;
+    if (!initialized) return 0;
+
+    if (mode == TCL_MODE_NONBLOCKING) {
+	infoPtr->flags |= IOCP_ASYNC;
     } else {
-	infoPtr->flags &= ~(IOCP_BLOCKING);
+	infoPtr->flags &= ~(IOCP_ASYNC);
     }
     return 0;
 }
@@ -1356,18 +1344,42 @@ IocpCutProc (ClientData instanceData)
 static void
 IocpSpliceProc (ClientData instanceData)
 {
-    ThreadSpecificData *tsdPtr;
+    ThreadSpecificData *tsdPtr = InitSockets();
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
 
-    tsdPtr = InitSockets();
     infoPtr->tsdHome = tsdPtr;
 }
-
-
 
 /* =================================================================== */
 /* ============== Lo-level buffer and state manipulation ============= */
 
+/*
+ *  Only zap the notifier when the notifier is waiting and this request
+ *  has not already been made previously.
+ */
+
+static void
+IocpZapTclNotifier (SocketInfo *infoPtr)
+{
+    DWORD dwWait;
+    LONG wasAlreadyPosted = InterlockedExchange(&infoPtr->ready, 1);
+
+    /*
+     * If we are in the middle of a thread transfer on the channel,
+     * infoPtr->tsdHome will be NULL.
+     */
+    if (infoPtr->tsdHome) {
+	if (!wasAlreadyPosted) {
+	    /* No entry on ready list.  Insert one. */
+	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+	}
+	dwWait = WaitForSingleObject(infoPtr->tsdHome->needAwake, 0);
+	/* if the notifier is waiting, zap it awake. */
+	if (dwWait == WAIT_OBJECT_0) {
+	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+	}
+    }
+}
 
 /* takes buffer ownership */
 void
@@ -1396,10 +1408,9 @@ IocpAlertToTclNewAccept (
     IocpLLPushBack(infoPtr->readyAccepts, acptInfo, &acptInfo->node);
 
     /*
-     * Let IocpCheckProc() know this channel has something ready
+     * Let IocpCheckProc() know this channel has an accept ready
      * that needs servicing.
      */
-    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
     IocpZapTclNotifier(infoPtr);
 }
 
@@ -1412,17 +1423,14 @@ NewSocketInfo (SOCKET socket)
     infoPtr = IocpAlloc(sizeof(SocketInfo));
     infoPtr->channel = NULL;
     infoPtr->socket = socket;
-    infoPtr->flags = 0;
+    infoPtr->flags = 0;		    /* assume initial blocking state */
     infoPtr->ready = 0;
+    infoPtr->watchMask = 0;
     infoPtr->readyAccepts = NULL;  
     infoPtr->acceptProc = NULL;
     infoPtr->localAddr = NULL;	    /* Local sockaddr. */
     infoPtr->remoteAddr = NULL;	    /* Remote sockaddr. */
-    
-    infoPtr->watchMask = 0;
-
-    infoPtr->lastError = ERROR_SUCCESS;
-
+    infoPtr->lastError = NO_ERROR;
     infoPtr->OutstandingOps = 0;
     infoPtr->allDone = CreateEvent(NULL, TRUE, FALSE, NULL); /* manual reset */
     infoPtr->node.ll = NULL;
@@ -1490,7 +1498,7 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
     bufPtr->socket = INVALID_SOCKET;
     bufPtr->buflen = buflen;
     bufPtr->addr = NULL;
-    bufPtr->WSAerr = ERROR_SUCCESS;
+    bufPtr->WSAerr = NO_ERROR;
     bufPtr->parent = infoPtr;
     bufPtr->node.ll = NULL;
     return bufPtr;
@@ -1538,30 +1546,7 @@ IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr)
      * Let IocpCheckProc() know this new channel has a ready
      * event (a recv) that needs servicing.
      */
-    IocpLLPushBack(infoPtr->tsdHome->readySockets,
-	    infoPtr, NULL);
-
     IocpZapTclNotifier(infoPtr);
-}
-
-/*
- *  Only zap the notifier when the notifier is waiting and this request
- *  has not already been made previously.
- */
-
-static void
-IocpZapTclNotifier (SocketInfo *infoPtr)
-{
-    DWORD dwWait;
-
-    if (infoPtr->tsdHome->threadId &&
-	    !InterlockedExchange(&infoPtr->ready, 1)) {
-	dwWait = WaitForSingleObject(infoPtr->tsdHome->needAwake, 0);
-	/* if the notifier is waiting, zap it awake. */
-	if (dwWait == WAIT_OBJECT_0) {
-	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
-	}
-    }
 }
 
 DWORD
@@ -1582,7 +1567,7 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
      * incoming connection.
      */
 
-    bufPtr->socket = winSock.WSASocketA(infoPtr->proto->af,
+    bufPtr->socket = winSock.WSASocket(infoPtr->proto->af,
 	    infoPtr->proto->type, infoPtr->proto->protocol, NULL, 0,
 	    WSA_FLAG_OVERLAPPED);
 
@@ -1593,7 +1578,7 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
     /*
      * Realloc for the extra needed addr storage space.
      */
-    bufPtr->buf = IocpReAlloc(bufPtr->buf, bufPtr->buflen +
+    bufPtr->buf = IocpNPPReAlloc(bufPtr->buf, bufPtr->buflen +
 	    (addr_storage * 2));
     bufPtr->buflen += (addr_storage * 2);
 
@@ -1625,7 +1610,7 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	/*
 	 * Tested under extreme listening socket abuse it was found that
 	 * this logic condition is never met.  AcceptEx _never_ completes
-	 * immediately.  It always returns WSA_IO_PENDING.  Too bad,
+	 * immediatly.  It always returns WSA_IO_PENDING.  Too bad,
 	 * as this was looking like a good way to detect and handle burst
 	 * conditions.
 	 */
@@ -1642,13 +1627,13 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, buflen);
-	if (PostOverlappedAccept(infoPtr, newBufPtr) != ERROR_SUCCESS) {
+	if (PostOverlappedAccept(infoPtr, newBufPtr) != NO_ERROR) {
 	    FreeBufferObj(newBufPtr);
 	}
     }
 #endif
 
-    return ERROR_SUCCESS;
+    return NO_ERROR;
 }
 
 DWORD
@@ -1732,7 +1717,7 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr, int useBurst)
     }
 #endif
 
-    return ERROR_SUCCESS;
+    return NO_ERROR;
 }
 
 DWORD
@@ -1765,6 +1750,7 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
     if (rc == SOCKET_ERROR) {
 	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
 	    bufPtr->WSAerr = WSAerr;
+
 	    /*
 	     * Eventhough we know about the error now, post this to the port
 	     * manually, too.  We need to force EOF as the generic layer
@@ -1778,18 +1764,26 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	}
     } else {
 	/*
-	 * The WSASend(To) completed now, instead of getting posted.
+	 * The WSASend/To completed now, instead of getting posted.
 	 * Zap an extra TCL_WRITABLE event to push the send buffers in
 	 * winsock until we get them posting and keep them full.  This
 	 * seems to be greedy if the peer is on localhost.
 	 *
-	 * TODO: study this problem.  Should we put a cap on the
-	 * concurency allowed?
+	 * TODO: study this problem.  We need to put a cap on the
+	 * concurency allowed.  Sounds like an fconfigure is needed.
+	 * The logic below isn't thread-safe, but that's ok as perfection
+	 * isn't required.
 	 */
-	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+	__asm nop;
+	/*
+	if (infoPtr->outstandingSends
+		< infoPtr->maxOutstandingSends) {
+	    infoPtr->outstandingSends++;
+	    IocpZapTclNotifier(infoPtr);
+	}*/
     }
 
-    return ERROR_SUCCESS;
+    return NO_ERROR;
 }
 
 
@@ -1826,11 +1820,12 @@ CompletionThreadProc (LPVOID lpParam)
     SocketInfo *infoPtr;
     BufferInfo *bufPtr;
     OVERLAPPED *ol;
-    DWORD bytes, flags, WSAerr;
+    DWORD bytes, flags, WSAerr, error = NO_ERROR;
     BOOL ok;
 
-    for (;;) {
-	WSAerr = ERROR_SUCCESS;
+    __try {
+again:
+	WSAerr = NO_ERROR;
 	flags = 0;
 
 	ok = GetQueuedCompletionStatus(cpinfo->port, &bytes,
@@ -1838,7 +1833,7 @@ CompletionThreadProc (LPVOID lpParam)
 
 	if (ok && !infoPtr) {
 	    /* A NULL key indicates closure time for this thread. */
-	    break;
+	    __leave;
 	}
 
 	/*
@@ -1867,9 +1862,25 @@ CompletionThreadProc (LPVOID lpParam)
 	}
 
 	/* Go handle the IO operation. */
-        HandleIo(infoPtr, bufPtr, cpinfo->port, bytes, WSAerr, flags);
+	HandleIo(infoPtr, bufPtr, cpinfo->port, bytes, WSAerr, flags);
+	goto again;
     }
-    return 0;
+    __except (error = GetExceptionCode(), EXCEPTION_EXECUTE_HANDLER) {
+	char msg[50];
+	DWORD dummy;
+	HANDLE where;
+
+	wsprintf(msg, "Big ERROR!  Completion thread died with %#x.  "
+		"You MUST restart the application.  "
+		"All socket communication has halted.\n", error);
+	OutputDebugString(msg);
+	where = GetStdHandle(STD_ERROR_HANDLE);
+	if (where) {
+	    WriteFile(where, msg, strlen(msg), &dummy, NULL);
+	}
+    }
+
+    return error;
 }
 
 /*
@@ -1913,7 +1924,7 @@ HandleIo (
 
     bufPtr->used = bytes;
     /* An error stored in the buffer object takes precedence. */
-    if (bufPtr->WSAerr == ERROR_SUCCESS) {
+    if (bufPtr->WSAerr == NO_ERROR) {
 	bufPtr->WSAerr = WSAerr;
     }
 
@@ -1925,7 +1936,7 @@ HandleIo (
 	 */
 	IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
 
-	if (bufPtr->WSAerr == ERROR_SUCCESS) {
+	if (bufPtr->WSAerr == NO_ERROR) {
 	    addr_storage = infoPtr->proto->addrLen + 16;
 
 	    /*
@@ -1973,7 +1984,7 @@ HandleIo (
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
 		newBufPtr = GetBufferObj(newInfoPtr, IOCP_RECV_BUFSIZE);
 		if (PostOverlappedRecv(newInfoPtr, newBufPtr, 0)
-			!= ERROR_SUCCESS) {
+			!= NO_ERROR) {
 		    break;
 		}
 	    }
@@ -1990,10 +2001,19 @@ HandleIo (
 
 	} else if (bufPtr->WSAerr == WSA_OPERATION_ABORTED ||
 		bufPtr->WSAerr == WSAENOTSOCK) {
+	    /* The operation was cancelled and the socket must be closing.
+	     * Do NOT replace this returning AcceptEx. */
 	    FreeBufferObj(bufPtr);
 	    break;
 
 	} else {
+	    /*
+	     * Possible SYN flood in progress. We WANT this returning
+	     * AcceptEx that had an error to be replaced.  Some of the
+	     * errors sampled are:
+	     *
+	     * WSAEHOSTUNREACH, WSAETIMEDOUT, WSAENETUNREACH
+	     */
 	    FreeBufferObj(bufPtr);
 	}
     
@@ -2003,14 +2023,14 @@ HandleIo (
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, 0);
-	if (PostOverlappedAccept(infoPtr, newBufPtr) != ERROR_SUCCESS) {
+	if (PostOverlappedAccept(infoPtr, newBufPtr) != NO_ERROR) {
 	    /*
 	     * Oh no, the AcceptEx failed.  There is no way to return an
 	     * error for this condition.  Tcl has no failure aspect for
 	     * listening sockets.
 	     */
 	    FreeBufferObj(newBufPtr);
-	    DbgPrint("\n\nIOCPsock (non-recoverable): an AcceptEx call failed and was not replaced.\n\n");
+	    DbgPrint("\nIOCPsock (non-recoverable): an AcceptEx call failed and was not replaced.\n");
 	}
 	break;
 
@@ -2045,55 +2065,46 @@ HandleIo (
 	    break;
 	}
 
-	if (bufPtr->WSAerr != ERROR_SUCCESS) {
+	if (bufPtr->WSAerr) {
 	    newBufPtr = GetBufferObj(infoPtr, 0);
 	    newBufPtr->WSAerr = bufPtr->WSAerr;
 	    /* Force EOF on the read side, too, for a write side error. */
 	    IocpPushRecvAlertToTcl(infoPtr, newBufPtr);
 	}
 	FreeBufferObj(bufPtr);
-
-	infoPtr->readyMask |= TCL_WRITABLE;
-
-	/*
-	 * Let IocpCheckProc() know this channel is writable again.
-	 */
-	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
-	IocpZapTclNotifier(infoPtr);
 	break;
 
     case OP_CONNECT:
 
-	infoPtr->readyMask |= TCL_WRITABLE;
+	infoPtr->llPendingRecv = IocpLLCreate();
 
-	if (bufPtr->WSAerr != ERROR_SUCCESS) {
+	if (bufPtr->WSAerr != NO_ERROR) {
 	    infoPtr->lastError = bufPtr->WSAerr;
+	    newBufPtr = GetBufferObj(infoPtr, 0);
+	    newBufPtr->WSAerr = bufPtr->WSAerr;
+	    /* Force EOF. */
+	    IocpPushRecvAlertToTcl(infoPtr, newBufPtr);
 	} else {
-	    infoPtr->llPendingRecv = IocpLLCreate();
-
 	    winSock.setsockopt(infoPtr->socket, SOL_SOCKET,
 		    SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
 
 	    /* post IOCP_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
 		newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-		if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != ERROR_SUCCESS) {
+		if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != NO_ERROR) {
+		    FreeBufferObj(bufPtr);
 		    break;
 		}
 	    }
+	    IocpZapTclNotifier(infoPtr);
 	}
 	FreeBufferObj(bufPtr);
-
-	/*
-	 * Let IocpCheckProc() know this channel is writable.
-	 */
-	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,	NULL);
-	IocpZapTclNotifier(infoPtr);
 	break;
 
     case OP_DISCONNECT:
     case OP_TRANSMIT:
     case OP_LOOKUP:
+    case OP_IOCTL:
 	/* For future use. */
 	break;
     }
@@ -2105,6 +2116,7 @@ done:
 	SetEvent(infoPtr->allDone);
     }
 }
+
 
 /* =================================================================== */
 /* ====================== Private memory heap ======================== */
@@ -2156,522 +2168,6 @@ __inline BOOL
 IocpNPPFree (LPVOID block)
 {
     return HeapFree(IocpSubSystem.NPPheap, 0, block);
-}
-
-/* =================================================================== */
-/* ========================= Linked-List ============================= */
-
-/* Bitmask macros. */
-#define mask_a( mask, val ) if ( ( mask & val ) != val ) { mask |= val; }
-#define mask_d( mask, val ) if ( ( mask & val ) == val ) { mask &= ~(val); }
-#define mask_y( mask, val ) ( mask & val ) == val
-#define mask_n( mask, val ) ( mask & val ) != val
-
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLCreate --
- *
- *	Creates a linked list.
- *
- * Results:
- *	pointer to the new one or NULL for error.
- *
- * Side effects:
- *	None known.
- *
- *----------------------------------------------------------------------
- */
-
-LPLLIST
-IocpLLCreate ()
-{   
-    LPLLIST ll;
-    
-    /* Alloc a linked list. */
-    ll = IocpAlloc(sizeof(LLIST));
-    if (!ll) {
-	return NULL;
-    }
-    if (!InitializeCriticalSectionAndSpinCount(&ll->lock, 4000)) {
-	IocpFree(ll);
-	return NULL;
-    }
-    ll->lCount = 0;
-    return ll;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLDestroy --
- *
- *	Destroys a linked list.
- *
- * Results:
- *	Same as HeapFree.
- *
- * Side effects:
- *	Nodes aren't destroyed.
- *
- *----------------------------------------------------------------------
- */
-
-BOOL 
-IocpLLDestroy (
-    LPLLIST ll)
-{
-    if (!ll) {
-	return FALSE;
-    }
-    DeleteCriticalSection(&ll->lock);
-    return IocpFree(ll);
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLPushFront --
- *
- *	Adds an item to the end of the list.
- *
- * Results:
- *	The node.
- *
- * Side effects:
- *	Will create a new node, if not given one.
- *
- *----------------------------------------------------------------------
- */
-
-LPLLNODE 
-IocpLLPushBack(
-    LPLLIST ll,
-    LPVOID lpItem,
-    LPLLNODE pnode)
-{
-    LPLLNODE tmp;
-
-    if (!ll) {
-	return NULL;
-    }
-    EnterCriticalSection(&ll->lock);
-    if (!pnode) {
-	pnode = IocpAlloc(sizeof(LLNODE));
-    }
-    if (!pnode) {
-	LeaveCriticalSection(&ll->lock);
-	return NULL;
-    }
-    pnode->lpItem = lpItem;
-    if (!ll->front && !ll->back) {
-	ll->front = pnode;
-	ll->back = pnode;
-    } else {
-	ll->back->next = pnode;
-	tmp = ll->back;
-	ll->back = pnode;
-	ll->back->prev = tmp;
-    }
-    ll->lCount++;
-    pnode->ll = ll;
-    LeaveCriticalSection(&ll->lock);
-    return pnode;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLPushFront --
- *
- *	Adds an item to the front of the list.
- *
- * Results:
- *	The node.
- *
- * Side effects:
- *	Will create a new node, if not given one.
- *
- *----------------------------------------------------------------------
- */
-
-LPLLNODE 
-IocpLLPushFront(
-    LPLLIST ll,
-    LPVOID lpItem,
-    LPLLNODE pnode)
-{
-    LPLLNODE tmp;
-
-    if (!ll) {
-	return NULL;
-    }
-    EnterCriticalSection(&ll->lock);
-    if (!pnode) {
-	pnode = IocpAlloc(sizeof(LLNODE));
-    }
-    if (!pnode) {
-	LeaveCriticalSection(&ll->lock);
-	return NULL;
-    }
-    pnode->lpItem = lpItem;
-    if (!ll->front && !ll->back) {
-	ll->front = pnode;
-	ll->back = pnode;
-    } else {
-	ll->front->prev = pnode;
-	tmp = ll->front;
-	ll->front = pnode;
-	ll->front->next = tmp;
-    }
-    ll->lCount++;
-    pnode->ll = ll;
-    LeaveCriticalSection(&ll->lock);
-    return pnode;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLPopAll --
- *
- *	Removes all items from the list.
- *
- * Results:
- *	TRUE if something was popped or FALSE if nothing was poppable.
- *
- * Side effects:
- *	Won't free the node(s) with IOCP_LL_NODESTROY in the state arg.
- *
- *----------------------------------------------------------------------
- */
-
-BOOL 
-IocpLLPopAll(
-    LPLLIST ll,
-    LPLLNODE snode,
-    DWORD dwState)
-{
-    LPLLNODE tmp1, tmp2;
-
-    if (!ll) {
-	return FALSE;
-    }
-    if (snode && snode->ll) {
-	ll = snode->ll;
-    }
-    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
-	EnterCriticalSection(&ll->lock);
-    }
-    if (!ll->front && ! ll->back || ll->lCount <= 0) {
-	if (mask_n(dwState, IOCP_LL_NOLOCK)) {
-	    LeaveCriticalSection(&ll->lock);
-	}
-	return FALSE;
-    }
-    tmp1 = ll->front;
-    if (snode) {
-	tmp1 = snode;
-    }
-    while(tmp1) {
-	tmp2 = tmp1->next;
-	/* Delete (or blank) the node and decrement the counter. */
-        if (mask_n(dwState, IOCP_LL_NODESTROY)) {
-	    IocpLLNodeDestroy(tmp1);
-	} else {
-	    tmp1->ll = NULL;
-	    tmp1->next = NULL; 
-            tmp1->prev = NULL;
-	}
-        ll->lCount--;
-	tmp1 = tmp2;
-    }
-
-    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
-	LeaveCriticalSection(&ll->lock);
-    }
-    
-    return TRUE;
-}
-
-
-BOOL 
-IocpLLPopAllCompare(
-    LPLLIST ll,
-    LPVOID lpItem,
-    DWORD dwState)
-{
-    LPLLNODE tmp1, tmp2;
-
-    if (!ll) {
-	return FALSE;
-    }
-    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
-	EnterCriticalSection(&ll->lock);
-    }
-    if (!ll->front && !ll->back || ll->lCount <= 0) {
-	if (mask_n(dwState, IOCP_LL_NOLOCK)) {
-	    LeaveCriticalSection(&ll->lock);
-	}
-	return FALSE;
-    }
-    tmp1 = ll->front;
-    while(tmp1) {
-	tmp2 = tmp1->next;
-	if (tmp1->lpItem == lpItem) {
-	    IocpLLPop(tmp1, IOCP_LL_NOLOCK | dwState);
-	}
-	tmp1 = tmp2;
-    }
-    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
-	LeaveCriticalSection(&ll->lock);
-    }
-    
-    return TRUE;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLPop --
- *
- *	Removes an item from the list.
- *
- * Results:
- *	TRUE if something was popped or FALSE if nothing was poppable.
- *
- * Side effects:
- *	Won't free the node with IOCP_LL_NODESTROY in the state arg.
- *
- *----------------------------------------------------------------------
- */
-
-BOOL 
-IocpLLPop(
-    LPLLNODE node,
-    DWORD dwState)
-{
-    LPLLIST ll;
-    LPLLNODE prev, next;
-
-    //Ready the node
-    if (!node || !node->ll) {
-	return FALSE;
-    }
-    ll = node->ll;
-    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
-	EnterCriticalSection(&ll->lock);
-    }
-    if (!ll->front && !ll->back || ll->lCount <= 0) {
-	if (mask_n(dwState, IOCP_LL_NOLOCK)) {
-	    LeaveCriticalSection(&ll->lock);
-	}
-	return FALSE;
-    }
-    prev = node->prev;
-    next = node->next;
-
-    /* Check for only item. */
-    if (!prev & !next) {
-	ll->front = NULL;
-	ll->back = NULL;
-    /* Check for front of list. */
-    } else if (!prev && next) {
-	next->prev = NULL;
-	ll->front = next;
-    /* Check for back of list. */
-    } else if (prev && !next) {
-	prev->next = NULL;
-	ll->back = prev;
-    /* Check for middle of list. */
-    } else if (prev && next) {
-	next->prev = prev;
-	prev->next = next;
-    }
-
-    /* Delete the node when IOCP_LL_NODESTROY is not specified. */
-    if (mask_n(dwState, IOCP_LL_NODESTROY)) {
-	IocpLLNodeDestroy(node);
-    } else {
-	node->ll = NULL;
-	node->next = NULL; 
-        node->prev = NULL;
-    }
-    ll->lCount--;
-    if (ll->lCount <= 0) {
-	ll->front = NULL;
-	ll->back = NULL;
-    }
-
-    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
-	LeaveCriticalSection(&ll->lock);
-    }
-    return TRUE;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLNodeDestroy --
- *
- *	Destroys a node.
- *
- * Results:
- *	Same as HeapFree.
- *
- * Side effects:
- *	memory returns to the system.
- *
- *----------------------------------------------------------------------
- */
-
-BOOL
-IocpLLNodeDestroy (LPLLNODE node)
-{
-    return IocpFree(node);
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLPopBack --
- *
- *	Removes the item at the back of the list.
- *
- * Results:
- *	The item stored in the node at the front or NULL for none.
- *
- * Side effects:
- *	Won't free the node with IOCP_LL_NODESTROY in the state arg.
- *
- *----------------------------------------------------------------------
- */
-
-LPVOID
-IocpLLPopBack(
-    LPLLIST ll,
-    DWORD dwState,
-    DWORD timeout)
-{
-    LPLLNODE tmp;
-    LPVOID vp;
-
-    if (!ll) {
-	return NULL;
-    }
-    EnterCriticalSection(&ll->lock);
-    if (!ll->front && !ll->back) {
-	LeaveCriticalSection(&ll->lock);
-	return NULL;
-    }
-    tmp = ll->back;
-    vp = tmp->lpItem;
-    IocpLLPop(tmp, IOCP_LL_NOLOCK | dwState);
-    LeaveCriticalSection(&ll->lock);
-    return vp;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLPopFront --
- *
- *	Removes the item at the front of the list.
- *
- * Results:
- *	The item stored in the node at the front or NULL for none.
- *
- * Side effects:
- *	Won't free the node with IOCP_LL_NODESTROY in the state arg.
- *
- *----------------------------------------------------------------------
- */
-
-LPVOID
-IocpLLPopFront(
-    LPLLIST ll,
-    DWORD dwState,
-    DWORD timeout)
-{
-    LPLLNODE tmp;
-    LPVOID vp;
-
-    if (!ll) {
-	return NULL;
-    }
-    EnterCriticalSection(&ll->lock);
-    if (!ll->lCount) {
-	LeaveCriticalSection(&ll->lock);
-	return NULL;
-    }
-    if (!ll->front && !ll->back) {
-	LeaveCriticalSection(&ll->lock);
-	return NULL;
-    }
-    tmp = ll->front;
-    vp = tmp->lpItem;
-    IocpLLPop(tmp, IOCP_LL_NOLOCK | dwState);
-    LeaveCriticalSection(&ll->lock);
-    return vp;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLIsNotEmpty --
- *
- *	self explanatory.
- *
- * Results:
- *	Boolean for if the linked-list has entries.
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
- */
-
-BOOL
-IocpLLIsNotEmpty (LPLLIST ll)
-{
-    BOOL b;
-    if (!ll) {
-	return FALSE;
-    }
-    EnterCriticalSection(&ll->lock);
-    b = (ll->lCount != 0);
-    LeaveCriticalSection(&ll->lock);
-    return b;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * IocpLLGetCount --
- *
- *	How many nodes are on the list?
- *
- * Results:
- *	Count of entries.
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
- */
-
-SIZE_T
-IocpLLGetCount (LPLLIST ll)
-{
-    SIZE_T c;
-    if (!ll) {
-	return 0;
-    }
-    EnterCriticalSection(&ll->lock);
-    c = ll->lCount;
-    LeaveCriticalSection(&ll->lock);
-    return c;
 }
 
 
@@ -2812,7 +2308,7 @@ static int wsaErrorTable2[] = {
     EINVAL,		/* WSATYPE_NOT_FOUND	    The specified class was not found. */
     EINVAL,		/* WSA_E_NO_MORE	    No more results can be returned by WSALookupServiceNext. */
     EINVAL,		/* WSA_E_CANCELLED	    A call to WSALookupServiceEnd was made while this call was still processing. The call has been canceled. */
-    EINVAL		/* WSAEREFUSED		    A database query failed because it was actively refused. */
+    EINVAL,		/* WSAEREFUSED		    A database query failed because it was actively refused. */
 };
 
 /*
@@ -2853,7 +2349,7 @@ static int wsaErrorTable3[] = {
     EINVAL,	/* WSA_QOS_EPSFILTERSPEC,	invalid filter spec in provider specific buffer */
     EINVAL,	/* WSA_QOS_ESDMODEOBJ,		invalid shape discard mode object in provider specific buffer */
     EINVAL,	/* WSA_QOS_ESHAPERATEOBJ,	invalid shaping rate object in provider specific buffer */
-    EINVAL	/* WSA_QOS_RESERVED_PETYPE,	reserved policy element in provider specific buffer */
+    EINVAL,	/* WSA_QOS_RESERVED_PETYPE,	reserved policy element in provider specific buffer */
 };
 
 /*

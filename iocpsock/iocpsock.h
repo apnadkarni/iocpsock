@@ -1,3 +1,28 @@
+/* ----------------------------------------------------------------------
+ *
+ * iocpsock.h --
+ *
+ *	Main header file for the shared stuff.
+ *
+ * ----------------------------------------------------------------------
+ * RCS: @(#) $Id$
+ * ----------------------------------------------------------------------
+ */
+
+#ifndef INCL_iocpsock_h_
+#define INCL_iocpsock_h_
+
+#define IOCPSOCK_MAJOR_VERSION   1
+#define IOCPSOCK_MINOR_VERSION   1
+#define IOCPSOCK_RELEASE_LEVEL   TCL_FINAL_RELEASE
+#define IOCPSOCK_RELEASE_SERIAL  0
+
+#define IOCPSOCK_VERSION	"1.1"
+#define IOCPSOCK_PATCH_LEVEL	"1.1.0"
+
+
+#ifndef RC_INVOKED
+
 /* Enables NT5 special features. */
 #define _WIN32_WINNT 0x0500
 
@@ -86,37 +111,43 @@ typedef struct {
 
     /* Winsock 2.2 functions */
     LPFN_WSAACCEPT	    WSAAccept;
-    LPFN_WSAADDRESSTOSTRINGA	WSAAddressToStringA;
+    LPFN_WSAADDRESSTOSTRINGA	WSAAddressToString;
     LPFN_WSACLOSEEVENT	    WSACloseEvent;
     LPFN_WSACONNECT	    WSAConnect;
     LPFN_WSACREATEEVENT	    WSACreateEvent;
-    LPFN_WSADUPLICATESOCKETA	WSADuplicateSocketA;
-    LPFN_WSAENUMNAMESPACEPROVIDERSA WSAEnumNameSpaceProvidersA;
+    LPFN_WSADUPLICATESOCKETA	WSADuplicateSocket;
+    LPFN_WSAENUMNAMESPACEPROVIDERSA WSAEnumNameSpaceProviders;
     LPFN_WSAENUMNETWORKEVENTS	WSAEnumNetworkEvents;
-    LPFN_WSAENUMPROTOCOLSA   WSAEnumProtocolsA;
+    LPFN_WSAENUMPROTOCOLSA   WSAEnumProtocols;
     LPFN_WSAEVENTSELECT	    WSAEventSelect;
     LPFN_WSAGETOVERLAPPEDRESULT	WSAGetOverlappedResult;
     LPFN_WSAGETQOSBYNAME    WSAGetQOSByName;
+    LPFN_WSAGETSERVICECLASSINFO	WSAGetServiceClassInfo;
+    LPFN_WSAGETSERVICECLASSNAMEBYCLASSIDA WSAGetServiceClassNameByClassId;
     LPFN_WSAHTONL	    WSAHtonl;
     LPFN_WSAHTONS	    WSAHtons;
+    LPFN_WSAINSTALLSERVICECLASSA WSAInstallServiceClass;
     LPFN_WSAIOCTL	    WSAIoctl;
     LPFN_WSAJOINLEAF	    WSAJoinLeaf;
-    LPFN_WSALOOKUPSERVICEBEGINA	WSALookupServiceBeginA;
+    LPFN_WSALOOKUPSERVICEBEGINA	WSALookupServiceBegin;
     LPFN_WSALOOKUPSERVICEEND	WSALookupServiceEnd;
-    LPFN_WSALOOKUPSERVICENEXTA	WSALookupServiceNextA;
+    LPFN_WSALOOKUPSERVICENEXTA	WSALookupServiceNext;
+    LPFN_WSANSPIOCTL	    WSANSPIoctl;
     LPFN_WSANTOHL	    WSANtohl;
     LPFN_WSANTOHS	    WSANtohs;
     LPFN_WSAPROVIDERCONFIGCHANGE WSAProviderConfigChange;
     LPFN_WSARECV	    WSARecv;
     LPFN_WSARECVDISCONNECT  WSARecvDisconnect;
     LPFN_WSARECVFROM	    WSARecvFrom;
+    LPFN_WSAREMOVESERVICECLASS	WSARemoveServiceClass;
     LPFN_WSARESETEVENT	    WSAResetEvent;
     LPFN_WSASEND	    WSASend;
     LPFN_WSASENDDISCONNECT  WSASendDisconnect;
     LPFN_WSASENDTO	    WSASendTo;
     LPFN_WSASETEVENT	    WSASetEvent;
-    LPFN_WSASOCKETA	    WSASocketA;
-    LPFN_WSASTRINGTOADDRESSA	WSAStringToAddressA;
+    LPFN_WSASETSERVICEA	    WSASetService;
+    LPFN_WSASOCKETA	    WSASocket;
+    LPFN_WSASTRINGTOADDRESSA	WSAStringToAddress;
     LPFN_WSAWAITFORMULTIPLEEVENTS WSAWaitForMultipleEvents;
 
 } WinsockProcs;
@@ -188,7 +219,7 @@ extern GUID TransmitFileGuid;		/* TransmitFile() */
 struct _ListNode;
 struct _List;
 typedef struct _ListNode {
-    struct _ListNode *next;	/* node in front */
+    struct _ListNode *next;	/* node in back */
     struct _ListNode *prev;	/* node in back */
     struct _List *ll;		/* parent linked-list */
     LPVOID lpItem;		/* storage item */
@@ -200,6 +231,7 @@ typedef struct _List {
     struct _ListNode *back;	/* tail of list */
     LONG lCount;		/* nodes contained */
     CRITICAL_SECTION lock;	/* accessor lock */
+    HANDLE haveData;		/* event when data is added to an empty list */
 } LLIST, *LPLLIST;
 
 
@@ -223,13 +255,15 @@ typedef struct _BufferInfo {
 #   define OP_CONNECT	3   /* ConnectEx */
 #   define OP_DISCONNECT 4  /* DisconnectEx() */
 #   define OP_TRANSMIT	5   /* TransmitFile() */
-#   define OP_LOOKUP	6   /* TODO: For future use */
+#   define OP_IOCTL	6   /* WSAIoctl() */
+#   define OP_LOOKUP	7   /* TODO: For future use */
     int operation;	    /* Type of operation issued */
     LPSOCKADDR addr;	    /* addr storage space for WSARecvFrom/WSASendTo. */
+    ULONG IoOrder;	    /* Order in which this I/O was posted */
     LLNODE node;	    /* linked list node */
 } BufferInfo;
 
-
+#define __WIN32__
 #include "tclPort.h"
 
 /* We need at least the Tcl_Obj interface that was started in 8.0 */
@@ -265,13 +299,14 @@ extern Tcl_ThreadDataKey dataKey;
 
 #define IOCP_EOF	    (1<<0)
 #define IOCP_CLOSING	    (1<<1)
-#define IOCP_BLOCKING	    (1<<2)
+#define IOCP_ASYNC	    (1<<2)
 
 typedef struct SocketInfo {
     Tcl_Channel channel;	    /* Tcl channel for this socket. */
     SOCKET socket;		    /* Windows SOCKET handle. */
     DWORD flags;		    /* info about this socket. */
     LONG ready;			    /* indicates a ready event. */
+    LONG watchMask;		    /* events we are interested in. */
     WS2ProtocolData *proto;	    /* Network protocol info. */
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
 				     * origin. */
@@ -284,13 +319,11 @@ typedef struct SocketInfo {
     LPSOCKADDR localAddr;	    /* Local sockaddr. */
     LPSOCKADDR remoteAddr;	    /* Remote sockaddr. */
 
-    int watchMask;		    /* Tcl events we are interested in. */
-    int readyMask;		    /* Tcl events that have happened. */
     DWORD lastError;		    /* Error code from last operation. */
-    volatile LONG OutstandingOps;   /* count of operations pending. */
+    volatile LONG OutstandingOps;
     HANDLE allDone;		    /* manual reset event */
-    LPLLIST llPendingRecv;	    /* Our completed recv list. */
-    LLNODE node;		    /* linked list node info. */
+    LPLLIST llPendingRecv;	    /* Our pending recv list. */
+    LLNODE node;
 
 } SocketInfo;
 
@@ -315,8 +348,9 @@ typedef struct CompletionPortInfo {
 			     * that don't need to interact with Tcl
 			     * directly. */
     HANDLE NPPheap;	    /* Special private heap for all data that
-			     * will be set for the non-paged pool
-			     * (WSABUF and OVERLAPPED) */
+			     * will be set with special attributes for
+			     * the non-paged pool (WSABUF and OVERLAPPED)
+			     */
     HANDLE thread;	    /* The single threads for handling the
 			     * completion routine. */
 } CompletionPortInfo;
@@ -325,6 +359,7 @@ extern CompletionPortInfo IocpSubSystem;
 
 TCL_DECLARE_MUTEX(initLock)
 
+extern ThreadSpecificData *InitSockets();
 extern int		CreateSocketAddress (const char *addr,
 			    const char *port, LPADDRINFO inhints,
 			    LPADDRINFO *result);
@@ -401,6 +436,9 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
  * ----------------------------------------------------------------------
  */
 
+/* We do not want an initial recv() with a new connection */
+#define IOCP_ACCEPT_BUFSIZE	0
+
 /*
  * Initial count of how many WSARecv(From) calls to place on a connected
  * socket.  The actual count can grow automatically based on burst
@@ -414,3 +452,16 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
  * anyways.
  */
 #define IOCP_RECV_BUFSIZE	4096
+
+/*
+ * Count of how many active WSASend(to) calls do we want.  Too high a
+ * value can cause gross memory eating behavior when the socket is
+ * attached localhost.  As far as I can tell, both sides go wild in a
+ * state which doesn't seem to move much data quickly.  This must be
+ * capped.
+ */
+#define IOCP_SEND_CONCURRENCY	200
+
+#endif  /* #ifndef RC_INVOKED */
+#endif /* #ifndef INCL_iocpsock_h_ */
+
