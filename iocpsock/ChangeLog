@@ -1,3 +1,88 @@
+2003-03-01  davygrvy
+
+	== TAGGED iocpsock_0_99 ==
+
+	* dllmain.c:
+	* iocpsock.rc:
+	* iocpsock_lolevel.c:
+	* readme.txt:
+		preparing for the 0.99 release.
+
+2003-02-28  davygrvy
+	* iocpsock_lolevel.c:
+		All resource leaks fixed!
+
+2003-02-27  davygrvy
+	* iocpsock_lolevel.c:
+		ANDing the ones compliment is not the same as XORing.  Silly me.
+		
+		Decided to do absolute closesocket in the DriverCloseProc instead of the
+		delay/lazy close I was doing before.
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		Added a way to turn off/on burst detection for compiling while
+		this is being studied
+
+2003-02-26  davygrvy
+	* iocpsock_lolevel.c:
+		more better fixed than last fix for the Tcl_Close problem for
+		when *we* are intiating the close.
+
+	* iocpsock_lolevel.c:
+		problem closing sockets fixed.
+
+	* iocpsock_lolevel.c:
+		fixed error in last fix.
+
+2003-02-22  davygrvy
+	* dllmain.c:
+		STATIC_BUILD case added.
+
+2003-02-21  davygrvy
+	* iocpsock_lolevel.c:
+		small cruft/lint.
+
+2003-02-20  davygrvy
+	* iocpsock_lolevel.c:
+		buffer clean-up problem fixed in PostOverlappedAccept and
+		PostOverlappedRecv.
+
+2003-02-19  davygrvy
+	* readme.txt:
+		set date.
+
+	* iocpsock.h:
+		master configs changed a bit.  Needs study to determine best
+		load behavior.
+
+	* ws2tcp.c:
+		Made sure ipv6 sockaddr was not used when getting localhost in
+		passive lookup.
+
+	* iocpsock_lolevel.c:
+		InitSockets) Initialize*SubSystem call missed when winsock
+		loaded the 1.1 interface.
+
+2003-02-17  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		small fix for the Oct`02 SDK's wspiapi.h.  It needed
+		WSASetLastError, which the may`02 SDK didn't use.
+
+	* readme.txt:
+		added notes on ipv6
+
+	* dllmain.c:
+		removed the puts to stderr on load.
+
+	* iocpsock.rc:
+	* resource.h:
+		(new) resource files
+
+	* iocpsock.dsp:
+		rc file.
+
 2003-02-17  davygrvy
 
 	== Tagged iocpsock_0_5 ==
