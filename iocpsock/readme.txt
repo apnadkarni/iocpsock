@@ -1,4 +1,4 @@
-iocpsock.dll -- ver 0.5 (xxxx)
+iocpsock.dll -- ver 0.5 (Feb 17 14:46:54 2003)
 
 http://sf.net/project/showfiles.php?group_id=73356
 http://sf.net/projects/iocpsock
@@ -43,7 +43,12 @@ called [socket2] and behaves just like the stock one.
      feature of NT.
 
 * CHANGES from 0.4:
-  - now takes ipv6 addresses and creates ipv6 sockets when asked.
+  - Now takes ipv6 addresses and creates ipv6 sockets when asked.  WinXP
+    can do ipv6 since sp1.  Win2K has a tech preview for ipv6, but isn't
+    production quality.  Only when the address given to [socket2] is in
+    ipv6 format does an ipv6 socket get used.  hostname might work, but
+    untested.
+  - Removed the puts to stderr on load.
 
 * CHANGES from 0.3:
   - Properly works under threads.  Tcl_DeleteEventSource called in
