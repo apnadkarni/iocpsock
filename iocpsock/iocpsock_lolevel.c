@@ -1716,7 +1716,7 @@ HandleIo (
         SOCKADDR_STORAGE *local, *remote;
         int localLen, remoteLen;
 
-	if (WSAerr == NO_ERROR) {
+	if (bufPtr->WSAerr == NO_ERROR) {
 	    /*
 	     * Get the address information from the decoder routine specific
 	     * to this socket's LSP.
@@ -1788,7 +1788,7 @@ HandleIo (
 
 	    /* Now post a receive on this new connection. */
 	    newBufPtr = GetBufferObj(newInfoPtr, 4096);
-	    if ((WSAerr = PostOverlappedRecv(newInfoPtr, newBufPtr)) != NO_ERROR) {
+	    if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
 		/* Oh no, the WSARecv failed. */
 		FreeBufferObj(newBufPtr);
 	    }
