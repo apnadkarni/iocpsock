@@ -55,7 +55,7 @@ proc httpCallback {token} {
     global showme
     upvar #0 $token state
     # Access state as a Tcl array
-#    puts [parray state]
+    puts [parray state]
     if {$state(status) != "ok"} {
 	puts "error on $state(sock): $state(error): $state(http)"
     } else {
@@ -64,7 +64,7 @@ proc httpCallback {token} {
 	    puts $state(body)
 	}
     }
-    ::http::cleanup $state
+    ::http::cleanup $token
     return
 }
 
