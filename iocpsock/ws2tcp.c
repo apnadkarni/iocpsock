@@ -314,6 +314,9 @@ CreateTcpSocket(
 	/* create the queue for holding ready ones */
 	infoPtr->readyAccepts = IocpLLCreate();
 
+	/* Create the recycle bin. */
+//	infoPtr->socketRecycleBin = IocpLLCreate();
+
 	IocpLLPushBack(IocpSubSystem.listeningSockets, infoPtr, &infoPtr->node);
 
 	/* post IOCP_ACCEPT_COUNT accepts. */

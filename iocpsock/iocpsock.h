@@ -263,6 +263,8 @@ typedef struct SocketInfo {
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
 				     * origin. */
     /* For listening sockets: */
+//    LPLLIST socketRecycleBin;	    /* A stack of sockets for reuse to
+//				     * AcceptEx. Still locally bound. */
     LPLLIST readyAccepts;	    /* Ready accepts() in queue. */
     LPLLIST llPendingAccepts;	    /* List of pending accepts(). */
     Tcl_TcpAcceptProc *acceptProc;  /* Proc to call on accept. */
@@ -279,8 +281,6 @@ typedef struct SocketInfo {
     short outstandingSends;
     short maxOutstandingSends;
     volatile LONG OutstandingOps;	    
-//    ULONG LastSendIssued; // Last sequence number sent
-//    ULONG IoCountIssued;
     LPLLIST llPendingRecv;	    /* Our pending recv list. */
     LLNODE node;
 
