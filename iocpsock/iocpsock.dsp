@@ -106,21 +106,6 @@ SOURCE=.\iocpsock_lolevel.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\iocpsock_util.c
-
-!IF  "$(CFG)" == "iocpsock - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "iocpsock - Win32 Debug"
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\iocpsock_util.h
-# End Source File
-# Begin Source File
-
 SOURCE=.\ws2apltalk.c
 # End Source File
 # Begin Source File

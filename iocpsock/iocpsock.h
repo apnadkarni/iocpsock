@@ -115,6 +115,31 @@ typedef struct {
 extern WinsockProcs winSock;
 extern int initialized;
 
+/* wspiapi.h doesn't like typedefs, so fix it. */
+#define inet_addr	winSock.inet_addr
+#define gethostbyname   winSock.gethostbyname
+#define WSAGetLastError winSock.WSAGetLastError
+#define htons		winSock.htons
+#define getservbyname   winSock.getservbyname
+#define htonl		winSock.htonl
+#define inet_ntoa	winSock.inet_ntoa
+#define ntohs		winSock.ntohs
+#define getservbyport	winSock.getservbyport
+#define gethostbyaddr	winSock.gethostbyaddr
+#undef _WSPIAPI_H_
+#include <wspiapi.h>
+#undef inet_addr
+#undef gethostbyname
+#undef WSAGetLastError
+#undef htons
+#undef getservbyname
+#undef htonl
+#undef inet_ntoa
+#undef ntohs
+#undef getservbyport
+#undef gethostbyaddr
+
+
 /*
  * Specific protocol information is stored here and shared to all
  * SocketInfo objects of that type.
@@ -122,8 +147,9 @@ extern int initialized;
 typedef struct {
     int af;		    /* Address family. */
     int	type;		    /* Address type. */
-    int	protocol;		    /* protocol type specific to the address
+    int	protocol;	    /* protocol type specific to the address
 			     * family. */
+    size_t addrLen;	    /* length of protocol specific SOCKADDR */
     LPFN_ACCEPTEX AcceptEx; /* LSP specific function for AcceptEx(). */
     LPFN_GETACCEPTEXSOCKADDRS GetAcceptExSockaddrs;
 			    /* LSP specific function for
@@ -137,24 +163,43 @@ extern GUID gGetAcceptExSockaddrsGuid;
 			     * GetAcceptExSockaddrs() from the LSP. */
 
 /* Linked-List node object. */
-struct S_ListNode;
-struct S_List;
-typedef struct S_ListNode
-{
-    struct S_ListNode *next;	/* node in front */
-    struct S_ListNode *prev;	/* node in back */
-    struct S_List *ll;		/* parent lined-list */
+struct _ListNode;
+struct _List;
+typedef struct _ListNode {
+    struct _ListNode *next;	/* node in front */
+    struct _ListNode *prev;	/* node in back */
+    struct _List *ll;		/* parent linked-list */
     LPVOID lpItem;		/* storage item */
-}   LLNODE, *LPLLNODE;
+} LLNODE, *LPLLNODE;
 
 /* Linked-List object. */
-typedef struct S_List
-{
-    struct S_ListNode *front;	/* head of list */
-    struct S_ListNode *back;	/* tail of list */
+typedef struct _List {
+    struct _ListNode *front;	/* head of list */
+    struct _ListNode *back;	/* tail of list */
     LONG lCount;		/* nodes contained */
     CRITICAL_SECTION lock;	/* accessor lock */
-}   LLIST, *LPLLIST;
+} LLIST, *LPLLIST;
+
+/*
+ * This is our per I/O buffer. It contains a WSAOVERLAPPED structure as well
+ * as other necessary information for handling an IO operation on a socket.
+ */
+typedef struct _BufferInfo {
+    WSAOVERLAPPED ol;
+    SOCKET socket;	    // Used for AcceptEx client socket
+    DWORD error;	    // Any error that occured for this operation.
+    BYTE *buf;		    // Buffer for recv/send/AcceptEx
+    size_t buflen;	    // Length of the buffer
+    size_t used;	    /* Length of the buffer used (post operation) */
+#   define OP_ACCEPT	0   // AcceptEx
+#   define OP_READ	1   // WSARecv/WSARecvFrom
+#   define OP_WRITE	2   // WSASend/WSASendTo
+    int operation;	    // Type of operation issued
+    LPSOCKADDR addr;	    // addr storage space.
+    int addrlen;	    // length of the protocol specific address
+    ULONG IoOrder;	    // Order in which this I/O was posted
+    LLNODE node;	    /* linked list node */
+} BufferInfo;
 
 
 #include "tclInt.h"
@@ -170,33 +215,12 @@ typedef struct S_List
 #   error "Stubs interface doesn't work in 8.0 and alpha/beta 8.1; only 8.1.0+"
 #endif
 
-
 typedef struct ThreadSpecificData {
     Tcl_ThreadId threadId;
     LPLLIST readySockets;
 } ThreadSpecificData;
+
 extern Tcl_ThreadDataKey dataKey;
-
-/*
- * This is our per I/O buffer. It contains a WSAOVERLAPPED structure as well
- * as other necessary information for handling an IO operation on a socket.
- */
-typedef struct _BufferInfo {
-    WSAOVERLAPPED ol;
-    SOCKET socket;	    // Used for AcceptEx client socket
-    BYTE *buf;		    // Buffer for recv/send/AcceptEx
-    size_t buflen;	    // Length of the buffer
-    size_t used;	    /* Length of the buffer used (post operation) */
-#   define OP_ACCEPT	0   // AcceptEx
-#   define OP_READ	1   // WSARecv/WSARecvFrom
-#   define OP_WRITE	2   // WSASend/WSASendTo
-    int operation;	    // Type of operation issued
-    SOCKADDR_STORAGE addr;  // addr storage space.
-    int addrlen;	    // length of the protocol specific address
-    ULONG IoOrder;	    // Order in which this I/O was posted
-    LLNODE node;	    /* linked list node */
-} BufferInfo;
-
 
 /*
  * The following structure is used to store the data associated with
@@ -204,18 +228,24 @@ typedef struct _BufferInfo {
  */
 
 typedef struct SocketInfo {
-    Tcl_Channel channel;	   /* Channel associated with this
-				    * socket. */
-    SOCKET socket;		   /* Windows SOCKET handle. */
-    WS2ProtocolData *proto;
-    CRITICAL_SECTION critSec;	    /* accessor lock */
-    ThreadSpecificData *tsdHome;    /* TSD block for getting back to our origin. */
-    LPLLIST readyAccepts;	    /* ready accepts() in queue (used for listening sockets only) */
+    Tcl_Channel channel;	    /* Tcl channel for this socket. */
+    SOCKET socket;		    /* Windows SOCKET handle. */
+    WS2ProtocolData *proto;	    /* Network protocol info. */
+    CRITICAL_SECTION critSec;	    /* Accessor lock. */
+    ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
+				     * origin. */
+    /* For listening sockets: */
+    LPLLIST readyAccepts;	    /* Ready accepts() in queue (used for
+				     * listening sockets only) */
     Tcl_TcpAcceptProc *acceptProc;  /* Proc to call on accept. */
     ClientData acceptProcData;	    /* The data for the accept proc. */
-//    int readyMask;		    /* Are we ready for a read or write? */
-    BOOL bClosing;
+
+    /* Neutral SOCKADDR data: */
+    LPSOCKADDR localAddr;	    /* Local sockaddr. */
+    LPSOCKADDR remoteAddr;	    /* Remote sockaddr. */
+
     DWORD lastError;		    /* Error code from last message. */
+    BOOL bClosing;
     volatile LONG OutstandingOps;	    
     ULONG LastSendIssued; // Last sequence number sent
     ULONG IoCountIssued;
@@ -252,12 +282,9 @@ typedef struct CompletionPortInfo {
     HANDLE threads[MAX_COMPLETION_THREAD_COUNT];
 			    /* The array of threads for handling the
 			     * completion routines. */
-    LPLLIST gFreeBufStack;  /* Global stack for holding free buffers. */
-
 } CompletionPortInfo;
+
 extern CompletionPortInfo IocpSubSystem;
-
-
 
 TCL_DECLARE_MUTEX(initLock)
 
@@ -281,3 +308,25 @@ extern int		HasSockets(Tcl_Interp *interp);
 extern char *		GetSysMsg(DWORD id);
 extern Tcl_Obj *	GetSysMsgObj(DWORD id);
 extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
+extern __inline LPVOID	IocpAlloc (SIZE_T size);
+extern __inline BOOL	IocpFree (LPVOID block);
+
+
+/* Thread safe linked-list management. */
+
+/* state bitmask. */
+#define IOCP_LL_NOLOCK		0x80000000
+#define IOCP_LL_NODESTROY	0x40000000
+
+extern LPLLIST		IocpLLCreate();
+extern BOOL		IocpLLDestroy(LPLLIST ll, DWORD dwState);
+extern LPLLNODE		IocpLLPushBack(LPLLIST ll, LPVOID lpItem,
+				LPLLNODE pnode);
+extern LPLLNODE		IocpLLPushFront(LPLLIST ll, LPVOID lpItem,
+				LPLLNODE pnode);
+extern BOOL		IocpLLPop(LPLLNODE node, DWORD dwState);
+extern BOOL		IocpLLPopAll(LPLLIST ll, LPLLNODE snode, DWORD dwState);
+extern LPVOID		IocpLLPopBack(LPLLIST ll, DWORD dwState);
+extern LPVOID		IocpLLPopFront(LPLLIST ll, DWORD dwState);
+extern BOOL		IocpLLIsNotEmpty(LPLLIST ll);
+extern BOOL		IocpLLNodeDestroy(LPLLNODE node);

@@ -1,5 +1,4 @@
 #include "iocpsock.h"
-#include "iocpsock_util.h"
 
 static GUID guidAcceptEx = WSAID_ACCEPTEX;
 static GUID guidGetAcceptExSockaddrs = WSAID_GETACCEPTEXSOCKADDRS;
@@ -8,6 +7,7 @@ static WS2ProtocolData tcp4ProtoData = {
     AF_INET,
     SOCK_STREAM,
     IPPROTO_TCP,
+    sizeof(SOCKADDR_IN),
     NULL,
     NULL
 };
@@ -16,6 +16,7 @@ static WS2ProtocolData tcp6ProtoData = {
     AF_INET6,
     SOCK_STREAM,
     IPPROTO_TCP,
+    sizeof(SOCKADDR_IN6),
     NULL,
     NULL
 };
@@ -116,6 +117,13 @@ Iocp_OpenTcpServer(
 	    == TCL_ERROR) {
         Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
         return (Tcl_Channel) NULL;
+    }
+
+    // Had to add this!
+    if (Tcl_SetChannelOption(NULL, infoPtr->channel, "-blocking", "0")
+	    == TCL_ERROR) {
+	Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
+	return (Tcl_Channel) NULL;
     }
 
     return infoPtr->channel;
@@ -224,10 +232,7 @@ CreateTcp4Socket(
 	}
 
         // Keep track of the pending AcceptEx operations
-        infoPtr->PendingAccepts = (BufferInfo **) HeapAlloc(
-                IocpSubSystem.heap,
-                HEAP_ZERO_MEMORY,
-		(sizeof(BufferInfo *) * 20));
+        infoPtr->PendingAccepts = (BufferInfo **) IocpAlloc(sizeof(BufferInfo *) * 20);
 
 	/* pre-queue 20 accepts. */
         for(i=0; i < 20 ;i++) {
@@ -238,7 +243,7 @@ CreateTcp4Socket(
         }
 
 	/* create the queue for holding ready ones */
-	infoPtr->readyAccepts = TSLLCreate();
+	infoPtr->readyAccepts = IocpLLCreate();
 
     } else {
 
