@@ -324,9 +324,6 @@ CreateTcpSocket(
 	    goto error;
 	}
 
-        /* Keep track of the pending AcceptEx operations */
-        infoPtr->llPendingAccepts = IocpLLCreate();
-
 	/* create the queue for holding ready ones */
 	infoPtr->readyAccepts = IocpLLCreate();
 

@@ -269,13 +269,12 @@ extern Tcl_ThreadDataKey dataKey;
 typedef struct SocketInfo {
     Tcl_Channel channel;	    /* Tcl channel for this socket. */
     SOCKET socket;		    /* Windows SOCKET handle. */
-    DWORD flags;
+    DWORD flags;		    /* info about this socket. */
     WS2ProtocolData *proto;	    /* Network protocol info. */
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
 				     * origin. */
     /* For listening sockets: */
     LPLLIST readyAccepts;	    /* Ready accepts() in queue. */
-    LPLLIST llPendingAccepts;	    /* List of pending accepts(). */
     Tcl_TcpAcceptProc *acceptProc;  /* Proc to call on accept. */
     ClientData acceptProcData;	    /* The data for the accept proc. */
 
@@ -284,14 +283,12 @@ typedef struct SocketInfo {
     LPSOCKADDR remoteAddr;	    /* Remote sockaddr. */
 
     int watchMask;		    /* Tcl events we are interested in. */
-    int readyMask;
+    int readyMask;		    /* Tcl events that have happened. */
     DWORD lastError;		    /* Error code from last operation. */
-    short outstandingSends;
-    short maxOutstandingSends;
-    volatile LONG OutstandingOps;
+    volatile LONG OutstandingOps;   /* count of operations pending. */
     HANDLE allDone;		    /* manual reset event */
-    LPLLIST llPendingRecv;	    /* Our pending recv list. */
-    LLNODE node;
+    LPLLIST llPendingRecv;	    /* Our completed recv list. */
+    LLNODE node;		    /* linked list node info. */
 
 } SocketInfo;
 
@@ -397,15 +394,6 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
  */
 
 /*
- * The count of pending AcceptEx calls to place on a listening socket.
- * Too low would be a value of 5 (many WSAECONREFUSED errors).  Too high
- * a value and it reserves resources that aren't used effectively.
- * Unfortunately, burst conditions can not be detected for the system
- * to grow the actual count based on need.
- */
-/*#define IOCP_ACCEPT_COUNT	200    now a switch for the tcl command*/
-
-/*
  * Initial count of how many WSARecv(From) calls to place on a connected
  * socket.  The actual count can grow automatically based on burst
  * activity (See the recursion used in PostOverlappedRecv for details).
@@ -418,12 +406,3 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
  * anyways.
  */
 #define IOCP_RECV_BUFSIZE	4096
-
-/*
- * Count of how many active WSASend(To) calls do we want.  Too high a
- * value can cause gross memory eating behavior when the socket is
- * attached localhost.  As far as I can tell, both sides go wild in a
- * state which doesn't seem to move much data quickly.  This must be
- * capped.
- */
-#define IOCP_SEND_CONCURRENCY	200

@@ -443,23 +443,23 @@ HasSockets(Tcl_Interp *interp)
 	    case TCL_WSE_CANTDOONEPOINTZERO:
 		Tcl_AppendResult(interp,
 			"The Windows Sockets version loaded by "
-			"WSAStartup is under 1.1 and is not "
+			"WSAStartup is less than 1.1 and is not "
 			"accepatable.", NULL);
 		break;
 	    case TCL_WSE_NOTALL11FUNCS:
 		Tcl_AppendResult(interp,
-			"The Windows Sockets library didn't have all the"
-			" needed exports for the 1.1 interface.", NULL);
+			"The Windows Sockets library didn't have all the "
+			"needed exports for the 1.1 interface.", NULL);
 		break;
 	    case TCL_WSE_NOTALL2XFUNCS:
 		Tcl_AppendResult(interp,
-			"The Windows Sockets library didn't have all the"
-			" needed exports for the 2.x interface.", NULL);
+			"The Windows Sockets library didn't have all the "
+			"needed exports for the 2.x interface.", NULL);
 		break;
 	    case TCL_WSE_CANTSTARTHANDLERTHREAD:
 		Tcl_AppendResult(interp,
-			"The Windows Sockets completion thread(s) "
-			"were unable to start.", NULL);
+			"The Windows Sockets completion thread "
+			"was unable to start.", NULL);
 		break;
 	    default:
 		Tcl_AppendObjToObj(Tcl_GetObjResult(interp),
@@ -1350,9 +1350,6 @@ NewSocketInfo (SOCKET socket)
     infoPtr->watchMask = 0;
 
     infoPtr->lastError = NO_ERROR;
-    infoPtr->outstandingSends = 0;
-// TODO: need this to be an fconfigure!
-    infoPtr->maxOutstandingSends = IOCP_SEND_CONCURRENCY;
 
     infoPtr->OutstandingOps = 0;
     infoPtr->allDone = CreateEvent(NULL, TRUE, FALSE, NULL); /* manual reset */
@@ -1697,16 +1694,10 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	 * winsock until we get them posting and keep them full.  This
 	 * seems to be greedy if the peer is on localhost.
 	 *
-	 * TODO: study this problem.  We need to put a cap on the
-	 * concurency allowed.  Sounds like an fconfigure is needed.
-	 * The logic below isn't thread-safe, but that's ok as perfection
-	 * isn't required.
+	 * TODO: study this problem.  Should we put a cap on the
+	 * concurency allowed?
 	 */
-	if (infoPtr->outstandingSends
-		< infoPtr->maxOutstandingSends) {
-	    infoPtr->outstandingSends++;
-	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
-	}
+	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
     }
 
     return NO_ERROR;
@@ -1973,9 +1964,6 @@ HandleIo (
 	}
 	FreeBufferObj(bufPtr);
 
-	if (infoPtr->outstandingSends > 0) {
-	    infoPtr->outstandingSends--;
-	}
 	infoPtr->readyMask |= TCL_WRITABLE;
 
 	/*
