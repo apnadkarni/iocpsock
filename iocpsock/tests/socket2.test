@@ -46,11 +46,11 @@ test socket2-1.3 {Check all fconfigure options} -constraints {
     fconfigure $s
 } -cleanup {
     catch {close $s}
-} -result {-blocking 1 -buffering full -buffersize 4096 -encoding cp1252 -eofchar {} -translation auto -peername {0.0.0.0 0.0.0.0 0} -sockname {*} -keepalive 0 -nagle 1 -acceptpool 5 -sendpool 2 -recvburst 0}
+} -result {-blocking 1 -buffering full -buffersize 4096 -encoding cp1252 -eofchar {} -translation auto -peername {0.0.0.0 0.0.0.0 0} -sockname {*} -keepalive 0 -nagle 1 -backlog 5 -sendcap {20 0} -recvburst {20 0}}
 
 
 ### Accepts should not be greedy or we risk resource starvation
-### for recv activities.  UNIX behaves this way, we should too.
+### for recv/send activities.  UNIX behaves this way, we should too.
 test socket2-2.1 {accepts are sequential} -constraints {
     nt
 } -setup {
@@ -61,6 +61,7 @@ test socket2-2.1 {accepts are sequential} -constraints {
 	incr connects
 	after 0 [subst {lappend notices {just serviced $connects}}]
 	lappend notices "now servicing $connects"
+	fconfigure $s -blocking 0
 	close $s
     }
 } -body {
