@@ -201,7 +201,11 @@ CreateTcpSocket(
 	if (!CreateSocketAddress(NULL, "1", addr, &mysockaddr)) {
 	    goto error2;
 	}
-	((LPSOCKADDR_IN)mysockaddr->ai_addr)->sin_port = 0;
+	if (mysockaddr->ai_family == AF_INET) {
+	    ((LPSOCKADDR_IN)mysockaddr->ai_addr)->sin_port = 0;
+	} else {
+	    IN6ADDR_SETANY((LPSOCKADDR_IN6) mysockaddr->ai_addr);
+	}
     }
 
 
