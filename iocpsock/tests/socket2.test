@@ -136,6 +136,46 @@ test socket2-3.1 {IocpWatchProc validatation of socket state (readable)} -constr
 } {(13): hello again?
 }}
 
+test socket2-3.1 {Keep hammering the readable handler for EOF notices until serviced} -constraints {
+    nt
+} -setup {
+    set notices [list]
+    set notyet 1
+    proc accept {s a p} {
+	global cliFromServ notices
+	lappend notices {got connect}
+        set cliFromServ $s
+	fconfigure $s -blocking 0
+	fileevent $s readable [list GotRead $s]
+    }
+    proc GotRead {s} {
+	global notices notyet
+	if {[string length [set e [fconfigure $s -error]]]} {
+	    lappend notices "error: $s: $e : closing socket"
+	    close $s
+	    return
+	}
+	set stuff [read $s]
+	set got [string length $stuff]
+	if {$got} {lappend notices "($got): $stuff"}
+	if {[eof $s]} {
+	    if {[incr notyet] % 20} {
+		lappend notices "closing"
+		close $s
+	    }
+	}
+    }
+} -body {
+} -cleanup {
+    close $client
+    close $server
+    unset server
+    rename accept {}
+    rename GotRead {}
+    unset notices
+    unset cliFromServ
+} -result {}
+
 # cleanup
 ::tcltest::cleanupTests
 return
