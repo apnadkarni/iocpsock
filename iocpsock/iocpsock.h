@@ -307,27 +307,28 @@ extern CompletionPortInfo IocpSubSystem;
 
 TCL_DECLARE_MUTEX(initLock)
 
-extern int	    CreateSocketAddress (const char *addr,
+extern int		CreateSocketAddress (const char *addr,
 			    const char *port, LPADDRINFO inhints,
 			    LPADDRINFO *result);
-extern void	    FreeSocketAddress(LPADDRINFO addrinfo);
-extern Tcl_Channel  Iocp_OpenTcpClient (Tcl_Interp *interp,
+extern void		FreeSocketAddress(LPADDRINFO addrinfo);
+extern Tcl_Channel	Iocp_OpenTcpClient (Tcl_Interp *interp,
 			    CONST char *port, CONST char *host,
 			    CONST char *myaddr, CONST char *myport,
 			    int async);
-extern Tcl_Channel  Iocp_OpenTcpServer (Tcl_Interp *interp,
+extern Tcl_Channel	Iocp_OpenTcpServer (Tcl_Interp *interp,
 			    CONST char *port, CONST char *host,
 			    Tcl_TcpAcceptProc *acceptProc,
 			    ClientData acceptProcData);
-extern DWORD	    PostOverlappedAccept (SocketInfo *infoPtr,
+extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
 			    BufferInfo *acceptobj);
-extern void	    HandleIo(SocketInfo *infoPtr, BufferInfo *bufPtr,
+extern void		HandleIo(SocketInfo *infoPtr, BufferInfo *bufPtr,
 			    HANDLE compPort, DWORD bytes, DWORD error,
 			    DWORD flags);
-extern void	    IocpWinConvertWSAError(DWORD errCode);
-extern void	    FreeBufferObj(BufferInfo *obj);
+extern void		IocpWinConvertWSAError(DWORD errCode);
+extern void		FreeBufferObj(BufferInfo *obj);
 
-extern BufferInfo *	GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen);
+extern BufferInfo *	GetBufferObj (SocketInfo *infoPtr,
+			    SIZE_T buflen);
 extern SocketInfo *	NewSocketInfo (SOCKET socket);
 extern void		FreeSocketInfo (SocketInfo *infoPtr);
 extern int		HasSockets (Tcl_Interp *interp);
@@ -352,22 +353,28 @@ extern LPLLNODE		IocpLLPushBack (LPLLIST ll, LPVOID lpItem,
 extern LPLLNODE		IocpLLPushFront (LPLLIST ll, LPVOID lpItem,
 				LPLLNODE pnode);
 extern BOOL		IocpLLPop (LPLLNODE node, DWORD dwState);
-extern BOOL		IocpLLPopAll (LPLLIST ll, LPLLNODE snode, DWORD dwState);
-extern BOOL		IocpLLPopAllCompare (LPLLIST ll, LPVOID lpItem, DWORD dwState);
-extern LPVOID		IocpLLPopBack (LPLLIST ll, DWORD dwState, DWORD timeout);
-extern LPVOID		IocpLLPopFront (LPLLIST ll, DWORD dwState, DWORD timeout);
+extern BOOL		IocpLLPopAll (LPLLIST ll, LPLLNODE snode,
+				DWORD dwState);
+extern BOOL		IocpLLPopAllCompare (LPLLIST ll, LPVOID lpItem,
+				DWORD dwState);
+extern LPVOID		IocpLLPopBack (LPLLIST ll, DWORD dwState,
+				DWORD timeout);
+extern LPVOID		IocpLLPopFront (LPLLIST ll, DWORD dwState,
+				DWORD timeout);
 extern BOOL		IocpLLIsNotEmpty (LPLLIST ll);
 extern BOOL		IocpLLNodeDestroy (LPLLNODE node);
 extern SIZE_T		IocpLLGetCount (LPLLIST ll);
 
 /* special hack jobs! */
-extern BOOL PASCAL	OurConnectEx(SOCKET s, const struct sockaddr* name,
-			    int namelen, PVOID lpSendBuffer, DWORD dwSendDataLength,
-			    LPDWORD lpdwBytesSent, LPOVERLAPPED lpOverlapped);
+extern BOOL PASCAL	OurConnectEx(SOCKET s,
+			    const struct sockaddr* name, int namelen,
+			    PVOID lpSendBuffer, DWORD dwSendDataLength,
+			    LPDWORD lpdwBytesSent,
+			    LPOVERLAPPED lpOverlapped);
 
 /* some stuff that needs to be switches or fconfigures, but aren't yet */
-#define IOCP_ACCEPT_COUNT	20
+#define IOCP_ACCEPT_COUNT	40
 #define IOCP_ACCEPT_BUFSIZE	0    /* more than zero means we want a receive with the accept */
-#define IOCP_RECV_COUNT		2
-#define IOCP_RECV_BUFSIZE	2016  /* 2048 - 32 */
-#define IOCP_SEND_CONCURRENCY	2
+#define IOCP_RECV_COUNT		1
+#define IOCP_RECV_BUFSIZE	4064  /* 4096 - 32 (HeapAlloc contains some management code)*/
+#define IOCP_SEND_CONCURRENCY	4
