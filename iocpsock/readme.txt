@@ -1,4 +1,4 @@
-iocpsock.dll -- ver 0.4 (Fri Feb 14 19:17:13 2003)
+iocpsock.dll -- ver 0.4 (Sat Feb 15 17:51:23 2003)
 
 http://sf.net/project/showfiles.php?group_id=73356
 http://sf.net/projects/iocpsock
@@ -43,10 +43,14 @@ called [socket2] and behaves just like the stock one.
      feature of NT.
 
 * CHANGES from 0.3:
-  - properly works under threads.  Tcl_DeleteEventSource called in
+  - Properly works under threads.  Tcl_DeleteEventSource called in
     the threadexithandler and readyEvents linkedlist in the tsdPtr set
     to NULL so modifying it by sockets in the middle of closing will do
     nothing.
+  - Removed the receive with accept optimization that AcceptEx does for
+    more normal/expected behavior.  It's an additional trip through the
+    completion routine, but I don't think it will take away any server
+    speed.
 
 * CHANGES from 0.2:
   - Better tracking and clean-up of resources.  Memory use is tight.
@@ -66,6 +70,8 @@ called [socket2] and behaves just like the stock one.
   - Manage out-of-order receives so that additional completion threads can
     be used -- one per CPU is said to be most efficient.
   - Make the linkedlist routines waitable so blocking can be emulated.
+  - Add special fconfigures for all the iocp stuff such as recv buffer
+    size/count, accept buffer size/count and write concurrency.
 
 --
 David Gravereaux <davygrvy@pobox.com>
