@@ -263,8 +263,6 @@ typedef struct SocketInfo {
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
 				     * origin. */
     /* For listening sockets: */
-//    LPLLIST socketRecycleBin;	    /* A stack of sockets for reuse to
-//				     * AcceptEx. Still locally bound. */
     LPLLIST readyAccepts;	    /* Ready accepts() in queue. */
     LPLLIST llPendingAccepts;	    /* List of pending accepts(). */
     Tcl_TcpAcceptProc *acceptProc;  /* Proc to call on accept. */
@@ -336,6 +334,8 @@ extern Tcl_Channel	Iocp_OpenTcpServer (Tcl_Interp *interp,
 			    ClientData acceptProcData);
 extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
 			    BufferInfo *acceptobj);
+extern DWORD		PostOverlappedRecv (SocketInfo *infoPtr,
+			    BufferInfo *recvobj);
 extern void		HandleIo(SocketInfo *infoPtr, BufferInfo *bufPtr,
 			    HANDLE compPort, DWORD bytes, DWORD error,
 			    DWORD flags);
@@ -390,6 +390,6 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
 /* some stuff that needs to be switches or fconfigures, but aren't yet */
 #define IOCP_ACCEPT_COUNT	100
 #define IOCP_ACCEPT_BUFSIZE	0    /* more than zero means we want a receive with the accept */
-#define IOCP_RECV_COUNT		2
+#define IOCP_RECV_COUNT		1
 #define IOCP_RECV_BUFSIZE	4096  /* use multiples of the page size only. */
 #define IOCP_SEND_CONCURRENCY	2
