@@ -1088,6 +1088,7 @@ IocpInputProc (
 	    } else {
 		if (bufPtr->used == 0) {
 		    infoPtr->flags |= IOCP_EOF;
+		    FreeBufferObj(bufPtr);
 		    return 0;
 		}
 		memcpy(bufPos, bufPtr->buf, bufPtr->used);
@@ -1699,6 +1700,7 @@ void
 FreeSocketInfo (SocketInfo *infoPtr)
 {
     BufferInfo *bufPtr;
+    AcceptInfo *acptInfo;
 
     if (!infoPtr) return;
 
@@ -1708,20 +1710,16 @@ FreeSocketInfo (SocketInfo *infoPtr)
     /* Just in case... */
     if (infoPtr->socket != INVALID_SOCKET) {
 	winSock.closesocket(infoPtr->socket);
-	infoPtr->socket = INVALID_SOCKET;
     }
 
     if (infoPtr->localAddr) {
 	IocpFree(infoPtr->localAddr);
-	infoPtr->localAddr = NULL;
     }
     if (infoPtr->remoteAddr) {
 	IocpFree(infoPtr->remoteAddr);
-	infoPtr->remoteAddr = NULL;
     }
 
     if (infoPtr->readyAccepts) {
-	AcceptInfo *acptInfo;
 	while ((acptInfo = IocpLLPopFront(infoPtr->readyAccepts,
 		IOCP_LL_NODESTROY, 0)) != NULL) {
 	    /* Recursion, but can't be a server socket.. So this is safe. */
@@ -1729,7 +1727,6 @@ FreeSocketInfo (SocketInfo *infoPtr)
 	    IocpFree(acptInfo);
 	}
 	IocpLLDestroy(infoPtr->readyAccepts);
-	infoPtr->readyAccepts = NULL;
     }
     if (infoPtr->llPendingRecv) {
 	while ((bufPtr = IocpLLPopFront(infoPtr->llPendingRecv,
@@ -1737,7 +1734,6 @@ FreeSocketInfo (SocketInfo *infoPtr)
 	    FreeBufferObj(bufPtr);
 	}
 	IocpLLDestroy(infoPtr->llPendingRecv);
-	infoPtr->llPendingRecv = NULL;
     }
     CloseHandle(infoPtr->allDone);
     IocpFree(infoPtr);
