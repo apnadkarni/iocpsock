@@ -23,3 +23,9 @@ proc doit {} {set s [socket [info host] 1234];puts $s "lala";flush $s;return $s}
 
 
 http://localhost/macClasII_2.hfx
+
+d:/tclhttpdCVS/tclhttpd/bin/httpd.tcl -debug 1 -threads 0 -port 80 -webmaster davygrvy@pobox.com
+
+package require Thread
+set t [thread::create {package require Iocpsock; set s [socket2 -server asd 1234]; thread::wait}]
+thread::send -async $t {thread::unwind}

@@ -20,11 +20,7 @@ static WS2ProtocolData tcp6ProtoData = {
     NULL
 };
 
-static SocketInfo *	CreateTcp4Socket(Tcl_Interp *interp,
-				CONST char *port, CONST char *host,
-				int server, CONST char *myaddr,
-				CONST char *myport, int async);
-static SocketInfo *	CreateTcp6Socket(Tcl_Interp *interp,
+static SocketInfo *	CreateTcpSocket(Tcl_Interp *interp,
 				CONST char *port, CONST char *host,
 				int server, CONST char *myaddr,
 				CONST char *myport, int async);
@@ -63,7 +59,7 @@ Iocp_OpenTcpClient(
      * Create a new client socket and wrap it in a channel.
      */
 
-    infoPtr = CreateTcp4Socket(interp, port, host, 0, myaddr, myport, async);
+    infoPtr = CreateTcpSocket(interp, port, host, 0, myaddr, myport, async);
     if (infoPtr == NULL) {
 	return NULL;
     }
@@ -125,7 +121,7 @@ Iocp_OpenTcpServer(
      * Create a new client socket and wrap it in a channel.
      */
 
-    infoPtr = CreateTcp4Socket(interp, port, host, 1, NULL, 0, 0);
+    infoPtr = CreateTcpSocket(interp, port, host, 1, NULL, 0, 0);
     if (infoPtr == NULL) {
 	return NULL;
     }
@@ -154,7 +150,7 @@ Iocp_OpenTcpServer(
 }
 
 static SocketInfo *
-CreateTcp4Socket(
+CreateTcpSocket(
     Tcl_Interp *interp,		/* For error reporting; can be NULL. */
     CONST char *port,		/* Port to open. */
     CONST char *host,		/* Name of host on which to open port. */
@@ -171,49 +167,59 @@ CreateTcp4Socket(
     LPADDRINFO hostaddr;	/* Socket address */
     LPADDRINFO mysockaddr;	/* Socket address for client */
     SOCKET sock = INVALID_SOCKET;
-    SocketInfo *infoPtr;	/* The returned value. */
+    SocketInfo *infoPtr = NULL;	/* The returned value. */
     BufferInfo *bufPtr;		/* The returned value. */
     DWORD bytes, WSAerr;
     BOOL code;
     int i;
+    WS2ProtocolData *pdata;
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
 
-    if (! CreateSocketAddress(host, port, &tcp4ProtoData, &hostaddr)) {
+    if (! CreateSocketAddress(host, port, NULL, &hostaddr)) {
 	goto error;
     }
     if ((myaddr != NULL || myport != NULL) &&
-	    ! CreateSocketAddress(myaddr, myport, &tcp4ProtoData,
+	    ! CreateSocketAddress(myaddr, myport, hostaddr,
 	    &mysockaddr)) {
 	goto error;
     }
 
-    sock = winSock.WSASocketA(tcp4ProtoData.af, tcp4ProtoData.type,
-	    tcp4ProtoData.protocol, NULL, 0, WSA_FLAG_OVERLAPPED);
+    switch (hostaddr->ai_family) {
+    case AF_INET:
+	pdata = &tcp4ProtoData; break;
+    case AF_INET6:
+	pdata = &tcp6ProtoData; break;
+    default:
+	Tcl_Panic("very bad protocol family retured from getaddrinfo()");
+    }
+
+    sock = winSock.WSASocketA(pdata->af, pdata->type,
+	    pdata->protocol, NULL, 0, WSA_FLAG_OVERLAPPED);
     if (sock == INVALID_SOCKET) {
 	goto error;
     }
 
     /* is it cached? */
-    if (tcp4ProtoData.AcceptEx == NULL) {
+    if (pdata->AcceptEx == NULL) {
 	/* Get the LSP specific functions. */
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&gAcceptExGuid, sizeof(GUID),
-		&tcp4ProtoData.AcceptEx,
-		sizeof(tcp4ProtoData.AcceptEx),
+		&pdata->AcceptEx,
+		sizeof(pdata->AcceptEx),
 		&bytes, NULL, NULL);
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
                &gGetAcceptExSockaddrsGuid, sizeof(GUID),
-               &tcp4ProtoData.GetAcceptExSockaddrs,
-	       sizeof(tcp4ProtoData.GetAcceptExSockaddrs),
+               &pdata->GetAcceptExSockaddrs,
+	       sizeof(pdata->GetAcceptExSockaddrs),
                &bytes, NULL, NULL);
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
                &gConnectExGuid, sizeof(GUID),
-               &tcp4ProtoData.ConnectEx,
-	       sizeof(tcp4ProtoData.ConnectEx),
+               &pdata->ConnectEx,
+	       sizeof(pdata->ConnectEx),
                &bytes, NULL, NULL);
-	if (tcp4ProtoData.ConnectEx == NULL) {
-	    tcp4ProtoData.ConnectEx = OurConnectEx;
+	if (pdata->ConnectEx == NULL) {
+	    pdata->ConnectEx = OurConnectEx;
 	}
     }
 
@@ -225,7 +231,7 @@ CreateTcp4Socket(
     SetHandleInformation((HANDLE)sock, HANDLE_FLAG_INHERIT, 0);
 
     infoPtr = NewSocketInfo(sock);
-    infoPtr->proto = &tcp4ProtoData;
+    infoPtr->proto = pdata;
 
     /* Info needed to get back to this thread. */
     infoPtr->tsdHome = tsdPtr;
@@ -308,7 +314,7 @@ CreateTcp4Socket(
 	    bufPtr = GetBufferObj(infoPtr, 0);
 	    bufPtr->operation = OP_CONNECT;
 
-	    code = tcp4ProtoData.ConnectEx(sock, hostaddr->ai_addr,
+	    code = pdata->ConnectEx(sock, hostaddr->ai_addr,
 		    hostaddr->ai_addrlen, bufPtr->buf, bufPtr->buflen,
 		    &bytes, &bufPtr->ol);
 

@@ -18,6 +18,9 @@
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#ifndef IPPROTO_IPV6
+#include <tpipv6.h> /* For IPv6 Tech Preview. */
+#endif
 
 /* probably not needed */
 //#include <iphlpapi.h>
@@ -303,7 +306,7 @@ extern CompletionPortInfo IocpSubSystem;
 TCL_DECLARE_MUTEX(initLock)
 
 extern int	    CreateSocketAddress (const char *addr,
-			    const char *port, WS2ProtocolData *pdata,
+			    const char *port, LPADDRINFO inhints,
 			    LPADDRINFO *result);
 extern void	    FreeSocketAddress(LPADDRINFO addrinfo);
 extern Tcl_Channel  Iocp_OpenTcpClient (Tcl_Interp *interp,

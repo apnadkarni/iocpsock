@@ -511,9 +511,12 @@ InitializeIocpSubSystem ()
     }
 
     IocpSubSystem.listeningSockets = IocpLLCreate();
+#if IOCP_ACCEPT_BUFSIZE > 0
+    /* Start the watchdog thread. */
     IocpSubSystem.stop = CreateEvent(NULL, TRUE, FALSE, NULL);
     IocpSubSystem.watchDogThread = CreateThread(NULL, 0,
 	    WatchDogThreadProc, IocpSubSystem.stop, 0, NULL);
+#endif
 
     Tcl_CreateExitHandler(IocpExitHandler, NULL);
 
@@ -551,10 +554,13 @@ IocpExitHandler (ClientData clientData)
 	    }
 	}
 
+#if IOCP_ACCEPT_BUFSIZE > 0
+	/* Bring down the watchdog thread. */
 	SetEvent(IocpSubSystem.stop);
 	WaitForSingleObject(IocpSubSystem.watchDogThread, INFINITE);
 	CloseHandle(IocpSubSystem.watchDogThread);
 	CloseHandle(IocpSubSystem.stop);
+#endif
 
 	/* Close the completion port object. */
 	CloseHandle(IocpSubSystem.port);
@@ -1307,6 +1313,8 @@ FreeSocketInfo (SocketInfo *infoPtr)
 {
     BufferInfo *bufPtr;
 
+    if (!infoPtr) return;
+
     DeleteCriticalSection(&infoPtr->critSec);
 
     /*
@@ -1787,6 +1795,7 @@ HandleIo (
 		/* Should the notifier be asleep, zap it awake. */
 		Tcl_ThreadAlert(newInfoPtr->tsdHome->threadId);
 	    } else {
+		/* No data received. */
 		FreeBufferObj(bufPtr);
 	    }
 
@@ -1905,15 +1914,34 @@ HandleIo (
 		}
 	    }
 	}
+	break;
+
+    case OP_LOOKUP:
+	/* For future use. */
+	break;
     }
 }
 
 /*
- * Watchdog thread to prevent denial-of-service attacks for cleaning-up
- * accepted sockets that have not recieved data yet.  AcceptEx is
- * optimized to only fire after data is received on the new connection.
- * IOW, the peer must talk first.
+ *----------------------------------------------------------------------
+ * WatchDogThreadProc --
+ *
+ *	This prevents denial-of-service attacks by cleaning-up accepted
+ *	sockets that have not received data yet.  AcceptEx is optimized
+ *	to only fire after data is received on the new connection. IOW,
+ *	the peer must talk first.  This only true when
+ *	PostOverlappedAccept() is called with a buffer size greater than
+ *	zero to indicate a receive is desired too.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Can close a socket on a listener's llPendingAccepts list.
+ *
+ *----------------------------------------------------------------------
  */
+
 static DWORD WINAPI
 WatchDogThreadProc (LPVOID lpParam)
 {
@@ -2537,19 +2565,19 @@ int
 CreateSocketAddress (
      const char *addr,
      const char *port,
-     WS2ProtocolData *pdata,
+     LPADDRINFO inhints,
      LPADDRINFO *paddrinfo)
 {
     ADDRINFO hints;
     LPADDRINFO phints;
     int result;
 
-    if (pdata != NULL) {
+    if (inhints != NULL) {
 	ZeroMemory(&hints, sizeof(hints));
 	hints.ai_flags  = ((addr) ? 0 : AI_PASSIVE);
-	hints.ai_family = pdata->af;
-	hints.ai_socktype = pdata->type;
-	hints.ai_protocol = pdata->protocol;
+	hints.ai_family = inhints->ai_family;
+	hints.ai_socktype = inhints->ai_socktype;
+	hints.ai_protocol = inhints->ai_protocol;
 	phints = &hints;
     } else {
 	phints = NULL;
