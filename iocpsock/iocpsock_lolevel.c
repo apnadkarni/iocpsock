@@ -2088,8 +2088,7 @@ HandleIo (
     int localLen, remoteLen;
 
 
-    if (WSAerr == WSA_OPERATION_ABORTED 
-	    && infoPtr->flags & IOCP_CLOSING) {
+    if (WSAerr == WSA_OPERATION_ABORTED) {
 	/* Reclaim cancelled overlapped buffer objects. */
         FreeBufferObj(bufPtr);
 	goto done;
@@ -2103,6 +2102,10 @@ HandleIo (
 
     switch (bufPtr->operation) {
     case OP_ACCEPT:
+
+	/*
+	 * Decrement the count of pending accepts from the total.
+	 */
 
 	InterlockedDecrement(&infoPtr->outstandingAccepts);
 
@@ -2206,6 +2209,10 @@ HandleIo (
 
     case OP_READ:
 
+	/*
+	 * Decrement the count of pending recvs from the total.
+	 */
+
 	InterlockedDecrement(&infoPtr->outstandingRecvs);
 
 	if (infoPtr->flags & IOCP_CLOSING) {
@@ -2226,11 +2233,17 @@ HandleIo (
 	     */
 
 	    newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-	    PostOverlappedRecv(infoPtr, newBufPtr, 1);
+	    if (PostOverlappedRecv(infoPtr, newBufPtr, 1)) != NO_ERROR) {
+		FreeBufferObj(newBufPtr);
+	    }
 	}
 	break;
 
     case OP_WRITE:
+
+	/*
+	 * Decrement the count of pending sends from the total.
+	 */
 
 	InterlockedDecrement(&infoPtr->outstandingSends);
 
