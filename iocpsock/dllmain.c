@@ -3,7 +3,7 @@
 /* A mess of stuff to make sure we get a good binary. */
 #ifdef _MSC_VER
     // Only do this when MSVC++ is compiling us.
-#   ifdef USE_TCL_STUBS
+#   if defined(USE_TCL_STUBS)
 	// Mark this .obj as needing tcl's Stubs library.
 #	pragma comment(lib, "tclstub" \
 		STRINGIFY(JOIN(TCL_MAJOR_VERSION,TCL_MINOR_VERSION)) ".lib")
@@ -13,7 +13,7 @@
 	    // be removed.
 #	    pragma comment(linker, "-nodefaultlib:msvcrt.lib")
 #	endif
-#   else
+#   elif !defined(STATIC_BUILD)
 	// Mark this .obj needing the import library
 #	pragma comment(lib, "tcl" \
 		STRINGIFY(JOIN(TCL_MAJOR_VERSION,TCL_MINOR_VERSION)) ".lib")
@@ -23,6 +23,7 @@
 #endif
 
 
+#if !defined(STATIC_BUILD)
 BOOL APIENTRY 
 DllMain (HANDLE hModule, DWORD dwReason, LPVOID lpReserved)
 {   
@@ -32,6 +33,7 @@ DllMain (HANDLE hModule, DWORD dwReason, LPVOID lpReserved)
     }
     return TRUE;
 }
+#endif
 
 char *
 GetSysMsg(DWORD id)
