@@ -1,14 +1,66 @@
+2004-03-13  davygrvy
+	* iocpsock_lolevel.c:
+		(IocpCloseProc): Should set flags to IOCP_CLOSABLE for non-stream
+		sockets before issuing CancelIo() for the async style close.
+
 2004-03-12  davygrvy
-	* testme.cmd:
-		set defaults so they work in my environment.. hehe just me!
+	* iocpsock_lolevel.c:
+		How do you async close a non-stream socket?  Trying CancelIo(), but
+		untested as we don't support UDP.
+
+	* iocpsock_lolevel.c:
+		added CancelIo().. I think I need this
+
+	* iocpsock_lolevel.c:
+		ref count problem solved.
+
+	* iocpsock_lolevel.c:
+		Now properly initiates a graceful close and auto-destroys the SocketInfo ref
+		correctly under async close rules
 
 	* makefile.vc:
 		aweful grepping logic rears its ugly head.
+
+	* tests/socket2.test:
+		async close behavior required for socket2-2.1
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		Renamed infoPtr->ready to be infoPtr->markedReady so it's meaning is not
+		mis-understood.  Remember that the WatchProc does the verify and that
+		infoPtr->markedReady is just a statement of a known condition and is not
+		absolute until the WatchProc is called.  I need a to research the core's
+		UpdateInterest() call to make sure after Tcl_NotifyChannel calls the handlers
+		that the core forces a verify through the WatchProc, if not, possible
+		polling behavior will need to be forced.
+
+	* ws2tcp.c:
+		Now handles the Win2K getaddrinfo() problem for server sockets, too,
+		asking for the "any" port.  I hate the bad IPv6 preview code for Win2K..
+		It's buggy.
+
+	* iocpsock_lolevel.c:
+		DoReadChars() in generic/tclIO.c calls UpdateInterest() after calling
+		IocpInputProc to verify through IocpWatchProc the channel's
+		ready state, therefore the TclZapNotifier call in IocpInputProc after the
+		IocpLLPushFront was removed.  This was a false impression given to
+		me by Klaus Suetterlin <robert@mpe.mpg.de> for which he was incorrect.
+		
+		Dude, I don't mind the code reveiw, but its rather impolite to place someone
+		who is providing FREE software in a defensive position.
 
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
 		fconfigure renames and new async close() behavior (NOT FINISHED
 		YET)
+
+	* testme.cmd:
+		set defaults so they work in my environment.. hehe just me!
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		Faked a DisconnectEx for Win2K/NT4.  Order may not be important, but we
+		hope the order it comes into the completion routine has no bearing.
 
 2004-03-10  davygrvy
 	* .cvsignore:
