@@ -29,3 +29,6 @@ d:/tclhttpdCVS/tclhttpd/bin/httpd.tcl -debug 1 -threads 0 -port 80 -webmaster da
 package require Thread
 set t [thread::create {package require Iocpsock; set s [socket2 -server asd 1234]; thread::wait}]
 thread::send -async $t {thread::unwind}
+
+set s [socket2 3ffe:b80:185d:1::29 ftp]
+set s [socket2 FEDCBA98:1A2B3C5D7E9F 0453]

@@ -173,25 +173,39 @@ CreateTcpSocket(
     BOOL code;
     int i;
     WS2ProtocolData *pdata;
+    ADDRINFO hints;
+    LPADDRINFO addr;
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
+    ZeroMemory(&hints, sizeof(hints));
+    hints.ai_protocol = SOCK_STREAM;
 
-    if (! CreateSocketAddress(host, port, NULL, &hostaddr)) {
+    /* discover both ipv6 and ipv4 */
+    if (! CreateSocketAddress(host, port, &hints, &hostaddr)) {
 	goto error;
     }
+    /* if we have more than one, choose ipv4 */
+    addr = hostaddr;
+    if (addr->ai_next) {
+	while (addr->ai_family != AF_INET && addr->ai_next) {
+	    addr = addr->ai_next;
+	}
+    }
+
     if ((myaddr != NULL || myport != NULL) &&
-	    ! CreateSocketAddress(myaddr, myport, hostaddr,
+	    ! CreateSocketAddress(myaddr, myport, addr,
 	    &mysockaddr)) {
 	goto error;
     }
 
-    switch (hostaddr->ai_family) {
+
+    switch (addr->ai_family) {
     case AF_INET:
 	pdata = &tcp4ProtoData; break;
     case AF_INET6:
 	pdata = &tcp6ProtoData; break;
     default:
-	Tcl_Panic("very bad protocol family retured from getaddrinfo()");
+	Tcl_Panic("very bad protocol family returned from getaddrinfo()");
     }
 
     sock = winSock.WSASocketA(pdata->af, pdata->type,
@@ -256,8 +270,8 @@ CreateTcpSocket(
 	 * place to look for bugs.
 	 */
     
-	if (winSock.bind(sock, hostaddr->ai_addr,
-		hostaddr->ai_addrlen) == SOCKET_ERROR) {
+	if (winSock.bind(sock, addr->ai_addr,
+		addr->ai_addrlen) == SOCKET_ERROR) {
             goto error;
         }
 
@@ -314,8 +328,8 @@ CreateTcpSocket(
 	    bufPtr = GetBufferObj(infoPtr, 0);
 	    bufPtr->operation = OP_CONNECT;
 
-	    code = pdata->ConnectEx(sock, hostaddr->ai_addr,
-		    hostaddr->ai_addrlen, bufPtr->buf, bufPtr->buflen,
+	    code = pdata->ConnectEx(sock, addr->ai_addr,
+		    addr->ai_addrlen, bufPtr->buf, bufPtr->buflen,
 		    &bytes, &bufPtr->ol);
 
 	    WSAerr = winSock.WSAGetLastError();
@@ -327,7 +341,7 @@ CreateTcpSocket(
 		}
 	    }
 	} else {
-	    code = winSock.connect(sock, hostaddr->ai_addr, hostaddr->ai_addrlen);
+	    code = winSock.connect(sock, addr->ai_addr, addr->ai_addrlen);
 	    if (code == SOCKET_ERROR) {
 		FreeSocketAddress(hostaddr);
 		goto error;
@@ -347,50 +361,3 @@ error:
     FreeSocketInfo(infoPtr);
     return NULL;
 }
-
-
-#if 0
-static int
-CreateSocketAddress(
-    LPSOCKADDR_IN sockaddrPtr,	    /* Socket address */
-    CONST char *host,		    /* Host.  NULL implies INADDR_ANY. */
-    u_short port)		    /* Port number. */
-{
-    struct hostent *hostent;		/* Host database entry */
-    struct in_addr addr;		/* For 64/32 bit madness */
-
-    ZeroMemory(sockaddrPtr, sizeof(SOCKADDR_IN));
-    sockaddrPtr->sin_family = AF_INET;
-    sockaddrPtr->sin_port = winSock.htons(port);
-    if (host == NULL) {
-	addr.s_addr = INADDR_ANY;
-    } else {
-        addr.s_addr = winSock.inet_addr(host);
-        if (addr.s_addr == INADDR_NONE) {
-            hostent = winSock.gethostbyname(host); /* BUG: blocking!!! */
-            if (hostent != NULL) {
-                memcpy(&addr, hostent->h_addr, hostent->h_length);
-            } else {
-#ifdef	EHOSTUNREACH
-                Tcl_SetErrno(EHOSTUNREACH);
-#else
-#ifdef ENXIO
-                Tcl_SetErrno(ENXIO);
-#endif
-#endif
-		return 0;	/* Error. */
-	    }
-	}
-    }
-
-    /*
-     * NOTE: On 64 bit machines the assignment below is rumored to not
-     * do the right thing. Please report errors related to this if you
-     * observe incorrect behavior on 64 bit machines such as DEC Alphas.
-     * Should we modify this code to do an explicit memcpy?
-     */
-
-    sockaddrPtr->sin_addr.s_addr = addr.s_addr;
-    return 1;	/* Success. */
-}
-#endif
