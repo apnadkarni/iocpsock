@@ -1,6 +1,24 @@
 2003-02-17  davygrvy
+
+	== Tagged iocpsock_0_5 ==
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		small fix for the Oct`02 SDK's wspiapi.h.  It needed
+		WSASetLastError, which the may`02 SDK didn't use.
+
 	* readme.txt:
-		added note about ipv6
+		added notes on ipv6
+
+	* dllmain.c:
+		removed the puts to stderr on load.
+
+	* iocpsock.rc:
+	* resource.h:
+		(new) resource files
+
+	* iocpsock.dsp:
+		rc file.
 
 	* bits.txt:
 	* ws2tcp.c:
