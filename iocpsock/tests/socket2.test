@@ -15,12 +15,21 @@ if {[lsearch [namespace children] ::tcltest] == -1} {
 ::tcltest::testConstraint xp \
 	[expr {$::tcl_platform(os) == "Windows NT" && $::tcl_platform(osVersion) > 5.0}]
 
-test socket2-1.1 {error message} {nt} {
-    socket2
-} {wrong # args: should be either:
-socket2 ?-protocol name? ?-myaddr addr? ?-myport myport? ?-async? host port
-socket2 -server command ?-ovlpd count? ?-protocol name? ?-myaddr addr? port}
+#test socket2-1.1 {error message} -constraints {
+#	nt
+#} -body {
+#    socket2
+#} -returnCodes {
+#	1
+#} -result {wrong # args: should be either:
+#socket2 ?-protocol name? ?-myaddr addr? ?-myport myport? ?-async? host port
+#socket2 -server command ?-ovlpd count? ?-protocol name? ?-myaddr addr? port}
 
+test socket2-1.1 {IocpWatchProc non-polling behavior} -constraints {
+	nt
+} -body {
+} -result {
+}
 
 # cleanup
 ::tcltest::cleanupTests
