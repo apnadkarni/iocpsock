@@ -762,7 +762,7 @@ IocpEventProc (
      */
 
     if (IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
-	/* Drain all new connections to our listening socket. */
+	/* load in all new connections from our listening socket. */
 	while (IocpAcceptOne(infoPtr));
 	return 1;
     }
@@ -928,7 +928,8 @@ IocpInputProc (
     *errorCodePtr = 0;
 
     if (infoPtr->flags & IOCP_EOF) {
-	return 0;
+	*errorCodePtr = ENOTCONN;
+	return -1;
     }
 
     /*
@@ -941,8 +942,7 @@ IocpInputProc (
 	goto error;
     }
 
-    /* TODO: This is here, but blocking is not supported yet
-     * by the queue. */
+    /* If we are async, don't block on the queue. */
     timeout = (infoPtr->flags & IOCP_ASYNC ? 0 : INFINITE);
 
     /*
@@ -969,6 +969,11 @@ IocpInputProc (
 	    } else {
 		if (bufPtr->used == 0) {
 		    infoPtr->flags |= IOCP_EOF;
+		    /*
+		     * Setting llPendingRecv to NULL indicates we are not connected.
+		     */
+		    IocpLLDestroy(infoPtr->llPendingRecv);
+		    infoPtr->llPendingRecv = NULL;
 		}
 		memcpy(bufPos, bufPtr->buf, bufPtr->used);
 		bytesRead += bufPtr->used;
@@ -1005,14 +1010,9 @@ IocpOutputProc (
     *errorCodePtr = 0;
 
 
-    if (infoPtr->llPendingRecv == NULL) {
-	/* Not connected.  How did we get here? */
-	*errorCodePtr = EWOULDBLOCK;
-	return -1;
-    }
-
     if (infoPtr->flags & IOCP_EOF) {
-	return 0;
+	*errorCodePtr = ENOTCONN;
+	return -1;
     }
 
     /*
