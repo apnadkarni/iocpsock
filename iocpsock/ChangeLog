@@ -1,3 +1,29 @@
+2004-11-25  davygrvy
+	* dllmain.c:
+	* hackersguide.txt:
+	* iocpsock.dsp:
+	* iocpsock.h:
+	* iocpsock_hilevel.c:
+	* iocpsock_lolevel.c:
+	* makefile.vc:
+	* man.html:
+	* testme.cmd:
+	* ws2tcp.c:
+		now supports [thread::transfer] if the TIP#218 patch is applied to the core.
+		I'm still testing this, but looks good so far.
+
+2004-05-08  davygrvy
+	* iocpsock.h:
+		We are now 3.0 alpha 0 because the fconfigures will change and
+		become incompatible.
+
+	* iocpsock_lolevel.c:
+		OurDisonnectEx function should be spelled OurDisconnectEx
+
+2004-05-07  davygrvy
+	* tests/test_client.tcl:
+		silly bug with the http callback repaired.
+
 2004-05-06  davygrvy
 	* iocpsock_lolevel.c:
 		Corrected an error message to return a more exact condition of
