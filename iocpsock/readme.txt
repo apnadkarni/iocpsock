@@ -1,46 +1,77 @@
-iocpsock11.dll -- ver 1.1.0 a/k/a "The big efficiency patch" (7:18 PM 3/3/2004)
+IOCPSOCK -- ver 2.0 a/k/a "The 'Got hardware speed?' release".
+(6:50 PM 3/23/2004)
+
+NEW for 2.0: tunable fconfigures.
 
 http://sf.net/project/showfiles.php?group_id=73356
 http://sf.net/projects/iocpsock
 
-This is a new sockets channel driver for windows NT.  The aim is to
+This is a new sockets channel driver for windows NT/2K/XP.  The aim is to
 get it ready for inclusion in the core.  It's main difference from the
 existing core tcp driver is the I/O model in use.  This uses
 overlapped I/O with completion ports over the existing Win3.1 model
-of WSAAsyncSelect.  I haven't yet tested the all-out speed, but expect
-a performance improvement of at least 4 times given the pipes and CPU
-available.
+of WSAAsyncSelect.
 
-It works great with tclhttpd, but its limits haven't been discovered
-yet.  As a server, the front-end just DOES NOT get over-run.  In the
-performance tests I've run, I just can't get the listening socket to
-ever fail!  With the stock channel driver, connect errors begin around
-30 connections per second.  Right now, I can do 80/sec with zero errors
-and push it well over that.  How far above that I'm pushing it, I can't
-tell as I need to build a better test environment next week to see,
-but it flat-lines early.
+It works great with tclhttpd.  As a server, the front-end just DOES NOT
+get over-run.  In the performance tests I've run, I just can't get the
+listening socket to ever fail (see below for the -backlog fconfigure).
+With the stock channel driver, connect errors begin around 30 connections
+per second.  Right now, I can do 80/sec with zero errors and push the test
+tool well over that knee without incurring any errors.
 
-SYN attacks show an interesting behavior.  I didn't think an AcceptEx
-could fail, but they do with a SYN from a spoofed IP and error with
-same errors a failed connect() can.  Hmm..  If the AcceptEx pool is
-large enough this should not impact valid connections during the DoS
-attack.  Condition that you are under "attack" could be returned to
-the user..  I'm comtemplating this feature for a future release.
+Using a simple server and client script that exchange a simple "hello" and
+"hello back" with the client doing the graceful shutdown, I'm able to do
+1315 exchanges per second on a 2.4Ghz box running XP.  It does full
+hardware speed (100mb/s) at around 35% CPU on the receiver.
 
-It's fun in that the bottleneck is now tclhttpd (the script) itself
-and user-mode CPU time handling sockets is now non-existent which lets
-tclhttpd max-out at a lower input load.  Either sockets are 50% faster
-or 33% more time is available to the script.  Either view seems valid.
-In theory, 50K+ concurrent sockets are possible.  The only limitation
-is available memory (~500 bytes per socket of the non-paged pool is reserved,
-which limits at about 1/4 of the physical memory: YMMV).
+Per socket resources are now tunable.  The new fconfigures are:
+
+-backlog:	Sets the size of the AcceptEx pool.  Directly relates to
+		the "bullet-proof" aspect of the front-end.  Under
+		testing, I have found a setting of 700 to be impossible
+		to ever cause a failure to a client connection (YMMV).
+		Server socket only.  For query, it returns the cap and
+		actual in-use as a list.
+
+-sendcap:	Sets the limit of concurrent WSASend calls allowed on
+		the socket or for new sockets if this is a server
+		socket.  For query, it returns the cap and actual
+		in-use in a list.
+
+-recvburst:	Sets the cap allowed to the "(A)utomatic (B)urst (D)etection".
+		If set to one, ABD is turned off in favor of normal
+		flow control.  For server sockets, this setting is
+		copied to new connections.  For query, it returns the
+		cap and actual in-use in a list.
+
+To see ABD in action: http://iocpsock.sourceforge.net/netio.jpg
+
+As the sender (on the left) increases it's -sendcap, thus allowing
+a higher concurrent WSASend count, thus sending rate, the receiver
+(on the right) enters a burst condition and increases its WSARecv
+count to match the incoming flow.  Though not shown, turning off ABD
+for normal flow-controlled behavior on the receiver will increase CPU
+usage, but works well just the same.
+
+There are essentially two modes one would operate a server under.
+Either, one wants high throughput on few connections (FTPD) or a high
+amount of short lived connections transfering very little (HTTPD).
+The new fconfigures allow for both modes.
+
+My suggestions are:
+
+		FTPD		HTTPD
+--------------------------------------
+-backlog	10		500
+-sendcap	20		1
+-recvburst	20		1
 
 It's amazingly stable.  It provides one command called [socket2] and
-behaves just like the stock one.
+behaves just like [socket], but with the added fconfigures.
 
-It does IPv6, btw.  The -sockname and -peername fconfigures don't do
-IPv6 yet, though, but you can create IPv6 sockets just by using an IPv6
-address.
+It does IPv6, but is mostly untested in that respect.  The -sockname
+and -peername fconfigures don't do IPv6 yet, though, but you can
+create IPv6 sockets just by using an IPv6 address.
 
 * FAQ:
 
@@ -66,6 +97,14 @@ address.
   A: Yes.  Just Win2K and WinXP.  It might work on NT4, though.  It
      can't work any of the Win9x flavors because completion ports are only
      an operating system feature of the NT flavors.
+
+* CHANGES from 1.1:
+  - new fconfigures: -backlog (in place of -ovrlpd), -sendcap, -recvburst.
+  - A new -protocol option was added to [socket2], but will be used in
+    future releases.
+  - Graceful closing problems fixed.
+  - all known bugs squashed.
+  - now has a test suite.
 
 * CHANGES from 1.0:
   - Use of the event loop made more efficient.  All polling behavior
@@ -115,11 +154,7 @@ address.
     conversation -- HTTP would be an example.
 
 * TODO:
-  - Add special fconfigures for all the iocp stuff such as recv buffer
-    size/count, accept buffer size/count and write concurrency.
-  - As above, but move the -ovlpd option to an fconfigure.
   - Begin on UDP, IPX, IrDA, AppleTalk, DecNet, etc... support.
-  - Test ConnectEx behavior more thoroughly on WinXP.
   - RAW sockets?  ICMP, IGMP?  multicast?  Hmm..
   - Add a trace feature for debugging purposes of internal behavior
     so odd things aren't silent.
