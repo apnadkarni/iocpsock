@@ -62,6 +62,7 @@ static void	    IocpAlertToTclNewAccept (SocketInfo *infoPtr,
 			    SocketInfo *newClient);
 static void	    IocpAcceptOne (SocketInfo *infoPtr);
 static void	    IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr);
+static void	    IocpZapTclNotifier (SocketInfo *infoPtr);
 static DWORD	    PostOverlappedSend (SocketInfo *infoPtr,
 			    BufferInfo *sendobj);
 static DWORD WINAPI CompletionThreadProc (LPVOID lpParam);
@@ -401,7 +402,7 @@ InitSockets()
 	    /* winsockLoadErr = InitializeOldSubSystem(); */
 	    Tcl_Panic("Barf! Can't run IOCP on non-NT systems, sorry.");
 	}
-	if (winsockLoadErr != NO_ERROR) {
+	if (winsockLoadErr != ERROR_SUCCESS) {
 	    goto unloadLibrary;
 	}
     }
@@ -412,6 +413,7 @@ InitSockets()
 	Tcl_CreateThreadExitHandler(IocpThreadExitHandler, tsdPtr);
 	tsdPtr->threadId = Tcl_GetCurrentThread();
 	tsdPtr->readySockets = IocpLLCreate();
+	tsdPtr->needAwake = CreateEvent(NULL, TRUE, FALSE, NULL);
     }
 
     return;
@@ -474,7 +476,7 @@ static DWORD
 InitializeIocpSubSystem ()
 {
 #define IOCP_HEAP_START_SIZE	(si.dwPageSize*64)  /* about 256k */
-    DWORD error = NO_ERROR;
+    DWORD error = ERROR_SUCCESS;
     SYSTEM_INFO si;
 
     GetSystemInfo(&si);
@@ -545,6 +547,7 @@ IocpThreadExitHandler (ClientData clientData)
 	IocpLLPopAll(tsdPtr->readySockets, NULL, 0);
 	IocpLLDestroy(tsdPtr->readySockets);
 	tsdPtr->readySockets = NULL;
+	CloseHandle(tsdPtr->needAwake);
     }
 }
 
@@ -580,6 +583,9 @@ IocpEventSetupProc (
 
     if (IocpLLIsNotEmpty(tsdPtr->readySockets)) {
 	Tcl_SetMaxBlockTime(&blockTime);
+    } else {
+	/* allow the notifier to be awoken by us. */
+	SetEvent(tsdPtr->needAwake);
     }
 }
 
@@ -604,6 +610,9 @@ IocpEventCheckProc (
     if (!(flags & TCL_FILE_EVENTS)) {
 	return;
     }
+
+    /* Disallow awaking the notifier as we aren't waiting for it anymore. */
+    ResetEvent(tsdPtr->needAwake);
 
     /*
      * Do we have any jobs to queue?  Take a snapshot of the count as
@@ -858,6 +867,9 @@ IocpInputProc (
      * by the queue. */
     timeout = (infoPtr->flags & IOCP_BLOCKING ? INFINITE : 0);
 
+    /* pending events are being serviced, flop the bit. */
+    InterlockedExchange(&infoPtr->ready, 0);
+
     /*
      * Merge in as much as toRead will allow.
      */
@@ -872,11 +884,13 @@ IocpInputProc (
 		/* Too large or have EOF.  Push it back on for later. */
 		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
 			&bufPtr->node);
+		/* stuff is left, flop is back on */
+		InterlockedExchange(&infoPtr->ready, 1);
 		IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
 			NULL);
 		break;
 	    }
-	    if (bufPtr->WSAerr != NO_ERROR) {
+	    if (bufPtr->WSAerr != ERROR_SUCCESS) {
 		infoPtr->lastError = bufPtr->WSAerr;
 		IocpWinConvertWSAError(infoPtr->lastError);
 		FreeBufferObj(bufPtr);
@@ -948,7 +962,7 @@ IocpOutputProc (
     memcpy(bufPtr->buf, buf, toWrite);
     WSAerr = PostOverlappedSend(infoPtr, bufPtr);
 
-    if (WSAerr != NO_ERROR) {
+    if (WSAerr != ERROR_SUCCESS) {
 	IocpWinConvertWSAError(WSAerr);
 	goto error;
     }
@@ -1049,7 +1063,7 @@ IocpGetOptionProc (
     if (len > 1) {
 	if ((optionName[1] == 'e') &&
 	    (strncmp(optionName, "-error", len) == 0)) {
-	    if (infoPtr->lastError != NO_ERROR) {
+	    if (infoPtr->lastError != ERROR_SUCCESS) {
 		IocpWinConvertWSAError(infoPtr->lastError);
 		Tcl_DStringAppend(dsPtr, Tcl_ErrnoMsg(Tcl_GetErrno()), -1);
 		infoPtr->flags |= IOCP_EOF;
@@ -1325,11 +1339,7 @@ IocpAlertToTclNewAccept (
      * that needs servicing.
      */
     IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
-
-    /* In case Tcl is asleep in the notifier, wake it up. */
-    if (infoPtr->tsdHome->threadId) {
-	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
-    }
+    IocpZapTclNotifier(infoPtr);
 }
 
 
@@ -1342,6 +1352,7 @@ NewSocketInfo (SOCKET socket)
     infoPtr->channel = NULL;
     infoPtr->socket = socket;
     infoPtr->flags = 0;
+    infoPtr->ready = 0;
     infoPtr->readyAccepts = NULL;  
     infoPtr->acceptProc = NULL;
     infoPtr->localAddr = NULL;	    /* Local sockaddr. */
@@ -1349,7 +1360,7 @@ NewSocketInfo (SOCKET socket)
     
     infoPtr->watchMask = 0;
 
-    infoPtr->lastError = NO_ERROR;
+    infoPtr->lastError = ERROR_SUCCESS;
 
     infoPtr->OutstandingOps = 0;
     infoPtr->allDone = CreateEvent(NULL, TRUE, FALSE, NULL); /* manual reset */
@@ -1418,7 +1429,7 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
     bufPtr->socket = INVALID_SOCKET;
     bufPtr->buflen = buflen;
     bufPtr->addr = NULL;
-    bufPtr->WSAerr = NO_ERROR;
+    bufPtr->WSAerr = ERROR_SUCCESS;
     bufPtr->parent = infoPtr;
     bufPtr->node.ll = NULL;
     return bufPtr;
@@ -1469,9 +1480,26 @@ IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr)
     IocpLLPushBack(infoPtr->tsdHome->readySockets,
 	    infoPtr, NULL);
 
-    /* Should the notifier be asleep, zap it awake. */
-    if (infoPtr->tsdHome->threadId) {
-	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+    IocpZapTclNotifier(infoPtr);
+}
+
+/*
+ *  Only zap the notifier when the notifier is waiting and this request
+ *  has not already been made previously.
+ */
+
+static void
+IocpZapTclNotifier (SocketInfo *infoPtr)
+{
+    DWORD dwWait;
+
+    if (infoPtr->tsdHome->threadId &&
+	    !InterlockedExchange(&infoPtr->ready, 1)) {
+	dwWait = WaitForSingleObject(infoPtr->tsdHome->needAwake, 0);
+	/* if the notifier is waiting, zap it awake. */
+	if (dwWait == WAIT_OBJECT_0) {
+	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+	}
     }
 }
 
@@ -1553,13 +1581,13 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, buflen);
-	if (PostOverlappedAccept(infoPtr, newBufPtr) != NO_ERROR) {
+	if (PostOverlappedAccept(infoPtr, newBufPtr) != ERROR_SUCCESS) {
 	    FreeBufferObj(newBufPtr);
 	}
     }
 #endif
 
-    return NO_ERROR;
+    return ERROR_SUCCESS;
 }
 
 DWORD
@@ -1643,7 +1671,7 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr, int useBurst)
     }
 #endif
 
-    return NO_ERROR;
+    return ERROR_SUCCESS;
 }
 
 DWORD
@@ -1700,7 +1728,7 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
     }
 
-    return NO_ERROR;
+    return ERROR_SUCCESS;
 }
 
 
@@ -1741,7 +1769,7 @@ CompletionThreadProc (LPVOID lpParam)
     BOOL ok;
 
     for (;;) {
-	WSAerr = NO_ERROR;
+	WSAerr = ERROR_SUCCESS;
 	flags = 0;
 
 	ok = GetQueuedCompletionStatus(cpinfo->port, &bytes,
@@ -1824,7 +1852,7 @@ HandleIo (
 
     bufPtr->used = bytes;
     /* An error stored in the buffer object takes precedence. */
-    if (bufPtr->WSAerr == NO_ERROR) {
+    if (bufPtr->WSAerr == ERROR_SUCCESS) {
 	bufPtr->WSAerr = WSAerr;
     }
 
@@ -1836,7 +1864,7 @@ HandleIo (
 	 */
 	IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
 
-	if (bufPtr->WSAerr == NO_ERROR) {
+	if (bufPtr->WSAerr == ERROR_SUCCESS) {
 	    addr_storage = infoPtr->proto->addrLen + 16;
 
 	    /*
@@ -1884,7 +1912,7 @@ HandleIo (
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
 		newBufPtr = GetBufferObj(newInfoPtr, IOCP_RECV_BUFSIZE);
 		if (PostOverlappedRecv(newInfoPtr, newBufPtr, 0)
-			!= NO_ERROR) {
+			!= ERROR_SUCCESS) {
 		    break;
 		}
 	    }
@@ -1914,7 +1942,7 @@ HandleIo (
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, 0);
-	if (PostOverlappedAccept(infoPtr, newBufPtr) != NO_ERROR) {
+	if (PostOverlappedAccept(infoPtr, newBufPtr) != ERROR_SUCCESS) {
 	    /*
 	     * Oh no, the AcceptEx failed.  There is no way to return an
 	     * error for this condition.  Tcl has no failure aspect for
@@ -1956,7 +1984,7 @@ HandleIo (
 	    break;
 	}
 
-	if (bufPtr->WSAerr) {
+	if (bufPtr->WSAerr != ERROR_SUCCESS) {
 	    newBufPtr = GetBufferObj(infoPtr, 0);
 	    newBufPtr->WSAerr = bufPtr->WSAerr;
 	    /* Force EOF on the read side, too, for a write side error. */
@@ -1970,18 +1998,14 @@ HandleIo (
 	 * Let IocpCheckProc() know this channel is writable again.
 	 */
 	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
-
-	/* Should the notifier be asleep, zap it awake. */
-	if (infoPtr->tsdHome->threadId) {
-	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
-	}
+	IocpZapTclNotifier(infoPtr);
 	break;
 
     case OP_CONNECT:
 
 	infoPtr->readyMask |= TCL_WRITABLE;
 
-	if (bufPtr->WSAerr != NO_ERROR) {
+	if (bufPtr->WSAerr != ERROR_SUCCESS) {
 	    infoPtr->lastError = bufPtr->WSAerr;
 	} else {
 	    infoPtr->llPendingRecv = IocpLLCreate();
@@ -1992,7 +2016,7 @@ HandleIo (
 	    /* post IOCP_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
 		newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-		if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != NO_ERROR) {
+		if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != ERROR_SUCCESS) {
 		    break;
 		}
 	    }
@@ -2003,11 +2027,7 @@ HandleIo (
 	 * Let IocpCheckProc() know this channel is writable.
 	 */
 	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,	NULL);
-
-	/* Should the notifier be asleep, zap it awake. */
-	if (infoPtr->tsdHome->threadId) {
-	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
-	}
+	IocpZapTclNotifier(infoPtr);
 	break;
 
     case OP_DISCONNECT:
@@ -2705,7 +2725,7 @@ static int wsaErrorTable2[] = {
     EINVAL,		/* WSATYPE_NOT_FOUND	    The specified class was not found. */
     EINVAL,		/* WSA_E_NO_MORE	    No more results can be returned by WSALookupServiceNext. */
     EINVAL,		/* WSA_E_CANCELLED	    A call to WSALookupServiceEnd was made while this call was still processing. The call has been canceled. */
-    EINVAL,		/* WSAEREFUSED		    A database query failed because it was actively refused. */
+    EINVAL		/* WSAEREFUSED		    A database query failed because it was actively refused. */
 };
 
 /*
@@ -2746,7 +2766,7 @@ static int wsaErrorTable3[] = {
     EINVAL,	/* WSA_QOS_EPSFILTERSPEC,	invalid filter spec in provider specific buffer */
     EINVAL,	/* WSA_QOS_ESDMODEOBJ,		invalid shape discard mode object in provider specific buffer */
     EINVAL,	/* WSA_QOS_ESHAPERATEOBJ,	invalid shaping rate object in provider specific buffer */
-    EINVAL,	/* WSA_QOS_RESERVED_PETYPE,	reserved policy element in provider specific buffer */
+    EINVAL	/* WSA_QOS_RESERVED_PETYPE,	reserved policy element in provider specific buffer */
 };
 
 /*

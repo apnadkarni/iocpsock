@@ -253,6 +253,7 @@ typedef struct _BufferInfo {
 typedef struct ThreadSpecificData {
     Tcl_ThreadId threadId;
     LPLLIST readySockets;
+    HANDLE needAwake;
 } ThreadSpecificData;
 
 extern Tcl_ThreadDataKey dataKey;
@@ -270,6 +271,7 @@ typedef struct SocketInfo {
     Tcl_Channel channel;	    /* Tcl channel for this socket. */
     SOCKET socket;		    /* Windows SOCKET handle. */
     DWORD flags;		    /* info about this socket. */
+    LONG ready;			    /* indicates a ready event. */
     WS2ProtocolData *proto;	    /* Network protocol info. */
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
 				     * origin. */

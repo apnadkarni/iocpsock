@@ -177,7 +177,7 @@ CreateTcpSocket(
     SOCKET sock = INVALID_SOCKET;
     SocketInfo *infoPtr = NULL;	/* The returned value. */
     BufferInfo *bufPtr;		/* The returned value. */
-    DWORD bytes, WSAerr;
+    DWORD bytes;
     BOOL code;
     int i;
     WS2ProtocolData *pdata;
@@ -191,7 +191,7 @@ CreateTcpSocket(
 
     /* discover both/either ipv6 and ipv4. */
     if (! CreateSocketAddress(host, port, &hints, &hostaddr)) {
-	goto error;
+	goto error1;
     }
     addr = hostaddr;
     /* if we have more than one and being passive, choose ipv4. */
@@ -204,10 +204,10 @@ CreateTcpSocket(
     if ((myaddr != NULL || myport != NULL) &&
 	    ! CreateSocketAddress(myaddr, myport, addr,
 	    &mysockaddr)) {
-	goto error;
+	goto error2;
     } else if (!server && !CreateSocketAddress(NULL, "0", addr,
 	    &mysockaddr)) {
-	goto error;
+	goto error2;
     }
 
 
@@ -223,7 +223,7 @@ CreateTcpSocket(
     sock = winSock.WSASocketA(pdata->af, pdata->type,
 	    pdata->protocol, NULL, 0, WSA_FLAG_OVERLAPPED);
     if (sock == INVALID_SOCKET) {
-	goto error;
+	goto error2;
     }
 
     /* is it cached? */
@@ -278,7 +278,7 @@ CreateTcpSocket(
     i = 0;
     if (winSock.setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
 	    (const char *) &i, sizeof(int)) == SOCKET_ERROR) {
-	goto error;
+	goto error2;
     }
 
     infoPtr = NewSocketInfo(sock);
@@ -294,7 +294,7 @@ CreateTcpSocket(
 	if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
 		(ULONG_PTR)infoPtr, 0) == NULL) {
 	    winSock.WSASetLastError(GetLastError());
-	    goto error;
+	    goto error2;
 	}
 
 	/*
@@ -309,7 +309,7 @@ CreateTcpSocket(
     
 	if (winSock.bind(sock, addr->ai_addr,
 		addr->ai_addrlen) == SOCKET_ERROR) {
-            goto error;
+            goto error2;
         }
 
 	FreeSocketAddress(hostaddr);
@@ -321,7 +321,7 @@ CreateTcpSocket(
          */
         
 	if (winSock.listen(sock, SOMAXCONN) == SOCKET_ERROR) {
-	    goto error;
+	    goto error1;
 	}
 
 	/* create the queue for holding ready ones */
@@ -334,7 +334,7 @@ CreateTcpSocket(
 	    if (PostOverlappedAccept(infoPtr, bufPtr) != NO_ERROR) {
 		/* Oh no, the AcceptEx failed. */
 		FreeBufferObj(bufPtr);
-		goto error;
+		goto error1;
 	    }
         }
 
@@ -346,7 +346,8 @@ CreateTcpSocket(
 
 	if (winSock.bind(sock, mysockaddr->ai_addr,
 		mysockaddr->ai_addrlen) == SOCKET_ERROR) {
-	    goto error;
+	    FreeSocketAddress(mysockaddr);
+	    goto error2;
 	}
 	FreeSocketAddress(mysockaddr);
 
@@ -358,38 +359,43 @@ CreateTcpSocket(
 	    bufPtr = GetBufferObj(infoPtr, 0);
 	    bufPtr->operation = OP_CONNECT;
 
-	    /* Associate the socket and its SocketInfo struct to the completion
-	     * port.  Implies an automatic set to non-blocking. */
+	    /* Associate the socket and its SocketInfo struct to the
+	     * completion port.  Implies an automatic set to
+	     * non-blocking. */
 	    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
 		    (ULONG_PTR)infoPtr, 0) == NULL) {
 		winSock.WSASetLastError(GetLastError());
-		goto error;
+		goto error2;
 	    }
+
+	    InterlockedIncrement(&infoPtr->OutstandingOps);
 
 	    code = pdata->ConnectEx(sock, addr->ai_addr,
 		    addr->ai_addrlen, NULL, 0, &bytes, &bufPtr->ol);
 
+	    FreeSocketAddress(hostaddr);
+
 	    if (code == FALSE) {
-		if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
+		if (winSock.WSAGetLastError() != WSA_IO_PENDING) {
+		    InterlockedDecrement(&infoPtr->OutstandingOps);
 		    FreeBufferObj(bufPtr);
-		    FreeSocketAddress(hostaddr);
-		    goto error;
+		    goto error1;
 		}
-		InterlockedIncrement(&infoPtr->OutstandingOps);
 	    }
 	} else {
 	    code = winSock.connect(sock, addr->ai_addr, addr->ai_addrlen);
+	    FreeSocketAddress(hostaddr);
 	    if (code == SOCKET_ERROR) {
-		FreeSocketAddress(hostaddr);
-		goto error;
+		goto error1;
 	    }
 
-	    /* Associate the socket and its SocketInfo struct to the completion
-	     * port.  Implies an automatic set to non-blocking. */
+	    /* Associate the socket and its SocketInfo struct to the
+	     * completion port.  Implies an automatic set to
+	     * non-blocking. */
 	    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
 		    (ULONG_PTR)infoPtr, 0) == NULL) {
 		winSock.WSASetLastError(GetLastError());
-		goto error;
+		goto error1;
 	    }
 
 	    infoPtr->llPendingRecv = IocpLLCreate();
@@ -400,12 +406,13 @@ CreateTcpSocket(
 		PostOverlappedRecv(infoPtr, bufPtr, 0);
 	    }
 	}
-	FreeSocketAddress(hostaddr);
     }
 
     return infoPtr;
 
-error:
+error2:
+    FreeSocketAddress(hostaddr);
+error1:
     IocpWinConvertWSAError(winSock.WSAGetLastError());
     if (interp != NULL) {
 	Tcl_AppendResult(interp, "couldn't open socket: ",
