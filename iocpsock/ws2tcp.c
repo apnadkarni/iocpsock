@@ -1,10 +1,14 @@
 #include "iocpsock.h"
 
+static FN_DECODEADDR DecodeIpv4Sockaddr;
+static FN_DECODEADDR DecodeIpv6Sockaddr;
+
 static WS2ProtocolData tcp4ProtoData = {
     AF_INET,
     SOCK_STREAM,
     IPPROTO_TCP,
     sizeof(SOCKADDR_IN),
+    DecodeIpv4Sockaddr,
     NULL,
     NULL,
     NULL,
@@ -19,6 +23,7 @@ static WS2ProtocolData tcp6ProtoData = {
     SOCK_STREAM,
     IPPROTO_TCP,
     sizeof(SOCKADDR_IN6),
+    DecodeIpv6Sockaddr,
     NULL,
     NULL,
     NULL,
@@ -61,6 +66,52 @@ const FLOWSPEC flowspec_guaranteed = {17000,
                                       340,
                                       340};
 #endif
+
+static Tcl_Obj *
+DecodeIpv4Sockaddr (SOCKET s, LPSOCKADDR addr)
+{
+    char name[NI_MAXHOST];
+    u_short port;
+    Tcl_Obj *result = Tcl_NewObj();
+
+    /* Get numeric IP string from SOCKADDR_IN struct. */
+    getnameinfo(addr, sizeof(SOCKADDR_IN), name, NI_MAXHOST,
+	    NULL, 0, NI_NUMERICHOST);
+    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+
+    /* Get resolved name string. */
+    getnameinfo(addr, sizeof(SOCKADDR_IN), name, NI_MAXHOST,
+	    NULL, 0, 0);
+    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+
+    /* Get port. */
+    winSock.WSANtohs(s, ((LPSOCKADDR_IN)addr)->sin_port, &port);
+    Tcl_ListObjAppendElement(NULL, result, Tcl_NewIntObj(port));
+    return result;
+}
+
+static Tcl_Obj *
+DecodeIpv6Sockaddr (SOCKET s, LPSOCKADDR addr)
+{
+    char name[NI_MAXHOST];
+    u_short port;
+    Tcl_Obj *result = Tcl_NewObj();
+
+    /* Get numeric IP string from SOCKADDR_IN6 struct. */
+    getnameinfo(addr, sizeof(SOCKADDR_IN6), name, NI_MAXHOST,
+	    NULL, 0, NI_NUMERICHOST);
+    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+
+    /* Get resolved name. */
+    getnameinfo(addr, sizeof(SOCKADDR_IN6), name, NI_MAXHOST,
+	    NULL, 0, 0);
+    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+
+    /* Get port. */
+    winSock.WSANtohs(s, ((LPSOCKADDR_IN6)addr)->sin6_port, &port);
+    Tcl_ListObjAppendElement(NULL, result, Tcl_NewIntObj(port));
+    return result;
+}
 
 /*
  *----------------------------------------------------------------------

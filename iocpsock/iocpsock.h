@@ -174,32 +174,6 @@ extern LONG StatFailedReplacementAcceptExCalls;
 #undef gethostbyaddr
 
 
-/*
- * Specific protocol information is stored here and shared to all
- * SocketInfo objects of that type.
- */
-typedef struct {
-    int af;		    /* Address family. */
-    int	type;		    /* Address type. */
-    int	protocol;	    /* protocol type. */
-    size_t addrLen;	    /* length of protocol specific SOCKADDR */
-
-    /* LSP specific extension functions */
-    LPFN_ACCEPTEX		AcceptEx;
-    LPFN_GETACCEPTEXSOCKADDRS	GetAcceptExSockaddrs;
-    LPFN_CONNECTEX		ConnectEx;
-    LPFN_DISCONNECTEX		DisconnectEx;
-    LPFN_TRANSMITFILE		TransmitFile;
-    /* The only caveat of using this TransmitFile extension API is that
-       on Windows NT Workstation or Windows 2000 Professional only two
-       requests will be processed at a time. You must be running on
-       Windows NT or Windows 2000 Server, Windows 2000 Advanced Server,
-       or Windows 2000 Data Center to get full usage of this specialized
-       API. */
-    LPFN_TRANSMITPACKETS	TransmitPackets;
-    LPFN_WSARECVMSG		WSARecvMsg;
-} WS2ProtocolData;
-
 /* Linked-List node object. */
 struct _ListNode;
 struct _List;
@@ -268,6 +242,35 @@ typedef struct _BufferInfo {
 #undef getsockopt
 #undef ntohs
 #undef setsockopt
+
+typedef Tcl_Obj * (FN_DECODEADDR) (SOCKET s, LPSOCKADDR addr);
+
+/*
+ * Specific protocol information is stored here and shared to all
+ * SocketInfo objects of that type.
+ */
+typedef struct {
+    int af;		    /* Address family. */
+    int	type;		    /* Address type. */
+    int	protocol;	    /* protocol type. */
+    size_t addrLen;	    /* length of protocol specific SOCKADDR */
+    FN_DECODEADDR		*DecodeSockAddr;
+
+    /* LSP specific extension functions */
+    LPFN_ACCEPTEX		AcceptEx;
+    LPFN_GETACCEPTEXSOCKADDRS	GetAcceptExSockaddrs;
+    LPFN_CONNECTEX		ConnectEx;
+    LPFN_DISCONNECTEX		DisconnectEx;
+    LPFN_TRANSMITFILE		TransmitFile;
+    /* The only caveat of using this TransmitFile extension API is that
+       on Windows NT Workstation or Windows 2000 Professional only two
+       requests will be processed at a time. You must be running on
+       Windows NT or Windows 2000 Server, Windows 2000 Advanced Server,
+       or Windows 2000 Data Center to get full usage of this specialized
+       API. */
+    LPFN_TRANSMITPACKETS	TransmitPackets;
+    LPFN_WSARECVMSG		WSARecvMsg;
+} WS2ProtocolData;
 
 
 typedef struct ThreadSpecificData {

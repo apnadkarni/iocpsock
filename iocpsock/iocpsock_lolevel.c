@@ -479,6 +479,11 @@ InitSockets()
 		IocpChannelType.version =
 			(Tcl_ChannelTypeVersion) IocpBlockProc;
 		break;
+	    case TCL_CHANNEL_VERSION_3:
+		/* We don't have a wideseekProc, so back down one more
+		 * to v2. */
+		IocpChannelType.version = TCL_CHANNEL_VERSION_2;
+		break;
 	    default:
 		/* No other Tcl_ChannelType struct maniputions are known at
 		 * this time. */
@@ -1432,15 +1437,17 @@ IocpGetOptionProc (
 				 * value; initialized by caller. */
 {
     SocketInfo *infoPtr;
-    struct hostent *hostEntPtr;
     SOCKET sock;
-    int size = sizeof(SOCKADDR_IN);
+    int size;
     size_t len = 0;
     char buf[TCL_INTEGER_SPACE];
+    Tcl_Obj *AddrInfo;
+    int objc;
+    Tcl_Obj **objv;
 
     
     infoPtr = (SocketInfo *) instanceData;
-    sock = (int) infoPtr->socket;
+    sock = infoPtr->socket;
     if (optionName != (char *) NULL) {
         len = strlen(optionName);
     }
@@ -1501,7 +1508,8 @@ IocpGetOptionProc (
             ((len > 1) && (optionName[1] == 'p') &&
                     (strncmp(optionName, "-peername", len) == 0))) {
         if (infoPtr->remoteAddr == NULL) {
-	    infoPtr->remoteAddr = IocpAlloc(infoPtr->proto->addrLen);
+	    size = infoPtr->proto->addrLen;
+	    infoPtr->remoteAddr = IocpAlloc(size);
 	    if (winSock.getpeername(sock, infoPtr->remoteAddr, &size)
 		    == SOCKET_ERROR) {
 		/*
@@ -1525,28 +1533,19 @@ IocpGetOptionProc (
             Tcl_DStringAppendElement(dsPtr, "-peername");
             Tcl_DStringStartSublist(dsPtr);
         }
-        Tcl_DStringAppendElement(dsPtr,
-                winSock.inet_ntoa(
-		    ((LPSOCKADDR_IN)infoPtr->remoteAddr)->sin_addr));
 
-	if (((LPSOCKADDR_IN)infoPtr->remoteAddr)->sin_addr.s_addr == 0) {
-	    hostEntPtr = (struct hostent *) NULL;
-	} else {
-	    hostEntPtr = winSock.gethostbyaddr(
-                (char *) &(((LPSOCKADDR_IN)infoPtr->remoteAddr)->sin_addr),
-		sizeof(((LPSOCKADDR_IN)infoPtr->remoteAddr)->sin_addr),
-		AF_INET);
-	}
-        if (hostEntPtr != (struct hostent *) NULL) {
-            Tcl_DStringAppendElement(dsPtr, hostEntPtr->h_name);
-        } else {
-            Tcl_DStringAppendElement(dsPtr,
-                    winSock.inet_ntoa(
-		    ((LPSOCKADDR_IN)infoPtr->remoteAddr)->sin_addr));
-        }
-	TclFormatInt(buf, winSock.ntohs(
-		((LPSOCKADDR_IN)infoPtr->remoteAddr)->sin_port));
-        Tcl_DStringAppendElement(dsPtr, buf);
+	AddrInfo = infoPtr->proto->DecodeSockAddr(
+		infoPtr->socket, infoPtr->remoteAddr);
+	Tcl_ListObjGetElements(NULL, AddrInfo, &objc, &objv);
+	/* append address. */
+	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[0]));
+	/* append resolved name. */
+	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[1]));
+	/* append port. */
+	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[2]));
+	/* discard object. */
+	Tcl_DecrRefCount(AddrInfo);
+
         if (len == 0) {
             Tcl_DStringEndSublist(dsPtr);
         } else {
@@ -1558,7 +1557,8 @@ IocpGetOptionProc (
             ((len > 1) && (optionName[1] == 's') &&
                     (strncmp(optionName, "-sockname", len) == 0))) {
         if (infoPtr->localAddr == NULL) {
-	    infoPtr->localAddr = IocpAlloc(infoPtr->proto->addrLen);
+	    size = infoPtr->proto->addrLen;
+	    infoPtr->localAddr = IocpAlloc(size);
 	    if (winSock.getsockname(sock, infoPtr->localAddr, &size)
 		    == SOCKET_ERROR) {
 		if (interp) {
@@ -1572,27 +1572,19 @@ IocpGetOptionProc (
             Tcl_DStringAppendElement(dsPtr, "-sockname");
             Tcl_DStringStartSublist(dsPtr);
         }
-        Tcl_DStringAppendElement(dsPtr,
-                winSock.inet_ntoa(
-		((LPSOCKADDR_IN)infoPtr->localAddr)->sin_addr));
-	if (((LPSOCKADDR_IN)infoPtr->localAddr)->sin_addr.s_addr == 0) {
-	    hostEntPtr = (struct hostent *) NULL;
-	} else {
-	    hostEntPtr = winSock.gethostbyaddr(
-                (char *) &(((LPSOCKADDR_IN)infoPtr->localAddr)->sin_addr),
-		sizeof(((LPSOCKADDR_IN)infoPtr->localAddr)->sin_addr),
-		AF_INET);
-	}
-        if (hostEntPtr != (struct hostent *) NULL) {
-            Tcl_DStringAppendElement(dsPtr, hostEntPtr->h_name);
-        } else {
-            Tcl_DStringAppendElement(dsPtr,
-                    winSock.inet_ntoa(
-		    ((LPSOCKADDR_IN)infoPtr->localAddr)->sin_addr));
-        }
-        TclFormatInt(buf, winSock.ntohs(
-		((LPSOCKADDR_IN)infoPtr->localAddr)->sin_port));
-        Tcl_DStringAppendElement(dsPtr, buf);
+
+	AddrInfo = infoPtr->proto->DecodeSockAddr(
+		infoPtr->socket, infoPtr->localAddr);
+	Tcl_ListObjGetElements(NULL, AddrInfo, &objc, &objv);
+	/* append address. */
+	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[0]));
+	/* append resolved name. */
+	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[1]));
+	/* append port. */
+	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[2]));
+	/* discard object. */
+	Tcl_DecrRefCount(AddrInfo);
+
         if (len == 0) {
             Tcl_DStringEndSublist(dsPtr);
         } else {
@@ -1777,13 +1769,14 @@ IocpGetHandleProc (
 static void
 IocpThreadActionProc (ClientData instanceData, int action)
 {
-    ThreadSpecificData *tsdPtr = InitSockets();
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
 
+    /* This lock is to prevent IocpZapTclNotifier() from accessing
+     * infoPtr->tsdHome */
     EnterCriticalSection(&infoPtr->tsdLock);
     switch (action) {
     case TCL_CHANNEL_THREAD_INSERT:
-	infoPtr->tsdHome = tsdPtr;
+	infoPtr->tsdHome = InitSockets();
 	break;
     case TCL_CHANNEL_THREAD_REMOVE:
 	/* Unable to turn off reading, therefore don't notify
@@ -1939,8 +1932,19 @@ NewAcceptSockInfo (SOCKET socket, SocketInfo *infoPtr)
 }
 
 /*
- *  Only zap the notifier when the notifier is waiting and this request
- *  has not already been made previously.
+ *----------------------------------------------------------------------
+ * IocpZapTclNotifier --
+ *
+ *	Wake the notifier.  Only zap the notifier when the notifier is
+ *	waiting and this request has not already been made previously.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	None known.
+ *
+ *----------------------------------------------------------------------
  */
 
 static void
@@ -1959,7 +1963,7 @@ IocpZapTclNotifier (SocketInfo *infoPtr)
 		    &infoPtr->node, IOCP_LL_NOLOCK);
 	}
 	LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
-	/* this is safe to call from any thread. */
+	/* This is safe to call from any thread. */
 	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
     }
     LeaveCriticalSection(&infoPtr->tsdLock);
