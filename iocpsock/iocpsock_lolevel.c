@@ -514,13 +514,12 @@ void
 IocpExitHandler (ClientData clientData)
 {
     if (initialized) {
-
 	Tcl_DeleteEvents(IocpRemoveAllPendingEvents, NULL);
 
-	/* Cause the waiting I/O handler threads to exit. */
+	/* Cause the waiting I/O handler thread to exit. */
 	PostQueuedCompletionStatus(IocpSubSystem.port, 0, 0, 0);
 
-	/* Wait for one to exit from the group. */
+	/* Wait for it to exit. */
 	WaitForSingleObject(IocpSubSystem.thread, INFINITE);
 	CloseHandle(IocpSubSystem.thread);
 
