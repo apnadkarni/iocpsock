@@ -1,3 +1,76 @@
+2003-02-17  davygrvy
+	* readme.txt:
+		added note about ipv6
+
+	* bits.txt:
+	* ws2tcp.c:
+		When more than one sockaddr is returned from getaddrinfo, 
+		choose ipv4.  Only when specifically asking for ipv6 should we
+		use it.
+
+2003-02-16  davygrvy
+	* readme.txt:
+		made note of recent changes
+
+	* readme.txt:
+		slight mods.
+
+	* iocpsock_lolevel.c:
+		(HandleIo) only set addr_storage when it's going to be used.
+
+	* iocpsock_lolevel.c:
+		Protect IocpLLDestroy from a NULL.
+
+	* bits.txt:
+	* iocpsock.dsp:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Now supports ipv6
+
+	* ws2irda.c:
+		added some sample code for future reference.
+
+	* readme.txt:
+		speling
+
+	* license.terms:
+		new
+
+	* iocpsock.h:
+		Fixed most all C++ style comments.
+
+2003-02-15  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		Added IocpLLGetCount() for safe access in IocpEventCheckProc().
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		PostOverlappedAccept() now reallocs the buffer to include the
+		address space.  Address space is now the protocol specific size
+		 which is good.  Calling PostOverlappedAccept with a buffer of
+		zero now means don't receive with the accept.
+
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		better error checking calling PostOverlappedAccept().
+
+	* ws2ipx.c:
+		all 5 types catagorized.
+
+	* readme.txt:
+		added bits about v0.4, done so far.
+
+	* iocpsock_lolevel.c:
+		wsaErrorTable2 wasn't large enough.  Filled the holes to get it
+		right.
+
+	* iocpsock_lolevel.c:
+		Moved operations in HandleIo() to a switch inplace of the if
+		else if/else if...
+
 2003-02-15  davygrvy
 	* dllmain.c:
 	* iocpsock_lolevel.c:
