@@ -8,6 +8,7 @@ Release
 *.obj
 *.i
 *.asm
+*.aps
 Makefile
 tcl.hpj
 tclConfig.sh
