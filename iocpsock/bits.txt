@@ -15,6 +15,14 @@ proc gotRead {s} {
 	close $s
     }
 }
+proc gotWrite {s} {
+    if {[string length [set e [fconfigure $s -error]]]} {
+	puts "error: $s: $e"
+	close $s
+	return
+    }
+}
+
 load iocpsock.dll
 set s [socket2 -server accept -myaddr [info hostname] 1234]
 
@@ -32,3 +40,4 @@ thread::send -async $t {thread::unwind}
 
 set s [socket2 3ffe:b80:185d:1::29 ftp]
 set s [socket2 FEDCBA98:1A2B3C5D7E9F 0453]
+
