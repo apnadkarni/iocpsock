@@ -94,6 +94,9 @@ Iocpsock_Init (Tcl_Interp *interp)
     Tcl_MutexUnlock(&initLock);
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
-    Tcl_PkgProvide(interp, "Iocpsock", "0.2");
+    Tcl_PkgProvide(interp, "Iocpsock", "0.3");
+    Tcl_WriteObj(Tcl_GetStdChannel(TCL_STDERR),
+	    Tcl_NewStringObj("Loaded IOCP sockets replacement module v0.3: "
+	    __TIMESTAMP__ "\n", -1));
     return TCL_OK;
 }
