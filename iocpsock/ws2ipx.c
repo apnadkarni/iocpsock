@@ -9,7 +9,6 @@ static WS2ProtocolData ipxProtoData = {
     sizeof(SOCKADDR_IPX),
     NULL,
     NULL,
-    NULL,
     NULL
 };
 

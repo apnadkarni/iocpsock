@@ -8,6 +8,5 @@ static WS2ProtocolData apltalkProtoData = {
     sizeof(SOCKADDR_AT),
     NULL,
     NULL,
-    NULL,
     NULL
 };

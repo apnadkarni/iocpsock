@@ -7,7 +7,6 @@ static WS2ProtocolData tcp4ProtoData = {
     sizeof(SOCKADDR_IN),
     NULL,
     NULL,
-    NULL,
     NULL
 };
 
@@ -16,7 +15,6 @@ static WS2ProtocolData tcp6ProtoData = {
     SOCK_STREAM,
     IPPROTO_TCP,
     sizeof(SOCKADDR_IN6),
-    NULL,
     NULL,
     NULL,
     NULL
@@ -216,14 +214,6 @@ CreateTcp4Socket(
                &bytes, NULL, NULL);
 	if (tcp4ProtoData.ConnectEx == NULL) {
 	    tcp4ProtoData.ConnectEx = OurConnectEx;
-	}
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-               &gDisconnectExGuid, sizeof(GUID),
-               &tcp4ProtoData.DisconnectEx,
-	       sizeof(tcp4ProtoData.DisconnectEx),
-               &bytes, NULL, NULL);
-	if (tcp4ProtoData.DisconnectEx == NULL) {
-	    tcp4ProtoData.DisconnectEx = OurDisconnectEx;
 	}
     }
 

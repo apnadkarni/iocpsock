@@ -8,6 +8,5 @@ static WS2ProtocolData netbiosProtoData = {
     sizeof(SOCKADDR_NB),
     NULL,
     NULL,
-    NULL,
     NULL
 };

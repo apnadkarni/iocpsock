@@ -19,16 +19,6 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
-/* protocol specific info (standard LSPs) */
-//#include <af_irda.h>
-//#include <ws2atm.h>
-//#include <ws2dnet.h>
-//#include <wshisotp.h>
-//#include <wsipx.h>
-//#include <wsnetbs.h>
-//#include <wsnwlink.h>
-//#include <wsvns.h>
-
 /* probably not needed */
 //#include <iphlpapi.h>
 
@@ -152,7 +142,6 @@ typedef struct {
     LPFN_ACCEPTEX		AcceptEx;
     LPFN_GETACCEPTEXSOCKADDRS	GetAcceptExSockaddrs;
     LPFN_CONNECTEX		ConnectEx;
-    LPFN_DISCONNECTEX		DisconnectEx;
 
 } WS2ProtocolData;
 
@@ -163,7 +152,6 @@ typedef struct {
 extern GUID gAcceptExGuid;		/* AcceptEx() */
 extern GUID gGetAcceptExSockaddrsGuid;	/* GetAcceptExSockaddrs() */
 extern GUID gConnectExGuid;		/* ConnectEx() */
-extern GUID gDisconnectExGuid;		/* DisconnectEx() */
 
 /* Linked-List node object. */
 struct _ListNode;

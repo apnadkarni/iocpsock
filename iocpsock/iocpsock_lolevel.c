@@ -35,7 +35,6 @@ CompletionPortInfo IocpSubSystem;
 GUID gAcceptExGuid = WSAID_ACCEPTEX;
 GUID gGetAcceptExSockaddrsGuid = WSAID_GETACCEPTEXSOCKADDRS;
 GUID gConnectExGuid = WSAID_CONNECTEX;
-GUID gDisconnectExGuid = WSAID_DISCONNECTEX;
 Tcl_ThreadDataKey dataKey;
 
 /* file scope globals. */

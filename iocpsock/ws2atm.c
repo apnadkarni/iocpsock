@@ -8,6 +8,5 @@ static WS2ProtocolData atmProtoData = {
     sizeof(SOCKADDR_ATM),
     NULL,
     NULL,
-    NULL,
     NULL
 };
