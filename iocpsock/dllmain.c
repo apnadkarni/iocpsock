@@ -94,6 +94,6 @@ Iocpsock_Init (Tcl_Interp *interp)
     Tcl_MutexUnlock(&initLock);
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
-    Tcl_PkgProvide(interp, "Iocpsock", "0.1");
+    Tcl_PkgProvide(interp, "Iocpsock", "0.2");
     return TCL_OK;
 }
