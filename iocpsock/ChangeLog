@@ -1,3 +1,34 @@
+2003-02-15  davygrvy
+	* dllmain.c:
+	* iocpsock_lolevel.c:
+		Now works under threads.  Yet another overly complex manner of
+		asyncronous shutdown that needed to be traced to find the
+		obscure code paths of fourth dimensional thinking that comes
+		with the nature of the beast.  Yes, threads are beasty.
+
+2003-02-14  davygrvy
+	* iocpsock_lolevel.c:
+		small error code changes that mean nothing in the big picture.
+
+	* readme.txt:
+		update the prose
+
+	* tclhttpd.patch.txt:
+		new file
+
+	* readme.txt:
+		update the prose, again edited.
+
+	* iocpsock_lolevel.c:
+		OP_ACCEPT logic in HandleIo changed to report a zero byte read, but only
+		post another WSARecv when more than zero bytes -- just like OP_READ.
+
+	* hackersguide.txt:
+		CompletionThread name changed to CompletionThreadProc
+
+	* readme.txt:
+		update the prose, again.
+
 2003-02-14  davygrvy
 	== Tagged iocpsock_0_3 ==
 
