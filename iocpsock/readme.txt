@@ -91,7 +91,7 @@ is used.  IOW, when the readable event handler is called (because
 some bytes came in to the socket) and the script does not, for some
 reason, call [read] or [gets] and no more bytes follow, the readable
 event handler will not be called again (unless UpdateInterest() is
-called by the generic layer, which is not a guarentee that it will do
+called by the generic layer, which is not a guarantee that it will do
 so).  The same is true for the EOF condition.  If the readable event
 handler does not close the socket for the [read] that returns an
 empty string followed by an [eof] that returns true, the readable
