@@ -61,6 +61,10 @@ GetSysMsgObj(DWORD id)
     return Tcl_NewStringObj(GetSysMsg(id), -1);
 }
 
+static const char *HtmlStart = "<tr><td>";
+static const char *HtmlMiddle = "</td><td>";
+static const char *HtmlEnd = "</td></tr>\n";
+
 int
 Iocp_StatsObjCmd (
     ClientData notUsed,			/* Not used. */
@@ -70,20 +74,36 @@ Iocp_StatsObjCmd (
 {
     Tcl_Obj *newResult;
     char buf[TCL_INTEGER_SPACE];
+    int useHtml = 0;
+    const char *Start = "", *Middle = " ", *End = "\n";
 
-    newResult = Tcl_NewStringObj("Sockets open: ", -1);
+    if (objc == 2) {
+	if (Tcl_GetBooleanFromObj(interp, objv[1], &useHtml) == TCL_ERROR) {
+	    return TCL_ERROR;
+	}
+    }
+
+    if (useHtml) {
+	Start = HtmlStart;
+	Middle = HtmlMiddle;
+	End = HtmlEnd;
+    }
+
+    newResult = Tcl_NewObj();
+    Tcl_AppendStringsToObj(newResult, Start, "Sockets open:", Middle, 0L);
     TclFormatInt(buf, StatOpenSockets);
-    Tcl_AppendStringsToObj(newResult, buf, "\nFailed AcceptEx calls: ", 0L);
+    Tcl_AppendStringsToObj(newResult, buf, End, Start, "AcceptEx calls that returned an error:", Middle, 0L);
     TclFormatInt(buf, StatFailedAcceptExCalls);
-    Tcl_AppendStringsToObj(newResult, buf, "\nGeneral pool bytes in use: ", 0L);
+    Tcl_AppendStringsToObj(newResult, buf, End, Start, "Unreplaced AcceptEx calls:", Middle, 0L);
+    TclFormatInt(buf, StatFailedReplacementAcceptExCalls);
+    Tcl_AppendStringsToObj(newResult, buf, End, Start, "General pool bytes in use:", Middle, 0L);
     TclFormatInt(buf, StatGeneralBytesInUse);
-    Tcl_AppendStringsToObj(newResult, buf, "\nSpecial pool bytes in use: ", 0L);
+    Tcl_AppendStringsToObj(newResult, buf, End, Start, "Special pool bytes in use:", Middle, 0L);
     TclFormatInt(buf, StatSpecialBytesInUse);
-    Tcl_AppendStringsToObj(newResult, buf, 0L);
+    Tcl_AppendStringsToObj(newResult, buf, End, 0L);
     Tcl_SetObjResult(interp, newResult);
     return TCL_OK;
 }
-
 
 /* Set the EXTERN macro to export declared functions. */
 #undef TCL_STORAGE_CLASS
