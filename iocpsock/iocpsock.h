@@ -427,4 +427,4 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
  * state which doesn't seem to move much data quickly.  This must be
  * capped.
  */
-#define IOCP_SEND_CONCURRENCY	2
+#define IOCP_SEND_CONCURRENCY	20
