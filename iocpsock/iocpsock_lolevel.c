@@ -379,20 +379,20 @@ InitSockets()
 		winsockLoadErr = TCL_WSE_NOTALL2XFUNCS;
 		goto unloadLibrary;
 	    }
+	}
 
-	    os.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
-	    GetVersionEx(&os);
+	os.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
+	GetVersionEx(&os);
 
-	    if (os.dwPlatformId == VER_PLATFORM_WIN32_NT) {
-		winsockLoadErr = InitializeIocpSubSystem();
-	    } else {
-		// TODO (long-term): put the old WSAAsyncSelect channel driver code in here too.
-		/* winsockLoadErr = InitializeOldSubSystem(); */
-		Tcl_Panic("Barf! Can't run IOCP on non-NT systems, sorry.");
-	    }
-	    if (winsockLoadErr != NO_ERROR) {
-		goto unloadLibrary;
-	    }
+	if (os.dwPlatformId == VER_PLATFORM_WIN32_NT) {
+	    winsockLoadErr = InitializeIocpSubSystem();
+	} else {
+	    // TODO (long-term): put the old WSAAsyncSelect channel driver code in here too.
+	    /* winsockLoadErr = InitializeOldSubSystem(); */
+	    Tcl_Panic("Barf! Can't run IOCP on non-NT systems, sorry.");
+	}
+	if (winsockLoadErr != NO_ERROR) {
+	    goto unloadLibrary;
 	}
     }
 
@@ -1525,7 +1525,7 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	BufferInfo *newBufPtr;
 
 	/*
-	 * The AcceptEx() completed now, instead of getting posted.
+	 * The WSARecv() completed now, instead of getting posted.
 	 * Keep adding more to counter-act the current load.
 	 */
 
@@ -1834,7 +1834,7 @@ HandleIo (
 	IocpLLPushBack(infoPtr->llPendingRecv, bufPtr, &bufPtr->node);
 
 	/*
-	 * Let IocpCheckProc() know this new channel has a ready read
+	 * Let IocpCheckProc() know this channel has a ready read
 	 * that needs servicing.
 	 */
 	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
