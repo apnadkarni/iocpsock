@@ -1691,6 +1691,9 @@ HandleIo (
     SocketInfo *newInfoPtr;
     BufferInfo *newBufPtr;
     int i;
+    SOCKADDR *local, *remote;
+    SIZE_T addr_storage = infoPtr->proto->addrLen + 16;
+    int localLen, remoteLen;
 
     EnterCriticalSection(&infoPtr->critSec);
 
@@ -1716,11 +1719,8 @@ HandleIo (
     /* An error stored in the buffer object takes precedence. */
     if (bufPtr->WSAerr == NO_ERROR) bufPtr->WSAerr = WSAerr;
 
-    if (bufPtr->operation == OP_ACCEPT) {
-        SOCKADDR *local, *remote;
-	SIZE_T addr_storage = infoPtr->proto->addrLen + 16;
-        int localLen, remoteLen;
-
+    switch (bufPtr->operation) {
+    case OP_ACCEPT:
 	/*
 	 * Remove this from the 'pending accepts' list of the
 	 * listening socket.  It isn't pending anymore.
@@ -1800,8 +1800,8 @@ HandleIo (
 	} else {
 	    FreeBufferObj(bufPtr);
 	}
-        
-        /*
+    
+	/*
 	 * Post another new AcceptEx() to replace this one that just fired.
 	 *
 	 * This call could cause recurrsion..  Careful!
@@ -1810,13 +1810,14 @@ HandleIo (
 	 * That's some heavy load.
 	 */
 
-        newBufPtr = GetBufferObj(infoPtr, IOCP_ACCEPT_BUFSIZE);
-        if (PostOverlappedAccept(infoPtr, newBufPtr) != NO_ERROR) {
+	newBufPtr = GetBufferObj(infoPtr, IOCP_ACCEPT_BUFSIZE);
+	if (PostOverlappedAccept(infoPtr, newBufPtr) != NO_ERROR) {
 	    /* Oh no, the AcceptEx failed. */
 	    FreeBufferObj(newBufPtr);
 	}
+	break;
 
-    } else if (bufPtr->operation == OP_READ) {
+    case OP_READ:
 
 	/* (takes buffer ownership) */
 	IocpLLPushBack(infoPtr->llPendingRecv, bufPtr, &bufPtr->node);
@@ -1845,12 +1846,13 @@ HandleIo (
 		/* Oh no, the WSARecv failed. */
 		FreeBufferObj(newBufPtr);
 	    }
-        }
+	}
+	break;
 
-    } else if (bufPtr->operation == OP_WRITE) {
+    case OP_WRITE:
 
 	infoPtr->writeError = WSAerr;
-        FreeBufferObj(bufPtr);
+	FreeBufferObj(bufPtr);
 
 	if (infoPtr->outstandingSends > 0) {
 	    infoPtr->outstandingSends--;
@@ -1864,8 +1866,9 @@ HandleIo (
 
 	/* Should the notifier be asleep, zap it awake. */
 	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+	break;
 
-    } else if (bufPtr->operation == OP_CONNECT) {
+    case OP_CONNECT:
 
 	infoPtr->llPendingRecv = IocpLLCreate();
 	infoPtr->readyMask |= TCL_WRITABLE;
