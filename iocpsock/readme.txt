@@ -50,7 +50,7 @@ called [socket2] and behaves just like the stock one.
   - Removed the receive with accept optimization that AcceptEx does for
     more normal/expected behavior.  It's an additional trip through the
     completion routine, but I don't think it will take away any server
-    speed.
+    speed as it doesn't wait for tcl anyways.
 
 * CHANGES from 0.2:
   - Better tracking and clean-up of resources.  Memory use is tight.
