@@ -4,7 +4,13 @@
 
 package require tcltest
 
-tcltest::testsDirectory [file dir [info script]]
-tcltest::runAllTests
+if {[catch {
+    tcltest::testsDirectory [file dir [info script]]
+    tcltest::runAllTests
+}]} {
+    puts $errorInfo
+}
 
+puts "press enter to continue"
+gets stdin
 return
