@@ -241,9 +241,14 @@ extern Tcl_ThreadDataKey dataKey;
  * each socket.
  */
 
+#define IOCP_EOF	    (1<<0)
+#define IOCP_CLOSING	    (1<<1)
+#define IOCP_BLOCKING	    (1<<2)
+
 typedef struct SocketInfo {
     Tcl_Channel channel;	    /* Tcl channel for this socket. */
     SOCKET socket;		    /* Windows SOCKET handle. */
+    DWORD flags;
     WS2ProtocolData *proto;	    /* Network protocol info. */
     CRITICAL_SECTION critSec;	    /* Accessor lock. */
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
@@ -259,14 +264,18 @@ typedef struct SocketInfo {
     LPSOCKADDR remoteAddr;	    /* Remote sockaddr. */
 
     int watchMask;		    /* Tcl events we are interested in. */
+    int readyMask;
 
     DWORD lastError;		    /* Error code from last message. */
+
     DWORD writeError;		    /* Error code from last Send(To). */
-    BOOL bClosing;
+    short outstandingSends;
+    short maxOutstandingSends;
+
     volatile LONG OutstandingOps;	    
     ULONG LastSendIssued; // Last sequence number sent
-    ULONG IoCountIssued;
-    BufferInfo *OutOfOrderSends;// List of send buffers that completed out of order
+//    ULONG IoCountIssued;
+//    BufferInfo *OutOfOrderSends;// List of send buffers that completed out of order
     BufferInfo **PendingAccepts;    // Pending AcceptEx buffers 
 				    //   (used for listening sockets only)
     LPLLIST llPendingRecv; //Our pending recv list.
@@ -351,6 +360,7 @@ extern LPLLNODE		IocpLLPushFront(LPLLIST ll, LPVOID lpItem,
 				LPLLNODE pnode);
 extern BOOL		IocpLLPop(LPLLNODE node, DWORD dwState);
 extern BOOL		IocpLLPopAll(LPLLIST ll, LPLLNODE snode, DWORD dwState);
+extern BOOL		IocpLLPopAllCompare(LPLLIST ll, LPVOID lpItem, DWORD dwState);
 extern LPVOID		IocpLLPopBack(LPLLIST ll, DWORD dwState);
 extern LPVOID		IocpLLPopFront(LPLLIST ll, DWORD dwState);
 extern BOOL		IocpLLIsNotEmpty(LPLLIST ll);
