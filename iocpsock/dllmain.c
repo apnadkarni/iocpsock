@@ -65,7 +65,6 @@ EXTERN int
 Iocpsock_Init (Tcl_Interp *interp)
 {
     Tcl_Obj *result;
-//    Tcl_Channel StdErr;
 
 #ifdef USE_TCL_STUBS
     if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {
@@ -97,12 +96,6 @@ Iocpsock_Init (Tcl_Interp *interp)
     Tcl_MutexUnlock(&initLock);
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
-    Tcl_PkgProvide(interp, "Iocpsock", "0.5");
-//    StdErr = Tcl_GetStdChannel(TCL_STDERR);
-//    if (StdErr) {
-//	Tcl_WriteObj(StdErr,
-//		Tcl_NewStringObj("Loaded IOCP sockets replacement module v0.5: "
-//		__TIMESTAMP__ "\n", -1));
-//    }
+    Tcl_PkgProvide(interp, "Iocpsock", "0.99");
     return TCL_OK;
 }

@@ -1,4 +1,4 @@
-iocpsock.dll -- ver 0.5 (Feb 18 13:01:50 2003)
+iocpsock.dll -- ver 0.99 a/k/a "release candidate" (11:23 AM 3/1/2003)
 
 http://sf.net/project/showfiles.php?group_id=73356
 http://sf.net/projects/iocpsock
@@ -11,25 +11,46 @@ of WSAAsyncSelect.  I haven't yet tested the all-out speed, but expect
 a performance improvement of at least 4 times given the pipes and CPU
 available.
 
-It works great with tclhttpd, but it's limits haven't been tested yet.
+It works great with tclhttpd, but its limits haven't been discovered
+yet.  As a server, the front-end just DOES NOT get over-run.  In the
+performance tests i've run, I just can't get the listening socket to
+ever fail!  With the stock channel driver, connect errors begin around
+30 connections per second.  Right now, I can do 80/sec with zero errors
+and push it well over that.  How far above that I'm pushing it, I can't
+tell as I need to build a better test environment next week to see,
+but it flat-lines early.
 
-More development is needed.  Looks stable (much more than earlier).
-Sockets are always created in non-blocking mode.  There is no blocking
-mode yet.  This will get fixed, eventually.  It provides one command
-called [socket2] and behaves just like the stock one.
+It's fun in that the bottleneck is now tclhttpd (the script) itself
+and user-mode CPU time handling sockets is now non-existent which lets
+tclhttpd max-out at a lower input load.  Either sockets are 50% faster
+or 33% more time is available to the script.  Either view seems valid.
+In theory, 50K+ concurrent sockets are possible.  The only limitation
+is available memory (~8K per socket of the non-paged pool is reserved,
+which limits at about 1/4 of the physical memory: YMMV).
+
+More development is needed.  It's amazingly stable.  Sockets are always
+created in non-blocking mode.  There is *no* blocking mode yet.  This
+will get fixed, eventually.  It provides one command called [socket2]
+and behaves just like the stock one, except for the lack of blocking
+mode.
+
+It does IPv6, btw.  The -sockname and -peername fconfigures don't do
+IPv6 yet, though, but you can create IPv6 sockets just by using an IPv6
+address.
 
 * FAQ:
 
   Q: What's IOCP?
-  A: A short for "I/O completion ports" and combined with overlapped
-     operations for the highest performance I/O model available on
-     windows NT.
+  A: A short for "I/O completion ports" and are combined with
+     overlapped operations for the highest performance I/O model
+     available on windows NT.
 
   Q: Ok, but what's "overlapped"?
-  A: Posting a WSARecv (or AcceptEx) call before the event (and data)
-     arrives allowing the operation to happen wholly in kernel-mode so
-     that not only do we get notification, but we get the data of the
-     operation too.  Instead of "what's ready?", it's "what's been done"
+  A: Posting a WSARecv, ConnectEx or AcceptEx call before the event
+     (and data) arrives allowing the operation to happen wholly in
+     kernel-mode so that not only do we get notification, but we get
+     the data of the operation too.  Instead of "what's ready?", it's
+     "what's been done?"
 
   Q: Gimme some links.  I want to read up on this.
   A: http://www.cswl.com/whiteppr/tech/rtime.html
@@ -38,16 +59,21 @@ called [socket2] and behaves just like the stock one.
      http://msdn.microsoft.com/library/en-us/winsock/winsock/overlapped_i_o_2.asp
 
   Q: Does this only work on NT?
-  A: Yes.  Win2K and WinXP.  It might work on NT4, though.  It can't
-     work any of the Win9x flavors because completion ports are an OS
-     feature of NT.
+  A: Yes.  Just Win2K and WinXP.  It might work on NT4, though.  It
+     can't work any of the Win9x flavors because completion ports are
+     an operating system feature of NT.
+
+* CHANGES from 0.5:
+  - *ALL* resource leaks plugged.
+  - Closing fixed.  It wasn't always closing the socket when it was
+    initiating the shutdown of the connection.
 
 * CHANGES from 0.4:
-  - Now takes ipv6 addresses and creates ipv6 sockets when asked.  WinXP
-    can do ipv6 since sp1.  Win2K has a tech preview for ipv6, but isn't
-    production quality.  Only when the address given to [socket2] is in
-    ipv6 format does an ipv6 socket get used.  hostname might work, but
-    untested.
+  - Now takes ipv6 addresses and creates ipv6 sockets when asked.
+    WinXP can do ipv6 since sp1.  Win2K has a tech preview for ipv6,
+    but isn't production quality.  Only when the address given to
+    [socket2] is in ipv6 format does an ipv6 socket get used.  hostname
+    might work, but untested.
   - Removed the puts to stderr on load.
 
 * CHANGES from 0.3:
@@ -80,6 +106,8 @@ called [socket2] and behaves just like the stock one.
   - Make the linkedlist routines waitable so blocking can be emulated.
   - Add special fconfigures for all the iocp stuff such as recv buffer
     size/count, accept buffer size/count and write concurrency.
+  - Begin on UDP, IPX, IrDA, AppleTalk, DecNet, etc... support.
+  - Test ConnectEx behavior on WinXP.
 
 --
 David Gravereaux <davygrvy@pobox.com>

@@ -814,7 +814,7 @@ IocpCloseProc (
 	infoPtr->channel = NULL;
 
 	if (infoPtr->proto->type == SOCK_STREAM) {
-	    err = winSock.WSASendDisconnect(infoPtr->socket, NULL);
+	    winSock.WSASendDisconnect(infoPtr->socket, NULL);
 	}
 	err = winSock.closesocket(infoPtr->socket);
 	if (err == SOCKET_ERROR) {
@@ -830,7 +830,8 @@ IocpCloseProc (
 	Tcl_DeleteEvents(IocpRemovePendingEvents, infoPtr);
 
 	/*
-	 * If there are no outstanding operations, lazy delete will not work.
+	 * If there are no outstanding operations, lazy delete will not
+	 * work, so delete from here.
 	 */
 	if (infoPtr->OutstandingOps <= 0) {
 	    FreeSocketInfo(infoPtr);
