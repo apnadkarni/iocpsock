@@ -1,6 +1,8 @@
 #include "iocpsock.h"
 #include <wsvns.h>
 
+static FN_DECODEADDR DecodeVinesSockaddr;
+
 static WS2ProtocolData vinesProtoData = {
     AF_BAN,
     SOCK_STREAM,
@@ -14,3 +16,9 @@ static WS2ProtocolData vinesProtoData = {
     NULL,
     NULL
 };
+
+static Tcl_Obj *
+DecodeVinesSockaddr (SocketInfo *info, LPSOCKADDR addr)
+{
+    return Tcl_NewObj();
+}

@@ -859,6 +859,8 @@ IocpAcceptOne (SocketInfo *infoPtr)
 {
     char channelName[16 + TCL_INTEGER_SPACE];
     AcceptInfo *acptInfo;
+    int objc, port;
+    Tcl_Obj **objv, *AddrInfo;
 
     acptInfo = IocpLLPopFront(infoPtr->readyAccepts, IOCP_LL_NODESTROY, 0);
 
@@ -889,12 +891,18 @@ IocpAcceptOne (SocketInfo *infoPtr)
      * type.
      */
 
+    AddrInfo = acptInfo->clientInfo->proto->DecodeSockAddr(
+	    acptInfo->clientInfo, acptInfo->clientInfo->remoteAddr);
+    Tcl_ListObjGetElements(NULL, AddrInfo, &objc, &objv);
+    Tcl_GetIntFromObj(NULL, objv[2], &port);
     if (infoPtr->acceptProc != NULL) {
 	(infoPtr->acceptProc) (infoPtr->acceptProcData,
 		acptInfo->clientInfo->channel,
-		winSock.inet_ntoa(((SOCKADDR_IN *)&acptInfo->remote)->sin_addr),
-		winSock.ntohs(((SOCKADDR_IN *)&acptInfo->remote)->sin_port));
+		Tcl_GetString(objv[0]) /* IP string */,
+		port);
     }
+
+    Tcl_DecrRefCount(AddrInfo);
 
 error:
     /* TODO: return error info to the trace routine. */
@@ -1442,7 +1450,7 @@ IocpGetOptionProc (
     size_t len = 0;
     char buf[TCL_INTEGER_SPACE];
     Tcl_Obj *AddrInfo;
-    int objc;
+    int objc, i;
     Tcl_Obj **objv;
 
     
@@ -1534,16 +1542,13 @@ IocpGetOptionProc (
             Tcl_DStringStartSublist(dsPtr);
         }
 
-	AddrInfo = infoPtr->proto->DecodeSockAddr(
-		infoPtr->socket, infoPtr->remoteAddr);
+	AddrInfo = infoPtr->proto->DecodeSockAddr(infoPtr, infoPtr->remoteAddr);
 	Tcl_ListObjGetElements(NULL, AddrInfo, &objc, &objv);
-	/* append address. */
-	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[0]));
-	/* append resolved name. */
-	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[1]));
-	/* append port. */
-	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[2]));
-	/* discard object. */
+
+	/* Append data as per the protocol type. */
+	for (i = 0; i < objc; i++) {
+	    Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[i]));
+	}
 	Tcl_DecrRefCount(AddrInfo);
 
         if (len == 0) {
@@ -1573,16 +1578,13 @@ IocpGetOptionProc (
             Tcl_DStringStartSublist(dsPtr);
         }
 
-	AddrInfo = infoPtr->proto->DecodeSockAddr(
-		infoPtr->socket, infoPtr->localAddr);
+	AddrInfo = infoPtr->proto->DecodeSockAddr(infoPtr, infoPtr->localAddr);
 	Tcl_ListObjGetElements(NULL, AddrInfo, &objc, &objv);
-	/* append address. */
-	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[0]));
-	/* append resolved name. */
-	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[1]));
-	/* append port. */
-	Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[2]));
-	/* discard object. */
+
+	/* Append data as per the protocol type. */
+	for (i = 0; i < objc; i++) {
+	    Tcl_DStringAppendElement(dsPtr, Tcl_GetString(objv[i]));
+	}
 	Tcl_DecrRefCount(AddrInfo);
 
         if (len == 0) {

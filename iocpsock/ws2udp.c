@@ -5,6 +5,7 @@ static WS2ProtocolData udp4ProtoData = {
     SOCK_DGRAM,
     IPPROTO_UDP,
     sizeof(SOCKADDR_IN),
+    DecodeIpSockaddr,
     NULL,
     NULL,
     NULL,
@@ -19,6 +20,7 @@ static WS2ProtocolData udp6ProtoData = {
     SOCK_DGRAM,
     IPPROTO_UDP,
     sizeof(SOCKADDR_IN6),
+    DecodeIpSockaddr,
     NULL,
     NULL,
     NULL,
@@ -28,21 +30,16 @@ static WS2ProtocolData udp6ProtoData = {
     NULL
 };
 
-static SocketInfo *	CreateUdp4Socket(Tcl_Interp *interp,
+static SocketInfo *	CreateUdpSocket(Tcl_Interp *interp,
 				CONST char *port, CONST char *host,
-				int server, CONST char *myaddr,
-				CONST char *myport);
-static SocketInfo *	CreateUdp6Socket(Tcl_Interp *interp,
-				CONST char *port, CONST char *host,
-				int server, CONST char *myaddr,
-				CONST char *myport);
+				CONST char *myaddr, CONST char *myport);
 
 /*
  *----------------------------------------------------------------------
  *
  * Iocp_OpenUdp4Client --
  *
- *	Opens a TCP client socket and creates a channel around it.
+ *	Opens a UDP socket and creates a channel around it.
  *
  * Results:
  *	The channel or NULL if failed.  An error message is returned
@@ -55,7 +52,7 @@ static SocketInfo *	CreateUdp6Socket(Tcl_Interp *interp,
  */
 
 Tcl_Channel
-Iocp_OpenUdp4Client(
+Iocp_OpenUdpSocket (
     Tcl_Interp *interp,		/* For error reporting; can be NULL. */
     CONST char *port,		/* Port (number|service) to open. */
     CONST char *host,		/* Host on which to open port. */
@@ -69,7 +66,7 @@ Iocp_OpenUdp4Client(
      * Create a new client socket and wrap it in a channel.
      */
 
-    infoPtr = CreateUdp4Socket(interp, port, host, 0, myaddr, myport);
+    infoPtr = CreateUdpSocket(interp, port, host, myaddr, myport);
     if (infoPtr == NULL) {
 	return NULL;
     }
@@ -97,75 +94,13 @@ Iocp_OpenUdp4Client(
     return infoPtr->channel;
 }
 
-/*
- *----------------------------------------------------------------------
- *
- * Iocp_OpenUdp4Server --
- *
- *	Opens a TCP server socket and creates a channel around it.
- *
- * Results:
- *	The channel or NULL if failed.  An error message is returned
- *	in the interpreter on failure.
- *
- * Side effects:
- *	Opens a server socket and creates a new channel.
- *
- *----------------------------------------------------------------------
- */
-
-Tcl_Channel
-Iocp_OpenUdp4Server(
-    Tcl_Interp *interp,		/* For error reporting, may be NULL. */
-    CONST char *port,		/* Port (number|service) to open. */
-    CONST char *host,		/* Name of host for binding. */
-    Tcl_TcpAcceptProc *acceptProc,
-				/* Callback for accepting connections
-				 * from new clients. */
-    ClientData acceptProcData)	/* Data for the callback. */
-{
-    SocketInfo *infoPtr;
-    char channelName[16 + TCL_INTEGER_SPACE];
-
-    /*
-     * Create a new client socket and wrap it in a channel.
-     */
-
-    infoPtr = CreateUdp4Socket(interp, port, host, 1, NULL, 0);
-    if (infoPtr == NULL) {
-	return NULL;
-    }
-
-    infoPtr->acceptProc = acceptProc;
-    infoPtr->acceptProcData = acceptProcData;
-
-    wsprintfA(channelName, "iocp%d", infoPtr->socket);
-
-    infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
-	    (ClientData) infoPtr, 0);
-    if (Tcl_SetChannelOption(interp, infoPtr->channel, "-eofchar", "")
-	    == TCL_ERROR) {
-        Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
-        return (Tcl_Channel) NULL;
-    }
-
-    // Had to add this!
-    if (Tcl_SetChannelOption(NULL, infoPtr->channel, "-blocking", "0")
-	    == TCL_ERROR) {
-	Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
-	return (Tcl_Channel) NULL;
-    }
-
-    return infoPtr->channel;
-}
 
 #if 0
 static SocketInfo *
-CreateUdp4Socket (
+CreateUdpSocket (
     Tcl_Interp *interp,
     CONST char *port,
     CONST char *host,
-    int server,
     CONST char *myaddr,
     CONST char *myport)
 {
@@ -300,11 +235,10 @@ error:
 }
 #else
 static SocketInfo *
-CreateUdp4Socket (
+CreateUdpSocket (
     Tcl_Interp *interp,
     CONST char *port,
     CONST char *host,
-    int server,
     CONST char *myaddr,
     CONST char *myport)
 {

@@ -19,7 +19,7 @@ static WS2ProtocolData dnetProtoData = {
 };
 
 static Tcl_Obj *
-DecodeDecnetSockaddr (SOCKET s, LPSOCKADDR addr)
+DecodeDecnetSockaddr (SocketInfo *info, LPSOCKADDR addr)
 {
-    return NULL;
+    return Tcl_NewObj();
 }

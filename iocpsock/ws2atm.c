@@ -19,7 +19,7 @@ static WS2ProtocolData atmProtoData = {
 };
 
 static Tcl_Obj *
-DecodeAtmSockaddr (SOCKET s, LPSOCKADDR addr)
+DecodeAtmSockaddr (SocketInfo *info, LPSOCKADDR addr)
 {
-    return NULL;
+    return Tcl_NewObj();
 }

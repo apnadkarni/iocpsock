@@ -243,36 +243,6 @@ typedef struct _BufferInfo {
 #undef ntohs
 #undef setsockopt
 
-typedef Tcl_Obj * (FN_DECODEADDR) (SOCKET s, LPSOCKADDR addr);
-
-/*
- * Specific protocol information is stored here and shared to all
- * SocketInfo objects of that type.
- */
-typedef struct {
-    int af;		    /* Address family. */
-    int	type;		    /* Address type. */
-    int	protocol;	    /* protocol type. */
-    size_t addrLen;	    /* length of protocol specific SOCKADDR */
-    FN_DECODEADDR		*DecodeSockAddr;
-
-    /* LSP specific extension functions */
-    LPFN_ACCEPTEX		AcceptEx;
-    LPFN_GETACCEPTEXSOCKADDRS	GetAcceptExSockaddrs;
-    LPFN_CONNECTEX		ConnectEx;
-    LPFN_DISCONNECTEX		DisconnectEx;
-    LPFN_TRANSMITFILE		TransmitFile;
-    /* The only caveat of using this TransmitFile extension API is that
-       on Windows NT Workstation or Windows 2000 Professional only two
-       requests will be processed at a time. You must be running on
-       Windows NT or Windows 2000 Server, Windows 2000 Advanced Server,
-       or Windows 2000 Data Center to get full usage of this specialized
-       API. */
-    LPFN_TRANSMITPACKETS	TransmitPackets;
-    LPFN_WSARECVMSG		WSARecvMsg;
-} WS2ProtocolData;
-
-
 typedef struct ThreadSpecificData {
     Tcl_ThreadId threadId;
     LPLLIST readySockets;
@@ -299,6 +269,9 @@ enum IocpRecvMode {
 };
 
 #include <pshpack4.h>
+
+/* forward reference. */
+struct WS2ProtocolData;
 
 typedef struct SocketInfo {
     Tcl_Channel channel;	    /* Tcl channel for this socket. */
@@ -327,7 +300,7 @@ typedef struct SocketInfo {
     enum IocpRecvMode recvMode;	    /* mode in use */
 
     int watchMask;		    /* events we are interested in. */
-    WS2ProtocolData *proto;	    /* Network protocol info. */
+    struct WS2ProtocolData *proto;  /* Network protocol info. */
 
     CRITICAL_SECTION tsdLock;	    /* accessor for the TSD block */
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
@@ -347,6 +320,36 @@ typedef struct SocketInfo {
 } SocketInfo;
 
 #include <poppack.h>
+
+typedef Tcl_Obj * (FN_DECODEADDR) (SocketInfo *info, LPSOCKADDR addr);
+
+/*
+ * Specific protocol information is stored here and shared to all
+ * SocketInfo objects of that type.
+ */
+typedef struct WS2ProtocolData {
+    int af;		    /* Address family. */
+    int	type;		    /* Address type. */
+    int	protocol;	    /* protocol type. */
+    size_t addrLen;	    /* length of protocol specific SOCKADDR */
+    FN_DECODEADDR		*DecodeSockAddr;
+
+    /* LSP specific extension functions */
+    LPFN_ACCEPTEX		AcceptEx;
+    LPFN_GETACCEPTEXSOCKADDRS	GetAcceptExSockaddrs;
+    LPFN_CONNECTEX		ConnectEx;
+    LPFN_DISCONNECTEX		DisconnectEx;
+    LPFN_TRANSMITFILE		TransmitFile;
+    /* The only caveat of using this TransmitFile extension API is that
+       on Windows NT Workstation or Windows 2000 Professional only two
+       requests will be processed at a time. You must be running on
+       Windows NT or Windows 2000 Server, Windows 2000 Advanced Server,
+       or Windows 2000 Data Center to get full usage of this specialized
+       API. */
+    LPFN_TRANSMITPACKETS	TransmitPackets;
+    LPFN_WSARECVMSG		WSARecvMsg;
+} WS2ProtocolData;
+
 
 typedef struct AcceptInfo {
     SOCKADDR_STORAGE local;
@@ -413,6 +416,20 @@ extern int		HasSockets (Tcl_Interp *interp);
 extern char *		GetSysMsg (DWORD id);
 extern Tcl_Obj *	GetSysMsgObj (DWORD id);
 extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
+extern FN_DECODEADDR	DecodeIpSockaddr;
+
+/*
+ * Callback structure for accept callback in a TCP server.
+ */
+
+typedef struct AcceptCallback {
+    char *script;			/* Script to invoke. */
+    Tcl_Interp *interp;			/* Interpreter in which to run it. */
+} AcceptCallback;
+typedef void Iocp_TcpAcceptProc (ClientData callbackData,
+	Tcl_Channel chan, CONST char *address, int port);
+extern Iocp_TcpAcceptProc TcpAcceptCallbackProc;
+
 
 /* private memory stuff */
 extern __inline LPVOID	IocpAlloc (SIZE_T size);

@@ -1,14 +1,11 @@
 #include "iocpsock.h"
 
-static FN_DECODEADDR DecodeIpv4Sockaddr;
-static FN_DECODEADDR DecodeIpv6Sockaddr;
-
 static WS2ProtocolData tcp4ProtoData = {
     AF_INET,
     SOCK_STREAM,
     IPPROTO_TCP,
     sizeof(SOCKADDR_IN),
-    DecodeIpv4Sockaddr,
+    DecodeIpSockaddr,
     NULL,
     NULL,
     NULL,
@@ -23,7 +20,7 @@ static WS2ProtocolData tcp6ProtoData = {
     SOCK_STREAM,
     IPPROTO_TCP,
     sizeof(SOCKADDR_IN6),
-    DecodeIpv6Sockaddr,
+    DecodeIpSockaddr,
     NULL,
     NULL,
     NULL,
@@ -67,49 +64,115 @@ const FLOWSPEC flowspec_guaranteed = {17000,
                                       340};
 #endif
 
-static Tcl_Obj *
-DecodeIpv4Sockaddr (SOCKET s, LPSOCKADDR addr)
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * TcpAcceptCallbackProc --
+ *
+ *	This callback is invoked by the channel driver when it accepts
+ *	a new connection from a client on a TCP(4|6) server socket.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Whatever the script does.
+ *
+ *----------------------------------------------------------------------
+ */
+
+void
+TcpAcceptCallbackProc (
+    ClientData callbackData,		/* The data stored when the callback
+                                         * was created in the call to
+                                         * Tcl_OpenTcpServer. */
+    Tcl_Channel chan,			/* Channel for the newly accepted
+                                         * connection. */
+    CONST char *address,		/* Address of client that was
+                                         * accepted. */
+    int port)				/* Port of client that was accepted. */
 {
-    char name[NI_MAXHOST];
-    u_short port;
-    Tcl_Obj *result = Tcl_NewObj();
+    AcceptCallback *acceptCallbackPtr;
+    Tcl_Interp *interp;
+    char *script;
+    char portBuf[TCL_INTEGER_SPACE];
+    int result;
 
-    /* Get numeric IP string from SOCKADDR_IN struct. */
-    getnameinfo(addr, sizeof(SOCKADDR_IN), name, NI_MAXHOST,
-	    NULL, 0, NI_NUMERICHOST);
-    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+    acceptCallbackPtr = (AcceptCallback *) callbackData;
 
-    /* Get resolved name string. */
-    getnameinfo(addr, sizeof(SOCKADDR_IN), name, NI_MAXHOST,
-	    NULL, 0, 0);
-    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+    /*
+     * Check if the callback is still valid; the interpreter may have gone
+     * away, this is signalled by setting the interp field of the callback
+     * data to NULL.
+     */
+    
+    if (acceptCallbackPtr->interp != (Tcl_Interp *) NULL) {
 
-    /* Get port. */
-    winSock.WSANtohs(s, ((LPSOCKADDR_IN)addr)->sin_port, &port);
-    Tcl_ListObjAppendElement(NULL, result, Tcl_NewIntObj(port));
-    return result;
+        script = acceptCallbackPtr->script;
+        interp = acceptCallbackPtr->interp;
+        
+        Tcl_Preserve((ClientData) script);
+        Tcl_Preserve((ClientData) interp);
+
+	sprintf(portBuf, "%d", port);
+        Tcl_RegisterChannel(interp, chan);
+
+        /*
+         * Artificially bump the refcount to protect the channel from
+         * being deleted while the script is being evaluated.
+         */
+
+        Tcl_RegisterChannel((Tcl_Interp *) NULL,  chan);
+        
+        result = Tcl_VarEval(interp, script, " ", Tcl_GetChannelName(chan),
+                " ", address, " ", portBuf, (char *) NULL);
+        if (result != TCL_OK) {
+            Tcl_BackgroundError(interp);
+	    Tcl_UnregisterChannel(interp, chan);
+        }
+
+        /*
+         * Decrement the artificially bumped refcount. After this it is
+         * not safe anymore to use "chan", because it may now be deleted.
+         */
+
+        Tcl_UnregisterChannel((Tcl_Interp *) NULL, chan);
+        
+        Tcl_Release((ClientData) interp);
+        Tcl_Release((ClientData) script);
+    } else {
+
+        /*
+         * The interpreter has been deleted, so there is no useful
+         * way to utilize the client socket - just close it.
+         */
+
+        Tcl_Close((Tcl_Interp *) NULL, chan);
+    }
 }
 
-static Tcl_Obj *
-DecodeIpv6Sockaddr (SOCKET s, LPSOCKADDR addr)
+
+Tcl_Obj *
+DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
 {
     char name[NI_MAXHOST];
-    u_short port;
     Tcl_Obj *result = Tcl_NewObj();
 
-    /* Get numeric IP string from SOCKADDR_IN6 struct. */
-    getnameinfo(addr, sizeof(SOCKADDR_IN6), name, NI_MAXHOST,
-	    NULL, 0, NI_NUMERICHOST);
+    /* Get the numeric IP string. */
+    getnameinfo(addr, info->proto->addrLen, name, NI_MAXHOST, NULL,
+	    0, NI_NUMERICHOST);
     Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
 
-    /* Get resolved name. */
-    getnameinfo(addr, sizeof(SOCKADDR_IN6), name, NI_MAXHOST,
-	    NULL, 0, 0);
+    /* Get resolved name string from the IP. */
+    getnameinfo(addr, info->proto->addrLen, name, NI_MAXHOST, NULL,
+	    0, 0);
     Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
 
-    /* Get port. */
-    winSock.WSANtohs(s, ((LPSOCKADDR_IN6)addr)->sin6_port, &port);
-    Tcl_ListObjAppendElement(NULL, result, Tcl_NewIntObj(port));
+    /* Get port numeric string. */
+    getnameinfo(addr, info->proto->addrLen, NULL, 0, name,
+	    NI_MAXSERV, NI_NUMERICSERV);
+    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
     return result;
 }
 

@@ -6,19 +6,9 @@
 
 #include "iocpsock.h"
 
-/*
- * Callback structure for accept callback in a TCP server.
- */
-
-typedef struct AcceptCallback {
-    char *script;			/* Script to invoke. */
-    Tcl_Interp *interp;			/* Interpreter in which to run it. */
-} AcceptCallback;
 
 
 /* local protos */
-static void	AcceptCallbackProc (ClientData callbackData,
-	            Tcl_Channel chan, char *address, int port);
 static void	RegisterTcpServerInterpCleanup (Tcl_Interp *interp,
 	            AcceptCallback *acceptCallbackPtr);
 static void	IocpAcceptCallbacksDeleteProc (
@@ -197,7 +187,7 @@ wrongNumArgs:
         strcpy(copyScript, script);
         acceptCallbackPtr->script = copyScript;
         acceptCallbackPtr->interp = interp;
-        chan = Iocp_OpenTcpServer(interp, portName, host, AcceptCallbackProc,
+        chan = Iocp_OpenTcpServer(interp, portName, host, TcpAcceptCallbackProc,
                 (ClientData) acceptCallbackPtr);
         if (chan == (Tcl_Channel) NULL) {
             ckfree(copyScript);
@@ -407,91 +397,4 @@ UnregisterTcpServerInterpCleanupProc (
         return;
     }
     Tcl_DeleteHashEntry(hPtr);
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * AcceptCallbackProc --
- *
- *	This callback is invoked by the TCP channel driver when it
- *	accepts a new connection from a client on a server socket.
- *
- * Results:
- *	None.
- *
- * Side effects:
- *	Whatever the script does.
- *
- *----------------------------------------------------------------------
- */
-
-static void
-AcceptCallbackProc (
-    ClientData callbackData,		/* The data stored when the callback
-                                         * was created in the call to
-                                         * Tcl_OpenTcpServer. */
-    Tcl_Channel chan,			/* Channel for the newly accepted
-                                         * connection. */
-    char *address,			/* Address of client that was
-                                         * accepted. */
-    int port)				/* Port of client that was accepted. */
-{
-    AcceptCallback *acceptCallbackPtr;
-    Tcl_Interp *interp;
-    char *script;
-    char portBuf[TCL_INTEGER_SPACE];
-    int result;
-
-    acceptCallbackPtr = (AcceptCallback *) callbackData;
-
-    /*
-     * Check if the callback is still valid; the interpreter may have gone
-     * away, this is signalled by setting the interp field of the callback
-     * data to NULL.
-     */
-    
-    if (acceptCallbackPtr->interp != (Tcl_Interp *) NULL) {
-
-        script = acceptCallbackPtr->script;
-        interp = acceptCallbackPtr->interp;
-        
-        Tcl_Preserve((ClientData) script);
-        Tcl_Preserve((ClientData) interp);
-
-	sprintf(portBuf, "%d", port);
-        Tcl_RegisterChannel(interp, chan);
-
-        /*
-         * Artificially bump the refcount to protect the channel from
-         * being deleted while the script is being evaluated.
-         */
-
-        Tcl_RegisterChannel((Tcl_Interp *) NULL,  chan);
-        
-        result = Tcl_VarEval(interp, script, " ", Tcl_GetChannelName(chan),
-                " ", address, " ", portBuf, (char *) NULL);
-        if (result != TCL_OK) {
-            Tcl_BackgroundError(interp);
-	    Tcl_UnregisterChannel(interp, chan);
-        }
-
-        /*
-         * Decrement the artificially bumped refcount. After this it is
-         * not safe anymore to use "chan", because it may now be deleted.
-         */
-
-        Tcl_UnregisterChannel((Tcl_Interp *) NULL, chan);
-        
-        Tcl_Release((ClientData) interp);
-        Tcl_Release((ClientData) script);
-    } else {
-
-        /*
-         * The interpreter has been deleted, so there is no useful
-         * way to utilize the client socket - just close it.
-         */
-
-        Tcl_Close((Tcl_Interp *) NULL, chan);
-    }
 }

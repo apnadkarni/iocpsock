@@ -80,7 +80,7 @@ static WS2ProtocolData spx2StreamProtoData = {
 };
 
 static Tcl_Obj *
-DecodeIpxSockaddr (SOCKET s, LPSOCKADDR addr)
+DecodeIpxSockaddr (SocketInfo *info, LPSOCKADDR addr)
 {
-    return NULL;
+    return Tcl_NewObj();
 }
