@@ -31,7 +31,7 @@ called [socket2] and behaves just like the stock one.
      that not only do we get notification, but we get the data of the
      operation too.  Instead of "what's ready?", it's "what's been done"
 
-  Q: Gimme some links.  I want read up on this.
+  Q: Gimme some links.  I want to read up on this.
   A: http://www.cswl.com/whiteppr/tech/rtime.html
      http://www.sysinternals.com/ntw2k/info/comport.shtml
      http://tangentsoft.net/wskfaq/articles/io-strategies.html
