@@ -55,6 +55,8 @@ static Tcl_DriverGetOptionProc	IocpGetOptionProc;
 static Tcl_DriverWatchProc	IocpWatchProc;
 static Tcl_DriverGetHandleProc	IocpGetHandleProc;
 static Tcl_DriverBlockModeProc	IocpBlockProc;
+/*static Tcl_DriverCutProc	IocpCutProc;
+static Tcl_DriverSpliceProc	IocpSpliceProc;*/
 
 static void	    IocpAlertToTclNewAccept (SocketInfo *infoPtr,
 			    SocketInfo *newClient);
@@ -63,7 +65,6 @@ static void	    IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr);
 static DWORD	    PostOverlappedSend (SocketInfo *infoPtr,
 			    BufferInfo *sendobj);
 static DWORD WINAPI CompletionThreadProc (LPVOID lpParam);
-static DWORD WINAPI WatchDogThreadProc (LPVOID lpParam);
 
 /*
  * This structure describes the channel type structure for TCP socket
@@ -87,13 +88,15 @@ Tcl_ChannelType IocpChannelType = {
     IocpBlockProc,	    /* Set socket into (non-)blocking mode. */
     NULL,		    /* flush proc. */
     NULL,		    /* handler proc. */
+    /*IocpCutProc,          /* cut proc. */
+    /*IocpSpliceProc,	    /* splice proc. */
 };
 
 
 typedef struct SocketEvent {
     Tcl_Event header;		/* Information that is standard for
 				 * all events. */
-    SocketInfo *infoPtr;
+    SocketInfo *infoPtr;	/* Socket data structure. */
 } SocketEvent;
 
 
@@ -762,11 +765,6 @@ IocpCloseProc (
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     int errorCode = 0, err;
-#if 0
-//#ifdef SHOWDBG
-    char msg[1024], addrbuf[50];
-    DWORD dummy = 50;
-#endif
 
     // The core wants to close channels after the exit handler!
     // Our heap is gone!
@@ -786,12 +784,6 @@ IocpCloseProc (
 	    IocpWinConvertWSAError(winSock.WSAGetLastError());
 	    errorCode = Tcl_GetErrno();
 	}
-#if 0
-//#ifdef SHOWDBG
-	winSock.WSAAddressToStringA(infoPtr->remoteAddr,infoPtr->proto->addrLen,NULL,addrbuf, &dummy);
-	wsprintf(msg, "Closed %d:%s", infoPtr->socket, addrbuf);
-	puts(msg);
-#endif
 	infoPtr->socket = INVALID_SOCKET;
 
 
@@ -1268,6 +1260,27 @@ IocpGetHandleProc (
     return TCL_OK;
 }
 
+static void
+IocpCutProc (ClientData instanceData)
+{
+    SocketInfo *infoPtr = (SocketInfo *) instanceData;
+
+    /* Unable to turn off reading, therefore don't notify
+     * anyone during the move. */
+    infoPtr->tsdHome = NULL;
+}
+
+static void
+IocpSpliceProc (ClientData instanceData)
+{
+    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+    SocketInfo *infoPtr = (SocketInfo *) instanceData;
+
+    infoPtr->tsdHome = tsdPtr;
+}
+
+
+
 /* =================================================================== */
 /* ============== Lo-level buffer and state manipulation ============= */
 
@@ -1305,7 +1318,9 @@ IocpAlertToTclNewAccept (
     IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
 
     /* In case Tcl is asleep in the notifier, wake it up. */
-    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+    if (infoPtr->tsdHome->threadId) {
+	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+    }
 }
 
 
@@ -1449,7 +1464,9 @@ IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr)
 	    infoPtr, NULL);
 
     /* Should the notifier be asleep, zap it awake. */
-    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+    if (infoPtr->tsdHome->threadId) {
+	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+    }
 }
 
 DWORD
@@ -1954,7 +1971,9 @@ HandleIo (
 	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
 
 	/* Should the notifier be asleep, zap it awake. */
-	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+	if (infoPtr->tsdHome->threadId) {
+	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+	}
 	break;
 
     case OP_CONNECT:
@@ -1985,7 +2004,9 @@ HandleIo (
 	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,	NULL);
 
 	/* Should the notifier be asleep, zap it awake. */
-	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+	if (infoPtr->tsdHome->threadId) {
+	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+	}
 	break;
 
     case OP_DISCONNECT:
