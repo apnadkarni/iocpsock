@@ -178,7 +178,8 @@ CreateTcpSocket(
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
     ZeroMemory(&hints, sizeof(hints));
-    hints.ai_protocol = SOCK_STREAM;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_protocol = IPPROTO_TCP;
 
     /* discover both ipv6 and ipv4 */
     if (! CreateSocketAddress(host, port, &hints, &hostaddr)) {
