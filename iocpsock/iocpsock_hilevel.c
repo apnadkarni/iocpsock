@@ -53,11 +53,10 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
     Tcl_Obj *CONST objv[];		/* Argument objects. */
 {
     static CONST char *socketOptions[] = {
-	"-async", "-myaddr", "-myport","-server", "-ovlpd", (char *) NULL
+	"-async", "-myaddr", "-myport","-server", "-protocol", "-lookup", NULL
     };
     enum socketOptions {
-	SKT_ASYNC,      SKT_MYADDR,      SKT_MYPORT,      SKT_SERVER,
-	SKT_OVLPD
+	SKT_ASYNC, SKT_MYADDR, SKT_MYPORT, SKT_SERVER, SKT_PROTO, SKT_LOOKUP
     };
     int optionIndex, a, server;
     char *arg, *copyScript, *host, *script;
@@ -67,8 +66,7 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
     int async = 0;
     Tcl_Channel chan;
     AcceptCallback *acceptCallbackPtr;
-    int overlappedCount = 20;
-    
+
     server = 0;
     script = NULL;
 
@@ -85,19 +83,17 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
 	    case SKT_ASYNC: {
                 if (server == 1) {
                     Tcl_AppendResult(interp,
-                            "cannot set -async option for server sockets",
-                            (char *) NULL);
+                            "cannot set -async option for server sockets", NULL);
                     return TCL_ERROR;
                 }
-                async = 1;		
+                async = 1;
 		break;
 	    }
 	    case SKT_MYADDR: {
 		a++;
                 if (a >= objc) {
 		    Tcl_AppendResult(interp,
-			    "no argument given for -myaddr option",
-                            (char *) NULL);
+			    "no argument given for -myaddr option", NULL);
 		    return TCL_ERROR;
 		}
                 myaddr = Tcl_GetString(objv[a]);
@@ -107,8 +103,7 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
 		a++;
                 if (a >= objc) {
 		    Tcl_AppendResult(interp,
-			    "no argument given for -myport option",
-                            (char *) NULL);
+			    "no argument given for -myport option", NULL);
 		    return TCL_ERROR;
 		}
 		myPortName = Tcl_GetString(objv[a]);
@@ -117,43 +112,41 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
 	    case SKT_SERVER: {
                 if (async == 1) {
                     Tcl_AppendResult(interp,
-                            "cannot set -async option for server sockets",
-                            (char *) NULL);
+                            "cannot set -async option for server sockets", NULL);
                     return TCL_ERROR;
                 }
 		server = 1;
 		a++;
 		if (a >= objc) {
 		    Tcl_AppendResult(interp,
-			    "no argument given for -server option",
-                            (char *) NULL);
+			    "no argument given for -server option", NULL);
 		    return TCL_ERROR;
 		}
                 script = Tcl_GetString(objv[a]);
 		break;
 	    }
-	    case SKT_OVLPD: {
+	    case SKT_PROTO: {
 		a++;
                 if (a >= objc) {
 		    Tcl_AppendResult(interp,
-			    "no argument given for -ovlpd option",
-                            (char *) NULL);
+			    "no argument given for -protocol option", NULL);
 		    return TCL_ERROR;
 		}
-		if (Tcl_GetIntFromObj(interp, objv[a], &overlappedCount)
-			== TCL_ERROR) {
-		    return TCL_ERROR;
-		}
-		if (overlappedCount < 1) {
+		/* add code here */
+		break;
+	    }
+	    case SKT_LOOKUP: {
+		a++;
+                if (a >= objc) {
 		    Tcl_AppendResult(interp,
-			    "-ovlpd option must be a positive number greater than zero.",
-                            (char *) NULL);
+			    "no argument given for -lookup option", NULL);
 		    return TCL_ERROR;
 		}
+		/* add code here */
 		break;
 	    }
 	    default: {
-		panic("Iocp_SocketObjCmd: bad option index to SocketOptions");
+		Tcl_Panic("Iocp_SocketObjCmd: bad option index to SocketOptions");
 	    }
 	}
     }
@@ -171,10 +164,11 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
 wrongNumArgs:
 	Tcl_AppendResult(interp, "wrong # args: should be either:\n",
 		Tcl_GetString(objv[0]),
-                " ?-myaddr addr? ?-myport myport? ?-async? host port\n",
+                " ?-protocol type? ?-myaddr addr? ?-myport myport? ?-async? host port\n",
 		Tcl_GetString(objv[0]),
-                " -server command ?-ovlpd count? ?-myaddr addr? port",
-                (char *) NULL);
+                " -server command ?-protocol type? ?-myaddr addr? port\n",
+		Tcl_GetString(objv[0]),
+		" -lookup host ?-protocol type? ?-command command?", NULL);
         return TCL_ERROR;
     }
 
@@ -192,7 +186,7 @@ wrongNumArgs:
         acceptCallbackPtr->script = copyScript;
         acceptCallbackPtr->interp = interp;
         chan = Iocp_OpenTcpServer(interp, portName, host, AcceptCallbackProc,
-                (ClientData) acceptCallbackPtr, overlappedCount);
+                (ClientData) acceptCallbackPtr);
         if (chan == (Tcl_Channel) NULL) {
             ckfree(copyScript);
             ckfree((char *) acceptCallbackPtr);
@@ -207,13 +201,13 @@ wrongNumArgs:
          */
 
         RegisterTcpServerInterpCleanup(interp, acceptCallbackPtr);
-        
+
         /*
          * Register a close callback. This callback will inform the
          * interpreter (if it still exists) that this channel does not
          * need to be informed when the interpreter is deleted.
          */
-        
+
         Tcl_CreateCloseHandler(chan, IocpServerCloseProc,
                 (ClientData) acceptCallbackPtr);
     } else {
@@ -224,7 +218,7 @@ wrongNumArgs:
     }
     Tcl_RegisterChannel(interp, chan);            
     Tcl_AppendResult(interp, Tcl_GetChannelName(chan), (char *) NULL);
-    
+
     return TCL_OK;
 }
 

@@ -1,15 +1,19 @@
 console show
 
 package require Iocpsock
-set server {216.91.56.166}
+set server {216.91.56.64}
 
 proc TestClientRead {s i} {
     if {[string length [set e [fconfigure $s -error]]]} {
-	puts "error: $s: $e : closing socket"
+	#puts "error: $s: $e : closing socket"
 	close $s
 	return
     }
-    read $s
+    if {![catch {read $s} reply]} {
+        #puts "recieved: $reply"
+	catch {close $s}
+	return
+    }
     if {[eof $s]} {
 	#puts "closing"
 	close $s
@@ -17,11 +21,11 @@ proc TestClientRead {s i} {
 }
 proc TestClientWrite {s i} {
     if {[string length [set e [fconfigure $s -error]]]} {
-	puts "error: $s: $e at $i: closing socket"
+	#puts "error: $s: $e at $i: closing socket"
 	close $s
 	return
     }
-    #puts "Now connected to [fconfigure $s -peername]"
+    catch {puts $s "hello?"}
     fileevent $s writable {}
 }
 
@@ -31,6 +35,8 @@ proc connect {{howmany {1}}} {
 	if {[catch {set s [socket2 -async $server 5150]} msg]} {
 	    return "Barfed at $a with $msg"
 	}
+	fconfigure $s -blocking 0 -buffering none -translation binary
+	fconfigure $s -sendpool 1 -recvburst 3
 	fileevent $s readable [list TestClientRead $s $a]
 	fileevent $s writable [list TestClientWrite $s $a]
 	if {$a % 20} {update}

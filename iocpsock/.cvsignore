@@ -5,6 +5,7 @@ Release_Static
 *.opt
 *.ncb
 *.plg
+*.aps
 *.00?
 *.o
 *.obj

@@ -1,5 +1,8 @@
 #include "iocpsock.h"
 
+/* Globals */
+HMODULE iocpModule = NULL;
+
 /* A mess of stuff to make sure we get a good binary. */
 #ifdef _MSC_VER
     // Only do this when MSVC++ is compiling us.
@@ -31,6 +34,7 @@ DllMain (HANDLE hModule, DWORD dwReason, LPVOID lpReserved)
     if (dwReason == DLL_PROCESS_ATTACH) {
 	/* don't call DLL_THREAD_ATTACH; I don't care to know. */
 	DisableThreadLibraryCalls(hModule);
+	iocpModule = hModule;
     }
     return TRUE;
 }

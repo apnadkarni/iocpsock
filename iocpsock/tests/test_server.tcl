@@ -1,14 +1,28 @@
-package require Iocpsock
+#package require Iocpsock
 
 set count 0
+if {[info exist s]} {close $s}
 
 proc accept {s addr port} {
-    #global count
     #puts "new connection from $addr:$port on $s"
-    #incr count
-    #after 50
-    close $s
+    fconfigure $s -blocking 0 -buffering none -translation binary
+    fileevent $s readable [list GotRead $s]
 }
-
+proc GotRead {s} {
+    if {[string length [set e [fconfigure $s -error]]]} {
+	puts "error: $s: $e : closing socket"
+	close $s
+	return
+    }
+    if {![catch {read $s}]} {
+	catch {puts $s "hi there"}
+    }
+    if {[eof $s]} {
+	#puts "closing $s"
+	catch {close $s}
+    }
+}
 set s [socket2 -server accept -myaddr [info hostname] 5150]
-console show
+fconfigure $s -acceptpool 500
+
+catch {console show}

@@ -39,7 +39,7 @@ BEGIN
 	BEGIN
             VALUE "Comments", "http://sf.net/projects/iocpsock\0"
             VALUE "CompanyName", "Lyris Technologies, Inc.\0"
-            VALUE "FileDescription", "IOCP " IOCPSOCK_VERSION "socket channel driver for Tcl\0"
+            VALUE "FileDescription", "IOCP socket channel driver extension v" IOCPSOCK_VERSION " for Tool Command Language\0"
             VALUE "FileVersion", IOCPSOCK_PATCH_LEVEL
             VALUE "InternalName", "iocpsock\0"
             VALUE "LegalCopyright", "Copyright © 2003-2004 by David Gravereaux under BSD license\0"

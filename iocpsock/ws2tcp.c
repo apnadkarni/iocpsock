@@ -9,6 +9,8 @@ static WS2ProtocolData tcp4ProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -21,14 +23,15 @@ static WS2ProtocolData tcp6ProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 
 static SocketInfo *	CreateTcpSocket(Tcl_Interp *interp,
 				CONST char *port, CONST char *host,
 				int server, CONST char *myaddr,
-				CONST char *myport, int async,
-				int overlappedCount);
+				CONST char *myport, int async);
 
 /*
  *----------------------------------------------------------------------
@@ -64,13 +67,11 @@ Iocp_OpenTcpClient(
      * Create a new client socket and wrap it in a channel.
      */
 
-    infoPtr = CreateTcpSocket(interp, port, host, 0, myaddr, myport, async, 0);
+    infoPtr = CreateTcpSocket(interp, port, host, 0, myaddr, myport, async);
     if (infoPtr == NULL) {
 	return NULL;
     }
-
-    wsprintfA(channelName, "iocp%p", infoPtr);
-
+    wsprintf(channelName, "iocp%lu", infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-translation",
@@ -117,8 +118,7 @@ Iocp_OpenTcpServer(
     Tcl_TcpAcceptProc *acceptProc,
 				/* Callback for accepting connections
 				 * from new clients. */
-    ClientData acceptProcData,	/* Data for the callback. */
-    int overlappedCount)
+    ClientData acceptProcData)	/* Data for the callback. */
 {
     SocketInfo *infoPtr;
     char channelName[16 + TCL_INTEGER_SPACE];
@@ -127,7 +127,7 @@ Iocp_OpenTcpServer(
      * Create a new client socket and wrap it in a channel.
      */
 
-    infoPtr = CreateTcpSocket(interp, port, host, 1 /*server*/, NULL, 0, 0, overlappedCount);
+    infoPtr = CreateTcpSocket(interp, port, host, 1 /*server*/, NULL, 0, 0);
     if (infoPtr == NULL) {
 	return NULL;
     }
@@ -155,10 +155,8 @@ CreateTcpSocket(
 				 * else 0 for a client socket. */
     CONST char *myaddr,		/* Optional client-side address */
     CONST char *myport,		/* Optional client-side port */
-    int async,			/* If nonzero, connect client socket
+    int async)			/* If nonzero, connect client socket
 				 * asynchronously. */
-    int overlappedCount)	/* How many overlapped AcceptEx calls do
-				 * we want? */
 {
     u_long flag = 1;		/* Indicates nonblocking mode. */
     int asyncConnect = 0;	/* Will be 1 if async connect is
@@ -224,43 +222,7 @@ CreateTcpSocket(
 	goto error2;
     }
 
-    /* is it cached? */
-    if (pdata->AcceptEx == NULL) {
-	/* Get the LSP specific functions. */
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-		&AcceptExGuid, sizeof(GUID),
-		&pdata->AcceptEx,
-		sizeof(pdata->AcceptEx),
-		&bytes, NULL, NULL);
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-		&GetAcceptExSockaddrsGuid, sizeof(GUID),
-		&pdata->GetAcceptExSockaddrs,
-		sizeof(pdata->GetAcceptExSockaddrs),
-		&bytes, NULL, NULL);
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-		&ConnectExGuid, sizeof(GUID),
-		&pdata->ConnectEx,
-		sizeof(pdata->ConnectEx),
-		&bytes, NULL, NULL);
-	if (pdata->ConnectEx == NULL) {
-	    /* Use our lame Win2K/NT4 emulation for this. */
-	    pdata->ConnectEx = OurConnectEx;
-	}
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-		&DisconnectExGuid, sizeof(GUID),
-		&pdata->DisconnectEx,
-		sizeof(pdata->DisconnectEx),
-		&bytes, NULL, NULL);
-	if (pdata->DisconnectEx == NULL) {
-	    /* There is no Win2K/NT4 emulation for this. */
-	    pdata->DisconnectEx = NULL;
-	}
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-		&TransmitFileGuid, sizeof(GUID),
-		&pdata->TransmitFile,
-		sizeof(pdata->TransmitFile),
-		&bytes, NULL, NULL);
-    }
+    IocpInitProtocolData(sock, pdata);
 
     /*
      * Win-NT has a misfeature that sockets are inherited in child
@@ -327,11 +289,11 @@ CreateTcpSocket(
 	/* create the queue for holding ready ones */
 	infoPtr->readyAccepts = IocpLLCreate();
 
-	/* post IOCP_ACCEPT_COUNT accepts. */
-        for(i=0; i < overlappedCount ;i++) {
+	/* post default IOCP_INITIAL_ACCEPT_COUNT accepts. */
+        for(i=0; i < IOCP_ACCEPT_CAP ;i++) {
 	    BufferInfo *bufPtr;
 	    bufPtr = GetBufferObj(infoPtr, 0);
-	    if (PostOverlappedAccept(infoPtr, bufPtr) != NO_ERROR) {
+	    if (PostOverlappedAccept(infoPtr, bufPtr, 0) != NO_ERROR) {
 		/* Oh no, the AcceptEx failed. */
 		FreeBufferObj(bufPtr);
 		goto error1;
@@ -368,7 +330,7 @@ CreateTcpSocket(
 		goto error2;
 	    }
 
-	    InterlockedIncrement(&infoPtr->OutstandingOps);
+	    InterlockedIncrement(&infoPtr->outstandingOps);
 
 	    code = pdata->ConnectEx(sock, addr->ai_addr,
 		    addr->ai_addrlen, NULL, 0, &bytes, &bufPtr->ol);
@@ -377,7 +339,7 @@ CreateTcpSocket(
 
 	    if (code == FALSE) {
 		if (winSock.WSAGetLastError() != WSA_IO_PENDING) {
-		    InterlockedDecrement(&infoPtr->OutstandingOps);
+		    InterlockedDecrement(&infoPtr->outstandingOps);
 		    FreeBufferObj(bufPtr);
 		    goto error1;
 		}
@@ -400,8 +362,8 @@ CreateTcpSocket(
 
 	    infoPtr->llPendingRecv = IocpLLCreate();
 
-	    /* post IOCP_RECV_COUNT recvs. */
-	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
+	    /* post IOCP_INITIAL_RECV_COUNT recvs. */
+	    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
 		bufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
 		PostOverlappedRecv(infoPtr, bufPtr, 0);
 	    }

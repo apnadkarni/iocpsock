@@ -12,13 +12,13 @@
 #ifndef INCL_iocpsock_h_
 #define INCL_iocpsock_h_
 
-#define IOCPSOCK_MAJOR_VERSION   1
-#define IOCPSOCK_MINOR_VERSION   1
+#define IOCPSOCK_MAJOR_VERSION   2
+#define IOCPSOCK_MINOR_VERSION   0
 #define IOCPSOCK_RELEASE_LEVEL   TCL_FINAL_RELEASE
 #define IOCPSOCK_RELEASE_SERIAL  0
 
-#define IOCPSOCK_VERSION	"1.1"
-#define IOCPSOCK_PATCH_LEVEL	"1.1.0"
+#define IOCPSOCK_VERSION	"2.0"
+#define IOCPSOCK_PATCH_LEVEL	"2.0.0"
 
 
 #ifndef RC_INVOKED
@@ -154,6 +154,7 @@ typedef struct {
 
 extern WinsockProcs winSock;
 extern int initialized;
+extern HMODULE iocpModule;
 
 /* wspiapi.h doesn't like typedefs, so fix it. */
 #define inet_addr	winSock.inet_addr
@@ -191,6 +192,8 @@ typedef struct {
     int	type;		    /* Address type. */
     int	protocol;	    /* protocol type. */
     size_t addrLen;	    /* length of protocol specific SOCKADDR */
+
+    /* LSP specific extension functions */
     LPFN_ACCEPTEX		AcceptEx;
     LPFN_GETACCEPTEXSOCKADDRS	GetAcceptExSockaddrs;
     LPFN_CONNECTEX		ConnectEx;
@@ -201,19 +204,10 @@ typedef struct {
        requests will be processed at a time. You must be running on
        Windows NT or Windows 2000 Server, Windows 2000 Advanced Server,
        or Windows 2000 Data Center to get full usage of this specialized
-       APIs. */
-
+       API. */
+    LPFN_TRANSMITPACKETS	TransmitPackets;
+    LPFN_WSARECVMSG		WSARecvMsg;
 } WS2ProtocolData;
-
-/*
- * GUIDs used for the WSAIoctl call to get the function address from the
- * LSP.
- */
-extern GUID AcceptExGuid;		/* AcceptEx() */
-extern GUID GetAcceptExSockaddrsGuid;	/* GetAcceptExSockaddrs() */
-extern GUID ConnectExGuid;		/* ConnectEx() */
-extern GUID DisconnectExGuid;		/* DisconnectEx() */
-extern GUID TransmitFileGuid;		/* TransmitFile() */
 
 /* Linked-List node object. */
 struct _ListNode;
@@ -252,14 +246,13 @@ typedef struct _BufferInfo {
 #   define OP_ACCEPT	0   /* AcceptEx() */
 #   define OP_READ	1   /* WSARecv()/WSARecvFrom() */
 #   define OP_WRITE	2   /* WSASend()/WSASendTo() */
-#   define OP_CONNECT	3   /* ConnectEx */
+#   define OP_CONNECT	3   /* ConnectEx() */
 #   define OP_DISCONNECT 4  /* DisconnectEx() */
 #   define OP_TRANSMIT	5   /* TransmitFile() */
 #   define OP_IOCTL	6   /* WSAIoctl() */
-#   define OP_LOOKUP	7   /* TODO: For future use */
+#   define OP_LOOKUP	7   /* TODO: For future use, WSANSIoctl()?? */
     int operation;	    /* Type of operation issued */
     LPSOCKADDR addr;	    /* addr storage space for WSARecvFrom/WSASendTo. */
-    ULONG IoOrder;	    /* Order in which this I/O was posted */
     LLNODE node;	    /* linked list node */
 } BufferInfo;
 
@@ -287,7 +280,6 @@ typedef struct _BufferInfo {
 typedef struct ThreadSpecificData {
     Tcl_ThreadId threadId;
     LPLLIST readySockets;
-    HANDLE needAwake;
 } ThreadSpecificData;
 
 extern Tcl_ThreadDataKey dataKey;
@@ -301,14 +293,29 @@ extern Tcl_ThreadDataKey dataKey;
 #define IOCP_CLOSING	    (1<<1)
 #define IOCP_ASYNC	    (1<<2)
 
+#pragma pack (push, 4)
+
 typedef struct SocketInfo {
     Tcl_Channel channel;	    /* Tcl channel for this socket. */
     SOCKET socket;		    /* Windows SOCKET handle. */
     DWORD flags;		    /* info about this socket. */
-    LONG ready;			    /* indicates a ready event.  Access
+
+    /* we need 32-bit alignment for these: */
+    volatile LONG ready;	    /* indicates a ready event.  Access
 				     * must be protected with the
 				     * tsdPtr->readySockets->lock critical
 				     * section. */
+    volatile LONG outstandingOps;   /* Count of all overlapped operations. */
+    volatile LONG outstandingSends; /* Count of overlapped WSASend() operations. */
+    volatile LONG outstandingSendCap; /* Limit of outstanding overlapped WSASend
+				     * operations allowed. */
+    volatile LONG outstandingAccepts; /* Count of overlapped AcceptEx() operations. */
+    volatile LONG outstandingAcceptCap; /* Limit of outstanding overlapped AcceptEx
+				     * operations allowed. */
+    volatile LONG outstandingRecvs; /* Count of overlapped WSARecv() operations. */
+    volatile LONG outstandingRecvCap; /* Limit of outstanding overlapped WSARecv
+				     * operations allowed. */
+
     int watchMask;		    /* events we are interested in. */
     WS2ProtocolData *proto;	    /* Network protocol info. */
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
@@ -323,11 +330,12 @@ typedef struct SocketInfo {
     LPSOCKADDR remoteAddr;	    /* Remote sockaddr. */
 
     DWORD lastError;		    /* Error code from last operation. */
-    volatile LONG OutstandingOps;
     HANDLE allDone;		    /* manual reset event */
     LPLLIST llPendingRecv;	    /* Our pending recv list. */
 
 } SocketInfo;
+
+#pragma pack (pop)
 
 typedef struct IocpAcceptInfo {
     SOCKADDR_STORAGE local;
@@ -362,6 +370,7 @@ extern CompletionPortInfo IocpSubSystem;
 TCL_DECLARE_MUTEX(initLock)
 
 extern ThreadSpecificData *InitSockets();
+extern void		IocpInitProtocolData (SOCKET sock, WS2ProtocolData *pdata);
 extern int		CreateSocketAddress (const char *addr,
 			    const char *port, LPADDRINFO inhints,
 			    LPADDRINFO *result);
@@ -373,9 +382,9 @@ extern Tcl_Channel	Iocp_OpenTcpClient (Tcl_Interp *interp,
 extern Tcl_Channel	Iocp_OpenTcpServer (Tcl_Interp *interp,
 			    CONST char *port, CONST char *host,
 			    Tcl_TcpAcceptProc *acceptProc,
-			    ClientData acceptProcData, int overlappedCount);
+			    ClientData acceptProcData);
 extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
-			    BufferInfo *acceptobj);
+			    BufferInfo *acceptobj, int useBurst);
 extern DWORD		PostOverlappedRecv (SocketInfo *infoPtr,
 			    BufferInfo *recvobj, int useBurst);
 extern void		HandleIo(SocketInfo *infoPtr, BufferInfo *bufPtr,
@@ -392,6 +401,8 @@ extern int		HasSockets (Tcl_Interp *interp);
 extern char *		GetSysMsg (DWORD id);
 extern Tcl_Obj *	GetSysMsgObj (DWORD id);
 extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
+
+/* private memory stuff */
 extern __inline LPVOID	IocpAlloc (SIZE_T size);
 extern __inline LPVOID  IocpReAlloc (LPVOID block, SIZE_T size);
 extern __inline BOOL	IocpFree (LPVOID block);
@@ -425,44 +436,89 @@ extern BOOL		IocpLLIsNotEmpty (LPLLIST ll);
 extern BOOL		IocpLLNodeDestroy (LPLLNODE node);
 extern SIZE_T		IocpLLGetCount (LPLLIST ll);
 
+/*
+ * Error code management.  The first four are missing from the core
+ * which is why I prefix them with Tcl_ .
+ */
+extern CONST char *	Tcl_Win32ErrId (DWORD errorCode);
+extern CONST char *	Tcl_Win32ErrMsg TCL_VARARGS_DEF(DWORD, arg1);
+extern CONST char *	Tcl_Win32ErrMsgVA (DWORD errorCode, va_list argList);
+extern CONST char *	Tcl_Win32Error TCL_VARARGS_DEF(Tcl_Interp *, arg1);
+extern CONST char *	IocpErrId (DWORD errorCode);
+extern CONST char *	IocpErrMsg TCL_VARARGS_DEF(DWORD, arg1);
+extern CONST char *	IocpErrMsgVA (DWORD errorCode, va_list argList);
+extern CONST char *	IocpError TCL_VARARGS_DEF(Tcl_Interp *, arg1);
+
 /* special hack jobs! */
 extern BOOL PASCAL	OurConnectEx(SOCKET s,
 			    const struct sockaddr* name, int namelen,
 			    PVOID lpSendBuffer, DWORD dwSendDataLength,
 			    LPDWORD lpdwBytesSent,
 			    LPOVERLAPPED lpOverlapped);
-
 /*
  * ----------------------------------------------------------------------
  * Some stuff that needs to be switches or fconfigures, but aren't yet.
  * ----------------------------------------------------------------------
  */
 
-/* We do not want an initial recv() with a new connection */
-#define IOCP_ACCEPT_BUFSIZE	0
+/*
+ * Default number of overlapped AcceptEx calls to place on a new
+ * listening socket.  Base minimum allowed, found by experimentation.
+ * This is the base pool count.  Don't go below this number or the
+ * listening socket will start returning errors quite easily.
+ *
+ * Use the -acceptpool fconfigure on the listening socket to set the
+ * pool size.  Each overlapped AcceptEx call will reserve ~500 bytes
+ * of the non-paged memory pool.  Larger IS better, if you don't mind
+ * the memory in reserve.  Choose a good sized -acceptpool such as 500
+ * if you want it "bunker buster proof".  The NP pool is a global
+ * resource for all processes and is said to have a limit around 1/4 of
+ * the physical memory.  500 overlapped AccepEx calls * ~500 bytes = ~250K
+ * of reserved NP pool memory.  Only use such high -acceptpool sizes
+ * for VERY heavy load servers that you want to handle SYN attacks
+ * gracefully.
+ */
+
+/* This is the -acceptpool fconfigure's default value. */
+#define IOCP_ACCEPT_CAP		    50
+
+/*
+ * We do not want an initial recv() with a new connection.  Use of this
+ * feature would require a watchdog thread for doing clean-up of mid-state
+ * (connected, but no data yet) connections and is just asking to be a DoS
+ * hole..  Not only that, but only works on protocols where the client
+ * speaks first.  HTTP may be one, but many others are not.
+ *
+ *  !DO NOT USE THIS FEATURE!  Turn it off.
+ */
+#define IOCP_ACCEPT_BUFSIZE	    0
 
 /*
  * Initial count of how many WSARecv(From) calls to place on a connected
  * socket.  The actual count can grow automatically based on burst
- * activity (See the recursion used in PostOverlappedRecv for details).
+ * activity to the cap count (See the recursion used in PostOverlappedRecv
+ * for details).
  */
-#define IOCP_RECV_COUNT		1
+
+#define IOCP_INITIAL_RECV_COUNT	    1
+/* This is the -recvburst fconfigure's default value. */
+#define IOCP_RECV_CAP		    20
 
 /*
  * How large do we want the receive buffers?  Use multiples of the
  * page size only (4096) as windows will lock this on page boundaries
  * anyways.
  */
-#define IOCP_RECV_BUFSIZE	4096
+
+#define IOCP_RECV_BUFSIZE	    4096
 
 /*
- * Count of how many active WSASend(to) calls do we want.  Too high a
- * value can cause gross memory eating behavior when the socket is
- * attached localhost.  As far as I can tell, both sides go wild in a
- * state which doesn't seem to move much data quickly.  This must be
- * capped.
+ * Initial (default) cap on send concurrency.
  */
-#define IOCP_SEND_CONCURRENCY	200
+
+/* This is the -sendpool fconfigure's default value. */
+#define IOCP_SEND_CAP		    20
+
 
 #endif  /* #ifndef RC_INVOKED */
 #endif /* #ifndef INCL_iocpsock_h_ */
