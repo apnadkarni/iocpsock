@@ -67,10 +67,10 @@ static DWORD	    PostOverlappedSend (SocketInfo *infoPtr,
 static DWORD WINAPI CompletionThreadProc (LPVOID lpParam);
 
 /*
- * This structure describes the channel type structure for TCP socket
- * based I/O using the native overlapped interface along with completion
- * ports for maximum efficiency so that most operation are done entirely
- * in kernel-mode.
+ * This structure describes the channel type structure to Tcl's generic layer
+ * for winsock based I/O using the native overlapped interface along with
+ * completion ports for maximum efficiency so that most operation are done
+ * entirely in kernel-mode.
  */
 
 Tcl_ChannelType IocpChannelType = {
@@ -776,7 +776,8 @@ IocpCloseProc (
 	infoPtr->flags |= IOCP_CLOSING;
 	infoPtr->channel = NULL;
 
-	if (infoPtr->proto->type == SOCK_STREAM) {
+	/* Only on stream sockets that aren't listening */
+	if (infoPtr->proto->type == SOCK_STREAM && !infoPtr->acceptProc) {
 	    err = winSock.WSASendDisconnect(infoPtr->socket, NULL);
 	}
 	err = winSock.closesocket(infoPtr->socket);
@@ -884,8 +885,8 @@ IocpInputProc (
 	    if (infoPtr->flags & IOCP_BLOCKING) break;
 	}
     } else  {
-	/* If there's nothing to get, return EAGAIN. */
-	*errorCodePtr = EAGAIN;
+	/* If there's nothing to get, return EWOULDBLOCK. */
+	*errorCodePtr = EWOULDBLOCK;
 	return -1;
     }
 
@@ -1530,7 +1531,7 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	/*
 	 * Tested under extreme listening socket abuse it was found that
 	 * this logic condition is never met.  AcceptEx _never_ completes
-	 * immediatly.  It always returns WSA_IO_PENDING.  Too bad,
+	 * immediately.  It always returns WSA_IO_PENDING.  Too bad,
 	 * as this was looking like a good way to detect and handle burst
 	 * conditions.
 	 */
@@ -1899,8 +1900,12 @@ HandleIo (
 		FreeBufferObj(bufPtr);
 	    }
 
+	} else if (bufPtr->WSAerr == WSA_OPERATION_ABORTED ||
+		bufPtr->WSAerr == WSAENOTSOCK) {
+	    FreeBufferObj(bufPtr);
+	    break;
+
 	} else {
-	    /* WSA_OPERATION_ABORTED appears to be the only error ever. */
 	    FreeBufferObj(bufPtr);
 	}
     
