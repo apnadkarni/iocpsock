@@ -1,3 +1,50 @@
+2003-04-30  davygrvy
+	* bits.txt:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Yet again (but this is good), all bugs fixed.
+
+2003-03-29  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		absolutely final edits for 1.0
+
+2003-03-26  davygrvy
+	* iocpsock.h:
+	* iocpsock_hilevel.c:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		final changes.  This is version 1.0, done.
+
+2003-03-21  davygrvy
+	* iocpsock_lolevel.c:
+		Much harder...  As bullet proof as a tank.
+
+	* iocpsock.h:
+		matched to other source changes
+
+	* ws2tcp.c:
+		small trim.
+
+	* ws2tcp.c:
+		removed an unused local var.
+
+2003-03-19  davygrvy
+	* iocpsock_lolevel.c:
+		commentary additions
+
+	* ws2tcp.c:
+		Added missing code to setup recieving data on a blocking
+		connected socket.  Whoops!
+
+2003-03-15  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Tried to add a socket recyclebin, but the complexity is a bit
+		much for now.  Maybe later I'll add it.  Not now.
+
 2003-03-15  davygrvy
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
