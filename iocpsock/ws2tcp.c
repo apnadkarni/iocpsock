@@ -314,9 +314,6 @@ CreateTcpSocket(
 	/* create the queue for holding ready ones */
 	infoPtr->readyAccepts = IocpLLCreate();
 
-	/* Create the recycle bin. */
-//	infoPtr->socketRecycleBin = IocpLLCreate();
-
 	IocpLLPushBack(IocpSubSystem.listeningSockets, infoPtr, &infoPtr->node);
 
 	/* post IOCP_ACCEPT_COUNT accepts. */
@@ -353,9 +350,8 @@ CreateTcpSocket(
 	    code = pdata->ConnectEx(sock, addr->ai_addr,
 		    addr->ai_addrlen, NULL, 0, &bytes, &bufPtr->ol);
 
-	    WSAerr = winSock.WSAGetLastError();
 	    if (code == FALSE) {
-		if (WSAerr != WSA_IO_PENDING) {
+		if (winSock.WSAGetLastError() != WSA_IO_PENDING) {
 		    FreeBufferObj(bufPtr);
 		    FreeSocketAddress(hostaddr);
 		    goto error;
