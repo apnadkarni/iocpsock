@@ -179,8 +179,24 @@ CreateTcpSocket(
     hints.ai_protocol = IPPROTO_TCP;
 
     /* discover both/either ipv6 and ipv4. */
-    if (! CreateSocketAddress(host, port, &hints, &hostaddr)) {
-	goto error1;
+    if (host == NULL && !strcmp(port, "0")) {
+	/* Win2K hack.  Ask for port 1, then set to 0 so getaddrinfo() doesn't bomb. */
+	if (! CreateSocketAddress(host, "1", &hints, &hostaddr)) {
+	    goto error1;
+	}
+	addr = hostaddr;
+	while (addr) {
+	    if (addr->ai_family == AF_INET) {
+		((LPSOCKADDR_IN)addr->ai_addr)->sin_port = 0;
+	    } else {
+		IN6ADDR_SETANY((LPSOCKADDR_IN6) addr->ai_addr);
+	    }
+	    addr = addr->ai_next;
+	}
+    } else {
+	if (! CreateSocketAddress(host, port, &hints, &hostaddr)) {
+	    goto error1;
+	}
     }
     addr = hostaddr;
     /* if we have more than one and being passive, choose ipv4. */
