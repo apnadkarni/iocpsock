@@ -933,7 +933,7 @@ IocpCloseProc (
 	/* artificially increment the count. */
 	InterlockedIncrement(&infoPtr->outstandingOps);
 
-	/* Setting this means all incoming operations will get trashed. */
+	/* Setting this means all returning operations will get trashed. */
 	infoPtr->flags |= IOCP_CLOSING;
 
 	/* Tcl now doesn't recognize us anymore, so don't let this dangle. */
@@ -998,6 +998,7 @@ IocpCloseProc (
 		    PostOverlappedDisconnect(infoPtr, bufPtr);
 		} else {
 		    /* TODO: untested. */
+		    infoPtr->flags |= IOCP_CLOSABLE;
 		    CancelIo((HANDLE)infoPtr->socket);
 		}
 	    } else {
