@@ -154,7 +154,7 @@ InitSockets()
 	iocpModule = TclWinGetTclInstance();
 #endif
 
-//	ZeroMemory(&winSock, sizeof(winSock));
+	ZeroMemory(&winSock, sizeof(WinsockProcs));
 
 	/*
 	 * Try ws2_32.dll first, if available.
@@ -930,25 +930,21 @@ IocpCloseProc (
      */
     if (initialized) {
 
-	EnterCriticalSection(&infoPtr->tsdHome->readySockets->lock);
-	
 	/* Flip the bit so no new stuff can ever come in again. */
 	InterlockedExchange(&infoPtr->markedReady, 1);
-
-	/* artificially increment the count. */
-	InterlockedIncrement(&infoPtr->outstandingOps);
-
-	LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
 
 	/* Setting this means all returning operations will get
 	 * trashed. */
 	infoPtr->flags |= IOCP_CLOSING;
 
+	/* artificially increment the count. */
+	InterlockedIncrement(&infoPtr->outstandingOps);
+
 	/* Tcl now doesn't recognize us anymore, so don't let this
 	 * dangle. */
 	infoPtr->channel = NULL;
 
-	/* Remove ourselves from the readySockets list, if we're on it. */
+	/* Remove ourselves from the readySockets list. */
 	IocpLLPop(&infoPtr->node, IOCP_LL_NODESTROY);
 
 	/* Remove all events queued in the event loop for this socket. */
@@ -1220,7 +1216,7 @@ IocpSetOptionProc (
 	return TCL_OK;
 
     } else if (strcmp(optionName, "-backlog") == 0 && infoPtr->acceptProc) {
-	int i;
+	int i, error = TCL_OK;
 	if (Tcl_GetInt(interp, value, &Integer) != TCL_OK) {
 	    return TCL_ERROR;
 	}
@@ -1230,9 +1226,13 @@ IocpSetOptionProc (
 		TclFormatInt(buf, IOCP_ACCEPT_CAP);
 		Tcl_AppendResult(interp,
 			"only a positive integer not less than ", buf,
-			" is allowed", NULL);
+			" is recommended", NULL);
 	    }
-	    return TCL_ERROR;
+	    error = TCL_ERROR;
+	    if (Integer < 1) {
+		return TCL_ERROR;
+	    }
+	    /* Let an unacceptably low -backlog get set anyways */
 	}
 	infoPtr->outstandingAcceptCap = Integer;
 	/* Now post them in, if outstandingAcceptCap is now larger. */
@@ -1249,7 +1249,7 @@ IocpSetOptionProc (
 		/* TODO: add error reporting */
 	    }
         }
-	return TCL_OK;
+	return error;
 
     } else if (strcmp(optionName, "-sendcap") == 0) {
 	if (Tcl_GetInt(interp, value, &Integer) != TCL_OK) {
@@ -1278,22 +1278,7 @@ IocpSetOptionProc (
 	    }
 	    return TCL_ERROR;
 	}
-#if 0
-	if (InterlockedExchange(&infoPtr->outstandingRecvCap, Integer)
-		== 1 && Integer > 1) {
-	    BufferInfo *newBufPtr;
-	    newBufPtr = GetBufferObj(infoPtr, 0);
-	    /* Bump it out of it's trap. */
-	    if (PostOverlappedRecv(infoPtr, newBufPtr, 1) != NO_ERROR) {
-		/* TODO: return this error. */
-		FreeBufferObj(newBufPtr);
-	    }
-	} else {
-#endif
-	    InterlockedExchange(&infoPtr->outstandingRecvCap, Integer);
-#if 0
-	}
-#endif
+	InterlockedExchange(&infoPtr->outstandingRecvCap, Integer);
 	return TCL_OK;
     }
 
@@ -1700,7 +1685,6 @@ void
 FreeSocketInfo (SocketInfo *infoPtr)
 {
     BufferInfo *bufPtr;
-    AcceptInfo *acptInfo;
 
     if (!infoPtr) return;
 
@@ -1720,6 +1704,7 @@ FreeSocketInfo (SocketInfo *infoPtr)
     }
 
     if (infoPtr->readyAccepts) {
+	AcceptInfo *acptInfo;
 	while ((acptInfo = IocpLLPopFront(infoPtr->readyAccepts,
 		IOCP_LL_NODESTROY, 0)) != NULL) {
 	    /* Recursion, but can't be a server socket.. So this is safe. */
@@ -2205,7 +2190,7 @@ CompletionThreadProc (LPVOID lpParam)
     DWORD bytes, flags, WSAerr, error = NO_ERROR;
     BOOL ok;
 
-#if 0
+#ifdef _DEBUG
 #else
     __try {
 #endif
@@ -2218,7 +2203,7 @@ again:
 
 	if (ok && !infoPtr) {
 	    /* A NULL key indicates closure time for this thread. */
-#if 0
+#ifdef _DEBUG
 	    return error;
 #else
 	    __leave;
@@ -2253,14 +2238,14 @@ again:
 	/* Go handle the IO operation. */
 	HandleIo(infoPtr, bufPtr, cpinfo->port, bytes, WSAerr, flags);
 	goto again;
-#if 0
+#ifdef _DEBUG
 #else
     }
     __except (error = GetExceptionCode(), EXCEPTION_EXECUTE_HANDLER) {
 	char msg[50];
 	DWORD dummy;
 	HANDLE where;
-	wsprintf(msg, "Big ERROR!  Completion thread died with %#x.  "
+	wsprintf(msg, "Big ERROR!  Completion thread died with exception %#x\n"
 		"You MUST restart the application.  "
 		"All socket communication has halted.\n", error);
 	OutputDebugString(msg);
@@ -2398,6 +2383,16 @@ HandleIo (
 	    FreeBufferObj(bufPtr);
 	    break;
 
+	} else if (bufPtr->WSAerr == WSAENOBUFS) {
+	    /*
+	     * No more space! The pending limit has been reached.
+	     * Decrement the asking cap by one.
+	     */
+
+	    InterlockedDecrement(&infoPtr->outstandingAcceptCap);
+	    FreeBufferObj(bufPtr);
+	    break;
+
 	} else {
 	    /*
 	     * Possible SYN flood in progress. We WANT this returning
@@ -2447,8 +2442,19 @@ HandleIo (
 		    FreeBufferObj(newBufPtr);
 		}
 	    }
+
 	} else if (infoPtr->flags & IOCP_CLOSING && infoPtr->flags & IOCP_ASYNC) {
 	    infoPtr->flags |= IOCP_CLOSABLE;
+	    FreeBufferObj(bufPtr);
+	    break;
+
+	} else if (bufPtr->WSAerr == WSAENOBUFS) {
+	    /*
+	     * No more space! The pending limit has been reached.
+	     * Decrement the asking cap by one.
+	     */
+
+	    InterlockedDecrement(&infoPtr->outstandingRecvCap);
 	    FreeBufferObj(bufPtr);
 	    break;
 	}
@@ -2471,15 +2477,27 @@ HandleIo (
 	    break;
 	}
 
-	if (bufPtr->WSAerr != NO_ERROR && infoPtr->llPendingRecv) {
+	if (bufPtr->WSAerr != NO_ERROR && bufPtr->WSAerr != WSAENOBUFS
+		&& infoPtr->llPendingRecv) {
 	    newBufPtr = GetBufferObj(infoPtr, 0);
 	    newBufPtr->WSAerr = bufPtr->WSAerr;
 	    /* Force EOF on the read side, too, for a write side error. */
 	    IocpPushRecvAlertToTcl(infoPtr, newBufPtr);
+
 	} else if (infoPtr->watchMask & TCL_WRITABLE &&
 		infoPtr->outstandingSends < infoPtr->outstandingSendCap) {
-	    /* can write more. */
-	    IocpZapTclNotifier(infoPtr);
+
+	    if (bufPtr->WSAerr == WSAENOBUFS) {
+		/*
+		 * No more space! The pending limit has been reached.
+		 * Decrement the asking cap by one.
+		 */
+
+		InterlockedDecrement(&infoPtr->outstandingSendCap);
+	    } else {
+		/* can write more. */
+		IocpZapTclNotifier(infoPtr);
+	    }
 	}
 	FreeBufferObj(bufPtr);
 	break;
