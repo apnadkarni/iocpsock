@@ -1,8 +1,5 @@
 #include "iocpsock.h"
 
-static GUID guidAcceptEx = WSAID_ACCEPTEX;
-static GUID guidGetAcceptExSockaddrs = WSAID_GETACCEPTEXSOCKADDRS;
-
 static WS2ProtocolData tcp4ProtoData = {
     AF_INET,
     SOCK_STREAM,
