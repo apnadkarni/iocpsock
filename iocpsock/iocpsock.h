@@ -112,6 +112,7 @@ extern int initialized;
 #define inet_addr	winSock.inet_addr
 #define gethostbyname   winSock.gethostbyname
 #define WSAGetLastError winSock.WSAGetLastError
+#define WSASetLastError winSock.WSASetLastError
 #define htons		winSock.htons
 #define getservbyname   winSock.getservbyname
 #define htonl		winSock.htonl
@@ -124,6 +125,7 @@ extern int initialized;
 #undef inet_addr
 #undef gethostbyname
 #undef WSAGetLastError
+#undef WSASetLastError
 #undef htons
 #undef getservbyname
 #undef htonl

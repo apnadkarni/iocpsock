@@ -2586,7 +2586,7 @@ CreateSocketAddress (
     result = getaddrinfo(addr, port, phints, paddrinfo);
 
     if (result != 0) {
-	winSock.WSASetLastError(result);
+//	winSock.WSASetLastError(result);
 	return 0;
     }
     return 1;
