@@ -375,6 +375,6 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
 /* some stuff that needs to be switches or fconfigures, but aren't yet */
 #define IOCP_ACCEPT_COUNT	40
 #define IOCP_ACCEPT_BUFSIZE	0    /* more than zero means we want a receive with the accept */
-#define IOCP_RECV_COUNT		1
+#define IOCP_RECV_COUNT		2
 #define IOCP_RECV_BUFSIZE	4064  /* 4096 - 32 (HeapAlloc contains some management code)*/
-#define IOCP_SEND_CONCURRENCY	4
+#define IOCP_SEND_CONCURRENCY	2

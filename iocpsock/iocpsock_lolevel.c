@@ -15,6 +15,9 @@
 // TODO: fixme!
 #define IOCP_OUT_OF_ORDER_NOT_WORKING	1
 
+// WSARecv and AcceptEx can tell if more are needed immediatly.
+#define IOCP_USE_BURST_DETECTION	1
+
 /*
  * The following declare the winsock loading error codes.
  */
@@ -1476,7 +1479,9 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	    InterlockedDecrement(&infoPtr->OutstandingOps);
 	    return WSAerr;
 	}
-    } else {
+    }
+#if IOCP_USE_BURST_DETECTION
+    else {
 	BufferInfo *newBufPtr;
 	
 	/*
@@ -1489,6 +1494,7 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	    FreeBufferObj(newBufPtr);
 	}
     }
+#endif
 
     return NO_ERROR;
 }
@@ -1527,7 +1533,9 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	    InterlockedDecrement(&infoPtr->OutstandingOps);
 	    return WSAerr;
 	}
-    } else {
+    }
+#if IOCP_USE_BURST_DETECTION
+    else {
 	BufferInfo *newBufPtr;
 
 	/*
@@ -1540,6 +1548,7 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	    FreeBufferObj(newBufPtr);
 	}
     }
+#endif
 
     return NO_ERROR;
 }
