@@ -1038,6 +1038,9 @@ IocpGetOptionProc (
     size_t len = 0;
     char buf[TCL_INTEGER_SPACE];
 
+    Tcl_DString temp;
+    DWORD tempLen;
+
     
     if (!initialized) {
 	return TCL_OK;
@@ -1084,8 +1087,20 @@ IocpGetOptionProc (
             Tcl_DStringAppendElement(dsPtr, "-peername");
             Tcl_DStringStartSublist(dsPtr);
         }
-        Tcl_DStringAppendElement(dsPtr,
-                winSock.inet_ntoa(((LPSOCKADDR_IN)infoPtr->remoteAddr)->sin_addr));
+
+	/*
+	 * Get the "human-readable string representation of the address"
+	 * using the protocol neutral WSAAddressToString().
+	 */
+
+	Tcl_DStringInit(&temp);
+	tempLen = temp.spaceAvl;
+	winSock.WSAAddressToStringA(infoPtr->remoteAddr,
+		infoPtr->proto->addrLen, NULL, Tcl_DStringValue(&temp),
+		&tempLen);
+	Tcl_DStringSetLength(&temp, tempLen);
+        Tcl_DStringAppendElement(dsPtr, Tcl_DStringValue(&temp));
+	Tcl_DStringFree(&temp);
 
 	if (((LPSOCKADDR_IN)infoPtr->remoteAddr)->sin_addr.s_addr == 0) {
 	    hostEntPtr = (struct hostent *) NULL;
@@ -1127,8 +1142,21 @@ IocpGetOptionProc (
             Tcl_DStringAppendElement(dsPtr, "-sockname");
             Tcl_DStringStartSublist(dsPtr);
         }
-        Tcl_DStringAppendElement(dsPtr,
-                winSock.inet_ntoa(((LPSOCKADDR_IN)infoPtr->localAddr)->sin_addr));
+
+	/*
+	 * Get the "human-readable string representation of the address"
+	 * using the protocol neutral WSAAddressToString().
+	 */
+
+	Tcl_DStringInit(&temp);
+	tempLen = temp.spaceAvl;
+	winSock.WSAAddressToStringA(infoPtr->localAddr,
+		infoPtr->proto->addrLen, NULL, Tcl_DStringValue(&temp),
+		&tempLen);
+	Tcl_DStringSetLength(&temp, tempLen);
+        Tcl_DStringAppendElement(dsPtr, Tcl_DStringValue(&temp));
+	Tcl_DStringFree(&temp);
+
 	if (((LPSOCKADDR_IN)infoPtr->localAddr)->sin_addr.s_addr == 0) {
 	    hostEntPtr = (struct hostent *) NULL;
 	} else {
