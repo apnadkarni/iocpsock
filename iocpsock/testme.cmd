@@ -12,5 +12,9 @@ if not defined MSSdk (
     ::call c:\dev\platsdk\SetEnv.bat /RETAIL
 )
 
-nmake -nologo -csf makefile.vc TCLDIR=..\tcl test
+if not defined TCLDIR (
+    set TCLDIR=..\tcl
+)
+
+nmake -nologo -csf makefile.vc test
 pause

@@ -1,4 +1,152 @@
+2004-03-10  davygrvy
+	* .cvsignore:
+	* dllmain.c:
+	* hackersguide.txt:
+	* iocpsock.h:
+	* iocpsock.rc:
+	* iocpsock_hilevel.c:
+	* iocpsock_lolevel.c:
+	* makefile.vc:
+	* testme.cmd:
+	* tests/socket2.test:
+	* tests/test_client.tcl:
+	* tests/test_server.tcl:
+	* win32err.c:
+	* ws2tcp.c:
+		Getting ready for a 2.0 release
+
+	* iocpsock_lolevel.c:
+		check for error on replacing WSARecvs in HandleIo()
+
+	* ws2apltalk.c:
+	* ws2atm.c:
+	* ws2decnet.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+	* ws2isotp4.c:
+	* ws2netbios.c:
+	* ws2udp.c:
+	* ws2vines.c:
+		Increased the size of the WS2ProtocolData struct declarations to match the
+		added vectors.
+
+2004-03-09  davygrvy
+	* readme.txt:
+		updated info.
+
+2004-03-05  davygrvy
+	* resource.h:
+		(deleted): no longer needed.
+
+2004-03-04  davygrvy
+	* iocpsock.dsp:
+	* iocpsock.dsw:
+		added the synflood project
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* linkedlist.c:
+	* makefile.vc:
+		The big efficiency fix.  All polling behavior erraticated.
+
+	* readme.txt:
+		updated.
+
+	* tests/RAWtcpip.h:
+	* tests/socket2.test:
+	* tests/synflood.c:
+	* tests/synflood.dsp:
+	* tests/synflood.dsw:
+		It is what it says it is.
+
+	* makefile.vc:
+		install target fixed
+
+2004-03-01  davygrvy
+	* iocpsock_lolevel.c:
+		sweet spot with event loop efficiency found.
+
+	* iocpsock.dsp:
+		corrected paths
+
+2004-02-29  davygrvy
+	* dllmain.c:
+		Use version macro in iocpsock.h for call to Tcl_PkgProvide
+
+2004-02-28  davygrvy
+	* iocpsock.rc:
+		modernized to follow the Tcl style
+
+	* dllmain.c:
+		Restrict to load into 8.3+ for the Tcl Channel APIs in use.
+
+	* ws2tcp.c:
+		need to respect the difference between AF_INET and AF_INET6
+
+	* ws2tcp.c:
+		Fixed Win2K problem with getaddrinfo() bombing asking for any
+		port.
+
+	* iocpsock_lolevel.c:
+		We need to drain all accepts in IocpEventProc now that tsdPtr->
+		readySockets list now represents possbly multple amounts of
+		work on the socket
+
+	* iocpsock.dsp:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* iocpsock_static.dsp:
+	* linkedlist.c:
+	* makefile.vc:
+	* nmakehlp.c:
+	* rules.vc:
+	* ws2tcp.c:
+		first run at an improved model for efficiency with regards to
+		the use of the event loop
+
+2004-02-12  davygrvy
+	* iocpsock_lolevel.c:
+		Removed TCL_WRITABLE from the ready mask.  A socket, if open, is
+		ALWAYS writable..  overlapped-I/O to the rescue.  By being bound-less,
+		memory limit issues may be discovered for sockets that write faster than
+		the wire can return the buffers.  We should watch for this.  Performance
+		is not free.
+
+	* tests/all.tcl:
+		a new test suite begins.
+
+	* tests/socket2.test:
+		let the test suite begin.
+
+2004-02-11  davygrvy
+	* iocpsock.dsp:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Lots of good stuff.  Use of the event loop should be more
+		efficient.  Client sockets are still a problem.
+
+2004-01-12  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Don't call Tcl_ThreadAlert unless we need to.
+
+2003-07-29  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		Test patch for removing send concurrency
+
 2003-07-11  davygrvy
+	* hackersguide.txt:
+		more prose
+
+	* hackersguide.txt:
+	* iocpsock.h:
+		IoOrder member removed from the BufferInfo struct.  More prose added
+		to the guide.
+
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
 	* ws2tcp.c:
@@ -13,17 +161,17 @@
 		of memory per socket per extra buffer used when started.
 
 2003-05-28  davygrvy
-	* ws2tcp.c:
-		Second CreateSocketAddress() call in CreateTcpSocket() wasn't needed.
-		This was causing server sockets to fail when the address data that errored
-		wasn't needed anyways.
-
 	* iocpsock.h:
 	* ws2tcp.c:
 		Turned off the internal send buffers and raised the send conccurency
 		count from 2 to 20.  Overlapped WSASends act like the internal buffers
 		anyway.  Seems natural to turn off the internal ones as this will reduce
 		memcpy operations by user our user buffers directly.
+
+	* ws2tcp.c:
+		Second CreateSocketAddress() call in CreateTcpSocket() wasn't needed.
+		This was causing server sockets to fail when the address data that errored
+		wasn't needed anyways.
 
 	* iocpsock.h:
 		200 is much better.  Worth testing on various systems to
@@ -46,12 +194,12 @@
 		WSAENOTSOCK.  Odd, it isn't documented to return this error.
 
 2003-04-30  davygrvy
+	* iocpsock_lolevel.c:
+		Added ideas for how to do a channel transfer.  Will wait for
+		the TIP to come around.
+
 	* readme.txt:
 		updated version
-
-2003-04-30  davygrvy
-
-	=== TAGGED for version 1.0 ===
 
 	* bits.txt:
 	* iocpsock.h:
@@ -79,10 +227,10 @@
 		matched to other source changes
 
 	* ws2tcp.c:
-		small trim.
+		removed an unused local var.
 
 	* ws2tcp.c:
-		removed an unused local var.
+		small trim.
 
 2003-03-19  davygrvy
 	* iocpsock_lolevel.c:
@@ -99,14 +247,10 @@
 		Tried to add a socket recyclebin, but the complexity is a bit
 		much for now.  Maybe later I'll add it.  Not now.
 
-2003-03-15  davygrvy
-	* iocpsock.h:
-	* iocpsock_lolevel.c:
-	* ws2tcp.c:
-		Tried to add a socket recyclebin, but the complexity is a bit
-		much for now.  Maybe later I'll add it.  Not now.
-
 2003-03-14  davygrvy
+	* bits.txt:
+		just some test scripts.
+
 	* iocpsock.h:
 	* ws2apltalk.c:
 	* ws2atm.c:
@@ -121,20 +265,17 @@
 		WS2ProtoData struct changed to add DisconnectEx and
 		TransmitFile().
 
-	* bits.txt:
-		just some test scripts.
-
 	* iocpsock_static.dsp:
 		new static build project
 
 	* .cvsignore:
 		more globs
 
-	* ws2tcp.c:
-		Tested under WinXP, fixed all ConnectEx problems.
-
 	* dllmain.c:
 		set project version to 1.0
+
+	* ws2tcp.c:
+		Tested under WinXP, fixed all ConnectEx problems.
 
 2003-03-02  davygrvy
 	* iocpsock_lolevel.c:
@@ -151,31 +292,21 @@
 	* readme.txt:
 		preparing for the 0.99 release.
 
-2003-03-01  davygrvy
-
-	== TAGGED iocpsock_0_99 ==
-
-	* dllmain.c:
-	* iocpsock.rc:
-	* iocpsock_lolevel.c:
-	* readme.txt:
-		preparing for the 0.99 release.
-
 2003-02-28  davygrvy
 	* iocpsock_lolevel.c:
 		All resource leaks fixed!
 
 2003-02-27  davygrvy
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		Added a way to turn off/on burst detection for compiling while
+		this is being studied
+
 	* iocpsock_lolevel.c:
 		ANDing the ones compliment is not the same as XORing.  Silly me.
 		
 		Decided to do absolute closesocket in the DriverCloseProc instead of the
 		delay/lazy close I was doing before.
-
-	* iocpsock.h:
-	* iocpsock_lolevel.c:
-		Added a way to turn off/on burst detection for compiling while
-		this is being studied
 
 2003-02-26  davygrvy
 	* iocpsock_lolevel.c:
@@ -183,10 +314,10 @@
 		when *we* are intiating the close.
 
 	* iocpsock_lolevel.c:
-		problem closing sockets fixed.
+		fixed error in last fix.
 
 	* iocpsock_lolevel.c:
-		fixed error in last fix.
+		problem closing sockets fixed.
 
 2003-02-22  davygrvy
 	* dllmain.c:
@@ -209,14 +340,14 @@
 		master configs changed a bit.  Needs study to determine best
 		load behavior.
 
-	* ws2tcp.c:
-		Made sure ipv6 sockaddr was not used when getting localhost in
-		passive lookup.
-
 	* iocpsock_lolevel.c:
 		InitSockets) Initialize*SubSystem call missed when winsock
 		loaded the 1.1 interface.
 
+	* ws2tcp.c:
+		Made sure ipv6 sockaddr was not used when getting localhost in
+		passive lookup.
+
 2003-02-17  davygrvy
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
@@ -224,36 +355,23 @@
 		WSASetLastError, which the may`02 SDK didn't use.
 
 	* readme.txt:
-		added notes on ipv6
+		added note about ipv6
+
+	* ws2tcp.c:
+		buffix in the hints.
 
 	* dllmain.c:
 		removed the puts to stderr on load.
-
-	* iocpsock.rc:
-	* resource.h:
-		(new) resource files
-
-	* iocpsock.dsp:
-		rc file.
-
-2003-02-17  davygrvy
-
-	== Tagged iocpsock_0_5 ==
-
-	* iocpsock.h:
-	* iocpsock_lolevel.c:
-		small fix for the Oct`02 SDK's wspiapi.h.  It needed
-		WSASetLastError, which the may`02 SDK didn't use.
 
 	* readme.txt:
 		added notes on ipv6
 
-	* dllmain.c:
-		removed the puts to stderr on load.
-
 	* iocpsock.rc:
 	* resource.h:
 		(new) resource files
+
+	* dllmain.c:
+		moved to v0.5
 
 	* iocpsock.dsp:
 		rc file.
@@ -265,17 +383,17 @@
 		use it.
 
 2003-02-16  davygrvy
-	* readme.txt:
-		made note of recent changes
-
-	* readme.txt:
-		slight mods.
+	* iocpsock_lolevel.c:
+		Protect IocpLLDestroy from a NULL.
 
 	* iocpsock_lolevel.c:
 		(HandleIo) only set addr_storage when it's going to be used.
 
-	* iocpsock_lolevel.c:
-		Protect IocpLLDestroy from a NULL.
+	* readme.txt:
+		slight mods.
+
+	* readme.txt:
+		made note of recent changes
 
 	* bits.txt:
 	* iocpsock.dsp:
@@ -284,22 +402,26 @@
 	* ws2tcp.c:
 		Now supports ipv6
 
-	* ws2irda.c:
-		added some sample code for future reference.
+	* license.terms:
+		new
 
 	* readme.txt:
 		speling
 
-	* license.terms:
-		new
-
 	* iocpsock.h:
 		Fixed most all C++ style comments.
+
+	* ws2irda.c:
+		added some sample code for future reference.
 
 2003-02-15  davygrvy
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
 		Added IocpLLGetCount() for safe access in IocpEventCheckProc().
+
+	* iocpsock_lolevel.c:
+	* ws2tcp.c:
+		better error checking calling PostOverlappedAccept().
 
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
@@ -309,25 +431,17 @@
 		 which is good.  Calling PostOverlappedAccept with a buffer of
 		zero now means don't receive with the accept.
 
-	* iocpsock_lolevel.c:
-	* ws2tcp.c:
-		better error checking calling PostOverlappedAccept().
-
-	* ws2ipx.c:
-		all 5 types catagorized.
-
-	* readme.txt:
-		added bits about v0.4, done so far.
-
-	* iocpsock_lolevel.c:
-		wsaErrorTable2 wasn't large enough.  Filled the holes to get it
-		right.
+	* dllmain.c:
+		moved to v0.4
 
 	* iocpsock_lolevel.c:
 		Moved operations in HandleIo() to a switch inplace of the if
 		else if/else if...
 
-2003-02-15  davygrvy
+	* iocpsock_lolevel.c:
+		wsaErrorTable2 wasn't large enough.  Filled the holes to get it
+		right.
+
 	* dllmain.c:
 	* iocpsock_lolevel.c:
 		Now works under threads.  Yet another overly complex manner of
@@ -335,87 +449,74 @@
 		obscure code paths of fourth dimensional thinking that comes
 		with the nature of the beast.  Yes, threads are beasty.
 
+	* readme.txt:
+		added bits about v0.4, done so far.
+
+	* ws2ipx.c:
+		all 5 types catagorized.
+
 2003-02-14  davygrvy
 	* iocpsock_lolevel.c:
 		small error code changes that mean nothing in the big picture.
 
 	* readme.txt:
-		update the prose
-
-	* tclhttpd.patch.txt:
-		new file
+		set proper timestamp to match the binary.
 
 	* readme.txt:
-		update the prose, again edited.
-
-	* iocpsock_lolevel.c:
-		OP_ACCEPT logic in HandleIo changed to report a zero byte read, but only
-		post another WSARecv when more than zero bytes -- just like OP_READ.
+		update the prose
 
 	* hackersguide.txt:
 		CompletionThread name changed to CompletionThreadProc
 
 	* readme.txt:
-		update the prose, again.
-
-2003-02-14  davygrvy
-	== Tagged iocpsock_0_3 ==
-
-	* iocpsock_lolevel.c:
-		small error code changes that mean nothing in the big picture.
-
-	* readme.txt:
-		update the prose
+		Moving to version 0.3
 
 	* tclhttpd.patch.txt:
 		new file
-
-	* readme.txt:
-		update the prose, again edited.
 
 	* iocpsock_lolevel.c:
 		OP_ACCEPT logic in HandleIo changed to report a zero byte read, but only
 		post another WSARecv when more than zero bytes -- just like OP_READ.
 
-	* hackersguide.txt:
-		CompletionThread name changed to CompletionThreadProc
+	* readme.txt:
+		update the prose, again edited.
 
 	* readme.txt:
 		update the prose, again.
 
 2003-02-13  davygrvy
-	* ws2tcp.c:
-	* ws2udp.c:
-		Do proper clean-up on errors.
+	* iocpsock_lolevel.c:
+		Moved the critical section locks in the watchdog routine to just where it was
+		needed.
 
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
 		Watchdog DOS thread turned on.
 
-	* iocpsock_lolevel.c:
-		Moved the critical section locks in the watchdog routine to just where it was
-		needed.
+	* ws2tcp.c:
+	* ws2udp.c:
+		Do proper clean-up on errors.
 
 	* ws2tcp.c:
 		server sockets will add themselves to the global list of
 		listening sockets.
 
-	* ws2udp.c:
-		a scratchpad of ideas.
+	* bits.txt:
+		scratchpad.
 
-	* iocpsock.h:
-	* iocpsock_lolevel.c:
-		watchdog DOS thread almost ready to be turned on.
+	* dllmain.c:
+		write a load notice to stderr.
 
 	* iocpsock_lolevel.c:
 		When closing an infoPtr, we must pop itself off the global
 		listening list, too.
 
-	* dllmain.c:
-		write a load notice to stderr.
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		watchdog DOS thread almost ready to be turned on.
 
-	* bits.txt:
-		scratchpad.
+	* ws2udp.c:
+		a scratchpad of ideas.
 
 2003-02-12  davygrvy
 	* iocpsock_lolevel.c:
@@ -427,16 +528,21 @@
 		may be on!
 
 2003-02-11  davygrvy
+	* hackersguide.txt:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		WatchDogThread partially added, but not turned on, yet.
+
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
 	* ws2tcp.c:
 		Pending accepts now stored in a linked-list.  Later when the watchdog
 		thread is made, we can traverse the lists.
 
-	* hackersguide.txt:
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
-		WatchDogThread partially added, but not turned on, yet.
+		Removed llPendingSend member of the SocketInfo struct.  It wasn't needed.
+		Winsock itself acts as the queue.
 
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
@@ -453,11 +559,6 @@
 		Removed DisconnectEx() from the WS2ProtocolData struct.  We won
 		t be using it.
 
-	* iocpsock.h:
-	* iocpsock_lolevel.c:
-		Removed llPendingSend member of the SocketInfo struct.  It wasn't needed.
-		Winsock itself acts as the queue.
-
 	* hackersguide.txt:
 		new file
 
@@ -469,14 +570,14 @@
 	* readme.txt:
 		moved version up to 0.2
 
-	* ws2tcp.c:
-		Double HandleIo() call following immediate ConnectEx() return
-		fixed.
-
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
 	* readme.txt:
 		SocketInfo clean-up now working properly.
+
+	* ws2tcp.c:
+		Double HandleIo() call following immediate ConnectEx() return
+		fixed.
 
 2003-02-06  daveg
 	* ws2tcp.c:
