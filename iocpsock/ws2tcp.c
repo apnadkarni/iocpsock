@@ -197,6 +197,9 @@ CreateTcpSocket(
 	    ! CreateSocketAddress(myaddr, myport, addr,
 	    &mysockaddr)) {
 	goto error;
+    } else if (! CreateSocketAddress(NULL, "0", addr,
+	    &mysockaddr)) {
+	goto error;
     }
 
 
@@ -310,16 +313,14 @@ CreateTcpSocket(
     } else {
 
         /*
-         * Try to bind to a local port, if specified.
+         * bind to a local address.  ConnectEx needs this.
          */
 
-	if (myaddr != NULL || myport != 0) { 
-	    if (winSock.bind(sock, mysockaddr->ai_addr,
-		    mysockaddr->ai_addrlen) == SOCKET_ERROR) {
-		goto error;
-	    }
-	    FreeSocketAddress(mysockaddr);
-	}            
+	if (winSock.bind(sock, mysockaddr->ai_addr,
+		mysockaddr->ai_addrlen) == SOCKET_ERROR) {
+	    goto error;
+	}
+	FreeSocketAddress(mysockaddr);
 
 	/*
 	 * Attempt to connect to the remote.
@@ -330,8 +331,7 @@ CreateTcpSocket(
 	    bufPtr->operation = OP_CONNECT;
 
 	    code = pdata->ConnectEx(sock, addr->ai_addr,
-		    addr->ai_addrlen, bufPtr->buf, bufPtr->buflen,
-		    &bytes, &bufPtr->ol);
+		    addr->ai_addrlen, NULL, 0, &bytes, &bufPtr->ol);
 
 	    WSAerr = winSock.WSAGetLastError();
 	    if (code == FALSE) {
@@ -340,6 +340,7 @@ CreateTcpSocket(
 		    FreeSocketAddress(hostaddr);
 		    goto error;
 		}
+		InterlockedIncrement(&infoPtr->OutstandingOps);
 	    }
 	} else {
 	    code = winSock.connect(sock, addr->ai_addr, addr->ai_addrlen);
