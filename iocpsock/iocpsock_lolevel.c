@@ -68,9 +68,6 @@ static Tcl_DriverBlockModeProc	IocpBlockProc;
 
 #ifdef TCL_CHANNEL_VERSION_4
 static Tcl_DriverThreadActionProc IocpThreadActionProc;
-#else
-static void			IocpThreadActionProc (
-				    ClientData instanceData, int action);
 #endif
 
 static Tcl_ChannelTypeVersion   IocpGetTclMaxChannelVer (
@@ -1768,6 +1765,7 @@ IocpGetHandleProc (
     return TCL_OK;
 }
 
+#ifdef TCL_CHANNEL_VERSION_4
 static void
 IocpThreadActionProc (ClientData instanceData, int action)
 {
@@ -1788,6 +1786,7 @@ IocpThreadActionProc (ClientData instanceData, int action)
     }
     LeaveCriticalSection(&infoPtr->tsdLock);
 }
+#endif
 
 /* =================================================================== */
 /* ============== Lo-level buffer and state manipulation ============= */
