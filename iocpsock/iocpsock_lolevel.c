@@ -32,6 +32,7 @@ LONG StatOpenSockets		= 0;
 LONG StatFailedAcceptExCalls	= 0;
 LONG StatGeneralBytesInUse	= 0;
 LONG StatSpecialBytesInUse	= 0;
+LONG StatFailedReplacementAcceptExCalls	= 0;
 
 /* file-scope globals */
 GUID AcceptExGuid		= WSAID_ACCEPTEX;
@@ -630,6 +631,8 @@ done:
 void
 IocpExitHandler (ClientData clientData)
 {
+    DWORD wait;
+
     if (initialized) {
 
 	Tcl_DeleteEvents(IocpRemoveAllPendingEvents, NULL);
@@ -637,8 +640,11 @@ IocpExitHandler (ClientData clientData)
 	/* Cause the waiting I/O handler threads to exit. */
 	PostQueuedCompletionStatus(IocpSubSystem.port, 0, 0, 0);
 
-	/* Wait for one to exit from the group. */
-	WaitForSingleObject(IocpSubSystem.thread, INFINITE);
+	/* Wait for our completion thread to exit. */
+	wait = WaitForSingleObject(IocpSubSystem.thread, 400);
+	if (wait == WAIT_TIMEOUT) {
+	    TerminateThread(IocpSubSystem.thread, 0x666);
+	}
 	CloseHandle(IocpSubSystem.thread);
 
 	/* Close the completion port object. */
@@ -937,11 +943,11 @@ IocpCloseProc (
      */
     if (initialized) {
 
+	/* Artificially increment the count. */
+	InterlockedIncrement(&infoPtr->outstandingOps);
+
 	/* Flip the bit so no new stuff can ever come in again. */
 	InterlockedExchange(&infoPtr->markedReady, 1);
-
-	/* artificially increment the count. */
-	InterlockedIncrement(&infoPtr->outstandingOps);
 
 	/* Setting this means all returning operations will get
 	 * trashed and no new operations are allowed. */
@@ -962,13 +968,15 @@ IocpCloseProc (
 	    bufPtr = GetBufferObj(infoPtr, 0);
 	    PostOverlappedDisconnect(infoPtr, bufPtr);
 	} else {
+	    SOCKET temp;
 	    /* Close this listening socket directly. */
 	    infoPtr->flags |= IOCP_CLOSABLE;
 	    InterlockedDecrement(&infoPtr->outstandingOps);
 	    /* collect stats */
 	    InterlockedDecrement(&StatOpenSockets);
-	    winSock.closesocket(infoPtr->socket);
+	    temp = infoPtr->socket;
 	    infoPtr->socket = INVALID_SOCKET;
+	    winSock.closesocket(temp);
 	}
     }
 
@@ -1016,20 +1024,29 @@ IocpInputProc (
 	    || IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
 	while ((bufPtr = IocpLLPopFront(infoPtr->llPendingRecv,
 		IOCP_LL_NODESTROY, timeout)) != NULL) {
-	    if (bytesRead + (int) bufPtr->used > toRead
-		    || (bufPtr->used == 0 && bytesRead)) {
-		if (toRead < IOCP_RECV_BUFSIZE) {
-		    DbgPrint("\n\nIOCPsock (non-recoverable): possible infinite loop in IocpInputProc!\n\n");
-		}
-		/* Too large or have EOF.  Push it back on for later. */
+	    if (bufPtr->used == 0 && bytesRead) {
+		/* Have EOF or error, yet bytes were written to the channel buffer.
+		   Push it back on for later. We need EOF as a single operation. */
 		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
 			&bufPtr->node, 0);
-		/*
-		 * Notice that we don't place the socket on the ready
-		 * list.  UpdateInterest() at the end of DoReadChars()
-		 * in generic/tclIO.c will do this for us by forcing
-		 * a verify through our watchProc.
-		 */
+		break;
+	    }
+	    if ((bytesRead + (int) bufPtr->used) > toRead) {
+		/* We need to do a partial copy to the channel buffer and
+		 * repost ourselves. */
+		BYTE *buffer;
+		SIZE_T howMuch = toRead - bytesRead;
+		if (bufPtr->last) {
+		    buffer = bufPtr->last;
+		} else {
+		    buffer = bufPtr->buf;
+		}
+		memcpy(bufPos, buffer, howMuch);
+		bufPtr->used -= howMuch;
+		bufPtr->last = buffer + howMuch;
+		bytesRead += howMuch;
+		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
+			&bufPtr->node, 0);
 		break;
 	    }
 	    if (bufPtr->WSAerr != NO_ERROR) {
@@ -1038,12 +1055,18 @@ IocpInputProc (
 		FreeBufferObj(bufPtr);
 		goto error;
 	    } else {
+		BYTE *buffer;
 		if (bufPtr->used == 0) {
 		    infoPtr->flags |= IOCP_EOF;
 		    FreeBufferObj(bufPtr);
 		    return 0;
 		}
-		memcpy(bufPos, bufPtr->buf, bufPtr->used);
+		if (bufPtr->last) {
+		    buffer = bufPtr->last;
+		} else {
+		    buffer = bufPtr->buf;
+		}
+		memcpy(bufPos, buffer, bufPtr->used);
 		bytesRead += bufPtr->used;
 		bufPos += bufPtr->used;
 	    }
@@ -1700,6 +1723,7 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
 	return NULL;
     }
     bufPtr->socket = INVALID_SOCKET;
+    bufPtr->last = NULL;
     bufPtr->buflen = buflen;
     bufPtr->addr = NULL;
     bufPtr->WSAerr = NO_ERROR;
@@ -2413,7 +2437,7 @@ HandleIo (
 	     * listening sockets.
 	     */
 	    FreeBufferObj(newBufPtr);
-	    DbgPrint("\nIOCPsock (non-recoverable): an AcceptEx call failed and was not replaced.\n");
+	    InterlockedIncrement(&StatFailedReplacementAcceptExCalls);
 	}
 	break;
 

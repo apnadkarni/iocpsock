@@ -58,12 +58,23 @@
 #include <nspapi.h>
 
 #if defined(_DEBUG) && defined(SHOWDBG)
-#   define DbgPrint(msg) OutputDebugString(msg);
+#   define DbgPrint(msg) \
+	    { \
+		DWORD dummy; \
+		HANDLE StdErr = GetStdHandle(STD_ERROR_HANDLE); \
+		if (StdErr && StdErr != INVALID_HANDLE_VALUE) { \
+		    WriteFile(StdErr, msg, strlen(msg), &dummy, NULL); \
+		} \
+	    } \
+	    OutputDebugString(msg);
 #elif defined(SHOWDBG)
 #   define DbgPrint(msg) \
 	    { \
 		DWORD dummy; \
-		WriteFile(GetStdHandle(STD_ERROR_HANDLE), msg, strlen(msg), &dummy, NULL); \
+		HANDLE StdErr = GetStdHandle(STD_ERROR_HANDLE); \
+		if (StdErr && StdErr != INVALID_HANDLE_VALUE) { \
+		    WriteFile(StdErr, msg, strlen(msg), &dummy, NULL); \
+		} \
 	    }
 #else
 #   define DbgPrint(msg)
@@ -159,6 +170,7 @@ extern LONG StatOpenSockets;
 extern LONG StatFailedAcceptExCalls;
 extern LONG StatGeneralBytesInUse;
 extern LONG StatSpecialBytesInUse;
+extern LONG StatFailedReplacementAcceptExCalls;
 
 /* wspiapi.h doesn't like typedefs, so fix it. */
 #define inet_addr	winSock.inet_addr
@@ -245,6 +257,7 @@ typedef struct _BufferInfo {
     SOCKET socket;	    /* Used for AcceptEx client socket */
     DWORD WSAerr;	    /* Any error that occured for this operation. */
     BYTE *buf;		    /* Buffer for recv/send/AcceptEx */
+    BYTE *last;		    /* buffer position if last read operation was a partial copy */
     SIZE_T buflen;	    /* Length of the buffer */
     SIZE_T used;	    /* Length of the buffer used (post operation) */
 #   define OP_ACCEPT	0   /* AcceptEx() */
