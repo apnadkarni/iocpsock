@@ -329,6 +329,7 @@ extern char *		GetSysMsg (DWORD id);
 extern Tcl_Obj *	GetSysMsgObj (DWORD id);
 extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
 extern __inline LPVOID	IocpAlloc (SIZE_T size);
+extern __inline LPVOID  IocpReAlloc (LPVOID block, SIZE_T size);
 extern __inline BOOL	IocpFree (LPVOID block);
 
 
@@ -357,3 +358,11 @@ extern SIZE_T		IocpLLGetCount (LPLLIST ll);
 extern BOOL PASCAL	OurConnectEx(SOCKET s, const struct sockaddr* name,
 			    int namelen, PVOID lpSendBuffer, DWORD dwSendDataLength,
 			    LPDWORD lpdwBytesSent, LPOVERLAPPED lpOverlapped);
+
+
+/* some stuff that needs to be switches or fconfigures, but aren't yet */
+#define IOCP_ACCEPT_COUNT	20
+#define IOCP_ACCEPT_BUFSIZE	0    /* more than zero means we want a receive with the accept */
+#define IOCP_RECV_COUNT		5
+#define IOCP_RECV_BUFSIZE	2016  /* 2048 - 32 */
+#define IOCP_SEND_CONCURRENCY	2

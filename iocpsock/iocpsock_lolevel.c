@@ -1294,7 +1294,7 @@ NewSocketInfo (SOCKET socket)
     infoPtr->writeError = NO_ERROR;
     infoPtr->outstandingSends = 0;
 // TODO: need this to be an fconfigure!
-    infoPtr->maxOutstandingSends = 2;
+    infoPtr->maxOutstandingSends = IOCP_SEND_CONCURRENCY;
 
     infoPtr->OutstandingOps = 0;
     infoPtr->node.ll = NULL;
@@ -1414,13 +1414,13 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
     DWORD bytes, WSAerr;
     int rc;
-    SIZE_T buflen;
-    unsigned int addr_storage = sizeof(SOCKADDR_STORAGE) + 16;
+    SIZE_T buflen, addr_storage;
 
     if (infoPtr->flags & IOCP_CLOSING) return WSAENOTCONN;
 
     bufPtr->operation = OP_ACCEPT;
     buflen = bufPtr->buflen;
+    addr_storage = infoPtr->proto->addrLen + 16;
 
     /*
      * Create a ready client socket of the same type for a future
@@ -1436,16 +1436,17 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
     }
 
     /*
-     * The buffer can not be smaller than this.
+     * Realloc for the extra needed addr storage space.
      */
-
-    _ASSERTE(bufPtr->buflen >= ((sizeof(SOCKADDR_STORAGE) + 16) * 2));
+    bufPtr->buf = IocpReAlloc(bufPtr->buf, bufPtr->buflen + (addr_storage * 2));
+    bufPtr->buflen += (addr_storage * 2);
 
     /*
-     * Increment the outstanding overlapped count for this socket.
+     * Increment the outstanding overlapped count for this socket and put
+     * the buffer on the pending accepts list.  We need to do this before
+     * the operation because it might complete instead of posting.
      */
     InterlockedIncrement(&infoPtr->OutstandingOps);
-
     IocpLLPushBack(infoPtr->llPendingAccepts, bufPtr, &bufPtr->node);
 
     /*
@@ -1689,6 +1690,7 @@ HandleIo (
 {
     SocketInfo *newInfoPtr;
     BufferInfo *newBufPtr;
+    int i;
 
     EnterCriticalSection(&infoPtr->critSec);
 
@@ -1715,8 +1717,15 @@ HandleIo (
     if (bufPtr->WSAerr == NO_ERROR) bufPtr->WSAerr = WSAerr;
 
     if (bufPtr->operation == OP_ACCEPT) {
-        SOCKADDR_STORAGE *local, *remote;
+        SOCKADDR *local, *remote;
+	SIZE_T addr_storage = infoPtr->proto->addrLen + 16;
         int localLen, remoteLen;
+
+	/*
+	 * Remove this from the 'pending accepts' list of the
+	 * listening socket.  It isn't pending anymore.
+	 */
+	IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
 
 	if (bufPtr->WSAerr == NO_ERROR) {
 	    /*
@@ -1725,11 +1734,9 @@ HandleIo (
 	     */
 
 	    infoPtr->proto->GetAcceptExSockaddrs(bufPtr->buf,
-		    bufPtr->buflen - ((sizeof(SOCKADDR_STORAGE) + 16) * 2),
-		    sizeof(SOCKADDR_STORAGE) + 16,
-		    sizeof(SOCKADDR_STORAGE) + 16,
-		    (SOCKADDR **)&local, &localLen,
-		    (SOCKADDR **)&remote, &remoteLen);
+		    bufPtr->buflen - (addr_storage * 2), addr_storage,
+		    addr_storage, &local, &localLen, &remote,
+		    &remoteLen);
 
 	    // TODO: Is this correct?
 	    winSock.setsockopt(bufPtr->socket, SOL_SOCKET,
@@ -1750,13 +1757,6 @@ HandleIo (
 	    bufPtr->socket = INVALID_SOCKET;
 
 	    /*
-	     * Remove this from the 'pending accepts' list of the
-	     * listening socket.  It isn't pending anymore.
-	     */
-
-	    IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
-
-	    /*
 	     * Save the remote and local SOCKADDRs to its SocketInfo struct.
 	     */
 
@@ -1772,27 +1772,30 @@ HandleIo (
 	    CreateIoCompletionPort((HANDLE) newInfoPtr->socket, CompPort,
 		    (ULONG_PTR) newInfoPtr, 0);
 
-	    /* (takes buffer ownership) */
-	    IocpLLPushBack(newInfoPtr->llPendingRecv, bufPtr, &bufPtr->node);
-
-	    /*
-	     * Let IocpCheckProc() know this new channel has a ready read
-	     * that needs servicing.
-	     */
-	    IocpLLPushBack(newInfoPtr->tsdHome->readySockets, newInfoPtr, NULL);
-
-	    /* Should the notifier be asleep, zap it awake. */
-	    Tcl_ThreadAlert(newInfoPtr->tsdHome->threadId);
-
 	    if (bytes > 0) {
-		/* Now post a receive on this new connection. */
-		newBufPtr = GetBufferObj(newInfoPtr, 4096);
+		/* (takes buffer ownership) */
+		IocpLLPushBack(newInfoPtr->llPendingRecv, bufPtr, &bufPtr->node);
+
+		/*
+		 * Let IocpCheckProc() know this new channel has a ready read
+		 * that needs servicing.
+		 */
+		IocpLLPushBack(newInfoPtr->tsdHome->readySockets, newInfoPtr, NULL);
+
+		/* Should the notifier be asleep, zap it awake. */
+		Tcl_ThreadAlert(newInfoPtr->tsdHome->threadId);
+	    } else {
+		FreeBufferObj(bufPtr);
+	    }
+
+	    /* post IOCP_RECV_COUNT recvs. */
+	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
+		newBufPtr = GetBufferObj(newInfoPtr, IOCP_RECV_BUFSIZE);
 		if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
 		    /* Oh no, the WSARecv failed. */
 		    FreeBufferObj(newBufPtr);
 		}
 	    }
-
 	} else {
 	    FreeBufferObj(bufPtr);
 	}
@@ -1806,7 +1809,7 @@ HandleIo (
 	 * That's some heavy load.
 	 */
 
-        newBufPtr = GetBufferObj(infoPtr, 4096);
+        newBufPtr = GetBufferObj(infoPtr, IOCP_ACCEPT_BUFSIZE);
         if (PostOverlappedAccept(infoPtr, newBufPtr) != NO_ERROR) {
 	    /* Oh no, the AcceptEx failed. */
 	    FreeBufferObj(newBufPtr);
@@ -1836,8 +1839,8 @@ HandleIo (
 	     * SocketInfo struct.
 	     */
 
-	    newBufPtr = GetBufferObj(infoPtr, 4096);
-	    if ((WSAerr = PostOverlappedRecv(infoPtr, newBufPtr)) != NO_ERROR) {
+	    newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
+	    if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
 		/* Oh no, the WSARecv failed. */
 		FreeBufferObj(newBufPtr);
 	    }
@@ -1886,11 +1889,13 @@ HandleIo (
 	    winSock.setsockopt(infoPtr->socket, SOL_SOCKET,
 		    SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
 
-	    /* Now post a receive on this new connection. */
-	    newBufPtr = GetBufferObj(infoPtr, 4096);
-	    if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
-		/* Oh no, the WSARecv failed. */
-		FreeBufferObj(newBufPtr);
+	    /* post IOCP_RECV_COUNT recvs. */
+	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
+		newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
+		if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
+		    /* Oh no, the WSARecv failed. */
+		    FreeBufferObj(newBufPtr);
+		}
 	    }
 	}
     }
@@ -1967,6 +1972,15 @@ IocpAlloc (SIZE_T size)
     p = HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, size);
     return p;
 }
+
+__inline LPVOID
+IocpReAlloc (LPVOID block, SIZE_T size)
+{
+    LPVOID p;
+    p = HeapReAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, block, size);
+    return p;
+}
+
 
 __inline BOOL
 IocpFree (LPVOID block)

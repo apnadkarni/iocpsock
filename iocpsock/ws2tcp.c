@@ -275,10 +275,10 @@ CreateTcp4Socket(
 
 	IocpLLPushBack(IocpSubSystem.listeningSockets, infoPtr, &infoPtr->node);
 
-	/* post 20 accepts. */
-        for(i=0; i < 20 ;i++) {
+	/* post IOCP_ACCEPT_COUNT accepts. */
+        for(i=0; i < IOCP_ACCEPT_COUNT ;i++) {
 	    BufferInfo *acceptobj;
-	    acceptobj = GetBufferObj(infoPtr, 4096);
+	    acceptobj = GetBufferObj(infoPtr, IOCP_ACCEPT_BUFSIZE);
             PostOverlappedAccept(infoPtr, acceptobj);
         }
 
