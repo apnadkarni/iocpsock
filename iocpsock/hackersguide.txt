@@ -29,3 +29,9 @@ is hit and the socket is completely drained.  This has the side effect of
 increasing the count of operations on the socket.  No method is included for
 returning the overlapped count to its normal count.  This shouldn't be a problem
 with short lived sockets.
+
+I mentioned before we only use one completion thread.  Why is that?  If more than
+one completion thread was used, consideration for packet order would be needed.  I
+avoid this by only using one thread <G>.  Think of it this way, one port splits to
+two service threads then back to a single linkedlist.  There is no guarentee that
+the order though that is maintained.

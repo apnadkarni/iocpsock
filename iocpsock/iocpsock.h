@@ -226,7 +226,6 @@ typedef struct _BufferInfo {
 #   define OP_LOOKUP	6   /* TODO: For future use */
     int operation;	    /* Type of operation issued */
     LPSOCKADDR addr;	    /* addr storage space for WSARecvFrom/WSASendTo. */
-    ULONG IoOrder;	    /* Order in which this I/O was posted */
     LLNODE node;	    /* linked list node */
 } BufferInfo;
 
