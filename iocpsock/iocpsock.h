@@ -32,6 +32,19 @@
 #include <svcguid.h>
 #include <nspapi.h>
 
+#if defined(_DEBUG) && defined(SHOWDBG)
+#   define DbgPrint(msg) OutputDebugString(msg);
+#elif defined(SHOWDBG)
+#   define DbgPrint(msg) \
+	    { \
+		DWORD dummy; \
+		WriteFile(GetStdHandle(STD_ERROR_HANDLE), msg, strlen(msg), &dummy, NULL); \
+	    }
+#else
+#   define DbgPrint(msg)
+#endif
+
+
 
 typedef struct {
     HMODULE	hModule;	/* Handle to the WinSock DLL. */
@@ -303,16 +316,8 @@ typedef struct CompletionPortInfo {
     HANDLE heap;	    /* Private heap used for WSABUFs and other
 			     * objects that don't need to interact with
 			     * Tcl directly. */
-#   define MAX_COMPLETION_THREAD_COUNT	16
-			    /* Maximum number of completion threads
-			     * allowed. */
-    HANDLE threads[MAX_COMPLETION_THREAD_COUNT];
-			    /* The array of threads for handling the
-			     * completion routines. */
-    HANDLE stop;	    /* stop event */
-    HANDLE watchDogThread;  /* Used for cleaning up halfway accepted sockets */
-    LPLLIST listeningSockets;  /* list for where we store all listening sockets. */
-
+    HANDLE thread;	    /* The single threads for handling the
+			     * completion routine. */
 } CompletionPortInfo;
 
 extern CompletionPortInfo IocpSubSystem;
@@ -399,14 +404,7 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
  * Unfortunately, burst conditions can not be detected for the system
  * to grow the actual count based on need.
  */
-/*#define IOCP_ACCEPT_COUNT	200*/
-
-/*
- * AcceptEx can return recieved data along with the connect.  Set this
- * to either zero or a multiple of the page size (4096).  A value of zero
- * indicates we don't want this feature.
- */
-#define IOCP_ACCEPT_BUFSIZE	0
+/*#define IOCP_ACCEPT_COUNT	200    now a switch for the tcl command*/
 
 /*
  * Initial count of how many WSARecv(From) calls to place on a connected

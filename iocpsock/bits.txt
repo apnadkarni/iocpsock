@@ -2,6 +2,7 @@ proc accept {s addr port} {
     puts "new connection from $addr:$port on $s"
     fconfigure $s -blocking no
     fileevent $s readable [list gotRead $s]
+    fileevent $s writable [list gotWrite $s]
 }
 proc gotRead {s} {
     if {[string length [set e [fconfigure $s -error]]]} {
@@ -21,6 +22,7 @@ proc gotWrite {s} {
 	close $s
 	return
     }
+    fileevent $s writable {}
 }
 
 load iocpsock.dll

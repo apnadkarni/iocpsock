@@ -69,7 +69,7 @@ Iocp_OpenTcpClient(
 	return NULL;
     }
 
-    wsprintfA(channelName, "iocp%d", infoPtr->socket);
+    wsprintfA(channelName, "iocp%p", infoPtr);
 
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
@@ -135,7 +135,7 @@ Iocp_OpenTcpServer(
     infoPtr->acceptProc = acceptProc;
     infoPtr->acceptProcData = acceptProcData;
 
-    wsprintfA(channelName, "iocp%d", infoPtr->socket);
+    wsprintfA(channelName, "iocp%p", infoPtr);
 
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, 0);
@@ -235,31 +235,31 @@ CreateTcpSocket(
 		sizeof(pdata->AcceptEx),
 		&bytes, NULL, NULL);
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-               &GetAcceptExSockaddrsGuid, sizeof(GUID),
-               &pdata->GetAcceptExSockaddrs,
-	       sizeof(pdata->GetAcceptExSockaddrs),
-               &bytes, NULL, NULL);
+		&GetAcceptExSockaddrsGuid, sizeof(GUID),
+		&pdata->GetAcceptExSockaddrs,
+		sizeof(pdata->GetAcceptExSockaddrs),
+		&bytes, NULL, NULL);
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-               &ConnectExGuid, sizeof(GUID),
-               &pdata->ConnectEx,
-	       sizeof(pdata->ConnectEx),
-               &bytes, NULL, NULL);
+		&ConnectExGuid, sizeof(GUID),
+		&pdata->ConnectEx,
+		sizeof(pdata->ConnectEx),
+		&bytes, NULL, NULL);
 	if (pdata->ConnectEx == NULL) {
 	    pdata->ConnectEx = OurConnectEx;
 	}
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-               &DisconnectExGuid, sizeof(GUID),
-               &pdata->DisconnectEx,
-	       sizeof(pdata->DisconnectEx),
-               &bytes, NULL, NULL);
+		&DisconnectExGuid, sizeof(GUID),
+		&pdata->DisconnectEx,
+		sizeof(pdata->DisconnectEx),
+		&bytes, NULL, NULL);
 	if (pdata->DisconnectEx == NULL) {
 	    pdata->DisconnectEx = NULL;
 	}
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-               &TransmitFileGuid, sizeof(GUID),
-               &pdata->TransmitFile,
-	       sizeof(pdata->TransmitFile),
-               &bytes, NULL, NULL);
+		&TransmitFileGuid, sizeof(GUID),
+		&pdata->TransmitFile,
+		sizeof(pdata->TransmitFile),
+		&bytes, NULL, NULL);
     }
 
     /*
@@ -318,12 +318,10 @@ CreateTcpSocket(
 	/* create the queue for holding ready ones */
 	infoPtr->readyAccepts = IocpLLCreate();
 
-	IocpLLPushBack(IocpSubSystem.listeningSockets, infoPtr, &infoPtr->node);
-
 	/* post IOCP_ACCEPT_COUNT accepts. */
         for(i=0; i < overlappedCount ;i++) {
 	    BufferInfo *bufPtr;
-	    bufPtr = GetBufferObj(infoPtr, IOCP_ACCEPT_BUFSIZE);
+	    bufPtr = GetBufferObj(infoPtr, 0);
 	    if (PostOverlappedAccept(infoPtr, bufPtr) != NO_ERROR) {
 		/* Oh no, the AcceptEx failed. */
 		FreeBufferObj(bufPtr);
@@ -390,11 +388,7 @@ CreateTcpSocket(
 	    /* post IOCP_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
 		bufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-		if (PostOverlappedRecv(infoPtr, bufPtr) != NO_ERROR) {
-		    /* Oh no, the WSARecv failed. */
-		    FreeBufferObj(bufPtr);
-		    break;
-		}
+		PostOverlappedRecv(infoPtr, bufPtr);
 	    }
 	}
 	FreeSocketAddress(hostaddr);
