@@ -292,6 +292,7 @@ extern Tcl_ThreadDataKey dataKey;
 #define IOCP_EOF	    (1<<0)
 #define IOCP_CLOSING	    (1<<1)
 #define IOCP_ASYNC	    (1<<2)
+#define IOCP_CLOSABLE	    (1<<3)
 
 #pragma pack (push, 4)
 
@@ -387,9 +388,6 @@ extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
 			    BufferInfo *acceptobj, int useBurst);
 extern DWORD		PostOverlappedRecv (SocketInfo *infoPtr,
 			    BufferInfo *recvobj, int useBurst);
-extern void		HandleIo(SocketInfo *infoPtr, BufferInfo *bufPtr,
-			    HANDLE compPort, DWORD bytes, DWORD error,
-			    DWORD flags);
 extern void		IocpWinConvertWSAError(DWORD errCode);
 extern void		FreeBufferObj(BufferInfo *obj);
 
@@ -467,20 +465,20 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
  * This is the base pool count.  Don't go below this number or the
  * listening socket will start returning errors quite easily.
  *
- * Use the -acceptpool fconfigure on the listening socket to set the
+ * Use the -backlog fconfigure on the listening socket to set the
  * pool size.  Each overlapped AcceptEx call will reserve ~500 bytes
  * of the non-paged memory pool.  Larger IS better, if you don't mind
- * the memory in reserve.  Choose a good sized -acceptpool such as 500
+ * the memory in reserve.  Choose a good sized -backlog such as 500
  * if you want it "bunker buster proof".  The NP pool is a global
  * resource for all processes and is said to have a limit around 1/4 of
  * the physical memory.  500 overlapped AccepEx calls * ~500 bytes = ~250K
- * of reserved NP pool memory.  Only use such high -acceptpool sizes
+ * of reserved NP pool memory.  Only use such high -backlog sizes
  * for VERY heavy load servers that you want to handle SYN attacks
  * gracefully.
  */
 
-/* This is the -acceptpool fconfigure's default value. */
-#define IOCP_ACCEPT_CAP		    50
+/* This is the -backlog fconfigure's default value. */
+#define IOCP_ACCEPT_CAP		    5
 
 /*
  * We do not want an initial recv() with a new connection.  Use of this
@@ -513,10 +511,10 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
 #define IOCP_RECV_BUFSIZE	    4096
 
 /*
- * Initial (default) cap on send concurrency.
+ * Initial (default) cap on send concurrency.  This is the -sendcap
+ * fconfigure's default value.
  */
 
-/* This is the -sendpool fconfigure's default value. */
 #define IOCP_SEND_CAP		    20
 
 
