@@ -441,8 +441,19 @@ $<
 #---------------------------------------------------------------------
 
 install-binaries:
+	@echo Installing to '$(SCRIPT_INSTALL_DIR)'
+	@echo installing $(IOCPLIB)
+	@$(CPY) "$(IOCPLIB)" "$(SCRIPT_INSTALL_DIR)\"
 
 install-libraries:
+!if !$(STATIC_BUILD)
+	@echo Creating package index "$(SCRIPT_INSTALL_DIR)\pkgIndex.tcl"
+	-del "$(SCRIPT_INSTALL_DIR)\pkgIndex.tcl"
+	echo package ifneeded Iocpsock $(DOTVERSION) [list load [file join $$dir $(IOCPLIBNAME)] Iocpsock] >"$(OUT_DIR)\pkgIndex.tcl"
+	$(CPY) "$(OUT_DIR)\pkgIndex.tcl" "$(SCRIPT_INSTALL_DIR)\"
+!endif
+
+install-docs:
 
 
 #---------------------------------------------------------------------
