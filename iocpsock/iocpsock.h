@@ -181,29 +181,30 @@ struct SocketInfo;
 typedef struct _BufferInfo {
     WSAOVERLAPPED ol;
     struct SocketInfo *parent;
-    SOCKET socket;	    // Used for AcceptEx client socket
-    DWORD WSAerr;	    // Any error that occured for this operation.
-    BYTE *buf;		    // Buffer for recv/send/AcceptEx
-    SIZE_T buflen;	    // Length of the buffer
+    SOCKET socket;	    /* Used for AcceptEx client socket */
+    DWORD WSAerr;	    /* Any error that occured for this operation. */
+    BYTE *buf;		    /* Buffer for recv/send/AcceptEx */
+    SIZE_T buflen;	    /* Length of the buffer */
     SIZE_T used;	    /* Length of the buffer used (post operation) */
 #   define OP_ACCEPT	0   /* AcceptEx() */
 #   define OP_READ	1   /* WSARecv()/WSARecvFrom() */
 #   define OP_WRITE	2   /* WSASend()/WSASendTo() */
 #   define OP_CONNECT	3   /* ConnectEx */
-    int operation;	    // Type of operation issued
-    LPSOCKADDR addr;	    // addr storage space for WSARecvFrom/WSASendTo.
-    ULONG IoOrder;	    // Order in which this I/O was posted
+#   define OP_LOOKUP	4   /* TODO: For future use */
+    int operation;	    /* Type of operation issued */
+    LPSOCKADDR addr;	    /* addr storage space for WSARecvFrom/WSASendTo. */
+    ULONG IoOrder;	    /* Order in which this I/O was posted */
     LLNODE node;	    /* linked list node */
 } BufferInfo;
 
 
 #include "tclPort.h"
 
-// We need at least the Tcl_Obj interface that was started in 8.0
+/* We need at least the Tcl_Obj interface that was started in 8.0 */
 #if TCL_MAJOR_VERSION < 8
 #   error "we need Tcl 8.0 or greater to build this"
 
-// Check for Stubs compatibility when asked for it.
+/* Check for Stubs compatibility when asked for it. */
 #elif defined(USE_TCL_STUBS) && TCL_MAJOR_VERSION == 8 && \
 	(TCL_MINOR_VERSION == 0 || \
         (TCL_MINOR_VERSION == 1 && TCL_RELEASE_LEVEL != TCL_FINAL_RELEASE))
@@ -260,7 +261,7 @@ typedef struct SocketInfo {
     volatile LONG OutstandingOps;	    
 //    ULONG LastSendIssued; // Last sequence number sent
 //    ULONG IoCountIssued;
-    LPLLIST llPendingRecv; //Our pending recv list.
+    LPLLIST llPendingRecv;	    /* Our pending recv list. */
     LLNODE node;
 
 } SocketInfo;
@@ -359,10 +360,9 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s, const struct sockaddr* name,
 			    int namelen, PVOID lpSendBuffer, DWORD dwSendDataLength,
 			    LPDWORD lpdwBytesSent, LPOVERLAPPED lpOverlapped);
 
-
 /* some stuff that needs to be switches or fconfigures, but aren't yet */
 #define IOCP_ACCEPT_COUNT	20
 #define IOCP_ACCEPT_BUFSIZE	0    /* more than zero means we want a receive with the accept */
-#define IOCP_RECV_COUNT		5
+#define IOCP_RECV_COUNT		2
 #define IOCP_RECV_BUFSIZE	2016  /* 2048 - 32 */
 #define IOCP_SEND_CONCURRENCY	2
