@@ -74,6 +74,7 @@ static void	    HandleIo(SocketInfo *infoPtr, BufferInfo *bufPtr,
 			    HANDLE compPort, DWORD bytes, DWORD error,
 			    DWORD flags);
 static DWORD WINAPI CompletionThread(LPVOID lpParam);
+static void	    IocpWinConvertWSAError(DWORD errCode);
 
 
 /*
@@ -797,7 +798,7 @@ IocpCloseProc(instanceData, interp)
     // Our heap is gone!
     if (initialized) {
 	if (winSock.closesocket(infoPtr->socket) == SOCKET_ERROR) {
-	    //TclWinConvertWSAError((DWORD) winSock.WSAGetLastError());
+	    IocpWinConvertWSAError(winSock.WSAGetLastError());
 	    errorCode = Tcl_GetErrno();
 	}
 //	FreeSocketInfo(infoPtr);
@@ -829,9 +830,15 @@ IocpInputProc(instanceData, buf, toRead, errorCodePtr)
 	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
 	    break;
 	}
-	memcpy(bufPos, bufPtr->buf, bufPtr->used);
-	bytesRead += bufPtr->used;
-	bufPos += bufPtr->used;
+	if (bufPtr->WSAerr != NO_ERROR) {
+	    // TODO: what SHOULD go here?
+	    IocpWinConvertWSAError(bufPtr->WSAerr);
+	    *errorCodePtr = Tcl_GetErrno();
+	} else {
+	    memcpy(bufPos, bufPtr->buf, bufPtr->used);
+	    bytesRead += bufPtr->used;
+	    bufPos += bufPtr->used;
+	}
 	FreeBufferObj(bufPtr);
     }
 
@@ -847,14 +854,16 @@ IocpOutputProc(instanceData, buf, toWrite, errorCodePtr)
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     BufferInfo *bufPtr;
-    DWORD code;
+    DWORD WSAerr;
 
     bufPtr = GetBufferObj(infoPtr, toWrite);
     memcpy(bufPtr->buf, buf, toWrite);
-    code = PostOverlappedSend(infoPtr, bufPtr);
+    WSAerr = PostOverlappedSend(infoPtr, bufPtr);
 
-    if (code != NO_ERROR) {
+    if (WSAerr != NO_ERROR) {
 	// TODO: what SHOULD go here?
+	IocpWinConvertWSAError(WSAerr);
+	*errorCodePtr = Tcl_GetErrno();
     }
 
     return toWrite;
@@ -1199,29 +1208,26 @@ FreeSocketInfo(SocketInfo *infoPtr)
 }
 
 BufferInfo *
-GetBufferObj(SocketInfo *si, size_t buflen)
+GetBufferObj(SocketInfo *infoPtr, SIZE_T buflen)
 {
-    BufferInfo *newobj=NULL;
+    BufferInfo *bufPtr;
 
     // Allocate the object
-    newobj = (BufferInfo *) IocpAlloc(sizeof(BufferInfo));
-    if (newobj == NULL) {
-	OutputDebugString("GetBufferObj: HeapAlloc failed: ");
-	OutputDebugString(GetSysMsg(GetLastError()));
-	OutputDebugString("\n");
-	return 0L;
+    bufPtr = (BufferInfo *) IocpAlloc(sizeof(BufferInfo));
+    if (bufPtr == NULL) {
+	return NULL;
     }
     // Allocate the buffer
-    newobj->buf = (BYTE *) IocpAlloc(sizeof(BYTE)*buflen);
-    if (newobj->buf == NULL) {
-	OutputDebugString("GetBufferObj: HeapAlloc failed: ");
-	OutputDebugString(GetSysMsg(GetLastError()));
-	OutputDebugString("\n");
-	return 0L;
+    bufPtr->buf = (BYTE *) IocpAlloc(sizeof(BYTE)*buflen);
+    if (bufPtr->buf == NULL) {
+	IocpFree(bufPtr);
+	return NULL;
     }
-    newobj->buflen = buflen;
-    newobj->addrlen = sizeof(newobj->addr);
-    return newobj;
+    bufPtr->buflen = buflen;
+    bufPtr->addr = NULL;
+    bufPtr->addrlen = infoPtr->proto->addrLen;
+    bufPtr->WSAerr = NO_ERROR;
+    return bufPtr;
 }
 
 void
@@ -1262,7 +1268,7 @@ NewAcceptSockInfo(SOCKET s, SocketInfo *infoPtr)
 DWORD
 PostOverlappedAccept(SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
-    DWORD bytes, err;
+    DWORD bytes, WSAerr;
     int rc;
     unsigned int addr_stoage = sizeof(SOCKADDR_STORAGE) + 16;
 
@@ -1296,19 +1302,18 @@ PostOverlappedAccept(SocketInfo *infoPtr, BufferInfo *bufPtr)
 	    bufPtr->buf, bufPtr->buflen - (addr_stoage * 2),
 	    addr_stoage, addr_stoage, &bytes, &bufPtr->ol);
 
-    err = winSock.WSAGetLastError();
+    WSAerr = winSock.WSAGetLastError();
     if (rc == FALSE) {
-	if (err != WSA_IO_PENDING) {
-	    //GetSysMsg(err);
-	    return SOCKET_ERROR;
+	if (WSAerr != WSA_IO_PENDING) {
+	    return WSAerr;
 	}
 	/*
 	 * Increment the outstanding overlapped count for this socket.
 	 */
 	InterlockedIncrement(&infoPtr->OutstandingOps);
     } else {
-	/* the AcceptEx operation completed now, instead of being posted. */
-        HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes, err, 0);
+	/* The AcceptEx operation completed now, instead of being posted. */
+        HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes, WSAerr, 0);
     }
 
     return NO_ERROR;
@@ -1318,7 +1323,7 @@ DWORD
 PostOverlappedRecv(SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
     WSABUF wbuf;
-    DWORD bytes, flags, err;
+    DWORD bytes, flags, WSAerr;
     int rc;
 
     bufPtr->operation = OP_READ;
@@ -1326,13 +1331,13 @@ PostOverlappedRecv(SocketInfo *infoPtr, BufferInfo *bufPtr)
     wbuf.len = bufPtr->buflen;
     flags = 0;
 
-    EnterCriticalSection(&infoPtr->critSec);
+//    EnterCriticalSection(&infoPtr->critSec);
 
     // Assign the IO order to this receive. This must be performned within
     //    the critical section. The operation of assigning the IO count and posting
     //    the receive cannot be interupted.
-    bufPtr->IoOrder = infoPtr->IoCountIssued;
-    infoPtr->IoCountIssued++;
+//    bufPtr->IoOrder = infoPtr->IoCountIssued;
+//    infoPtr->IoCountIssued++;
 
     if (infoPtr->proto->type == SOCK_STREAM) {
 	rc = winSock.WSARecv(infoPtr->socket, &wbuf, 1, &bytes, &flags,
@@ -1343,13 +1348,12 @@ PostOverlappedRecv(SocketInfo *infoPtr, BufferInfo *bufPtr)
 		&bufPtr->ol, NULL);
     }
 
-    LeaveCriticalSection(&infoPtr->critSec);
+//    LeaveCriticalSection(&infoPtr->critSec);
 
-    err = winSock.WSAGetLastError();
+    WSAerr = winSock.WSAGetLastError();
     if (rc == SOCKET_ERROR) {
-	if (err != WSA_IO_PENDING) {
-	    //GetSysMsg(err);
-	    return SOCKET_ERROR;
+	if (WSAerr != WSA_IO_PENDING) {
+	    return WSAerr;
 	}
 	/*
 	 * Increment the outstanding overlapped count for this socket.
@@ -1357,7 +1361,7 @@ PostOverlappedRecv(SocketInfo *infoPtr, BufferInfo *bufPtr)
 	InterlockedIncrement(&infoPtr->OutstandingOps);
     } else {
 	/* the WSARecv(From) operation completed now, instead of being posted. */
-        HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes, err, flags);
+        HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes, WSAerr, flags);
     }
 
     return NO_ERROR;
@@ -1367,18 +1371,18 @@ DWORD
 PostOverlappedSend(SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
     WSABUF wbuf;
-    DWORD bytes, err;
+    DWORD bytes, WSAerr;
     int rc;
 
     bufPtr->operation = OP_WRITE;
     wbuf.buf = bufPtr->buf;
     wbuf.len = bufPtr->buflen;
 
-    EnterCriticalSection(&infoPtr->critSec);
+//    EnterCriticalSection(&infoPtr->critSec);
 
     /* Incrmenting the last send issued and issuing the send should not
      * be interuptable. */
-    infoPtr->LastSendIssued++;
+//    infoPtr->LastSendIssued++;
 
     if (infoPtr->proto->type == SOCK_STREAM) {
 	rc = winSock.WSASend(infoPtr->socket, &wbuf, 1, &bytes, 0,
@@ -1389,13 +1393,12 @@ PostOverlappedSend(SocketInfo *infoPtr, BufferInfo *bufPtr)
 		&bufPtr->ol, NULL);
     }
 
-    LeaveCriticalSection(&infoPtr->critSec);
+//    LeaveCriticalSection(&infoPtr->critSec);
 
-    err = winSock.WSAGetLastError();
+    WSAerr = winSock.WSAGetLastError();
     if (rc == SOCKET_ERROR) {
-	if (err != WSA_IO_PENDING) {
-	    //GetSysMsg(err);
-	    return SOCKET_ERROR;
+	if (WSAerr != WSA_IO_PENDING) {
+	    return WSAerr;
 	}
 	/*
 	 * Increment the outstanding overlapped count for this socket.
@@ -1403,7 +1406,7 @@ PostOverlappedSend(SocketInfo *infoPtr, BufferInfo *bufPtr)
 	InterlockedIncrement(&infoPtr->OutstandingOps);
     } else {
 	/* the WSASend(To) operation completed now, instead of being posted. */
-        HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes, err, 0);
+        HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes, WSAerr, 0);
     }
 
     return NO_ERROR;
@@ -1481,7 +1484,7 @@ DoSends(SocketInfo *infoPtr)
  *
  * Side effects:
  *
- *	Without direct interaction from Tcl, in-coming accepts will be
+ *	Without direct interaction from Tcl, incoming accepts will be
  *	accepted and receives, received.  The results of the operations
  *	are posted and tcl will service them when the event loop is
  *	ready to.  Winsock is never left "dangling" on operations.
@@ -1496,15 +1499,14 @@ CompletionThread (LPVOID lpParam)
     SocketInfo *infoPtr;
     BufferInfo *bufPtr;
     OVERLAPPED *lpOverlapped = NULL;
-    DWORD BytesTransfered, Flags, Error;
+    DWORD bytes, flags, WSAerr;
     BOOL  ok;
 
     for (;;) {
-	Error = NO_ERROR;
+	WSAerr = NO_ERROR;
 
-	ok = GetQueuedCompletionStatus(cpinfo->port,
-		&BytesTransfered, (PULONG_PTR)&infoPtr,
-		&lpOverlapped, INFINITE);
+	ok = GetQueuedCompletionStatus(cpinfo->port, &bytes,
+		(PULONG_PTR)&infoPtr, &lpOverlapped, INFINITE);
 
 	if (ok && !infoPtr) {
 	    /* A NULL key indicates closure time for this thread. */
@@ -1529,16 +1531,15 @@ CompletionThread (LPVOID lpParam)
 	     */
 
 	    ok = winSock.WSAGetOverlappedResult(infoPtr->socket,
-		    lpOverlapped, &BytesTransfered, FALSE, &Flags);
+		    lpOverlapped, &bytes, FALSE, &flags);
 
 	    if (!ok) {
-		Error = winSock.WSAGetLastError();
+		WSAerr = winSock.WSAGetLastError();
 	    }
 	}
 
 	/* Go handle the IO operation. */
-        HandleIo(infoPtr, bufPtr, cpinfo->port, BytesTransfered, Error,
-		Flags);
+        HandleIo(infoPtr, bufPtr, cpinfo->port, bytes, WSAerr, flags);
     }
     return 0;
 }
@@ -1549,14 +1550,14 @@ HandleIo (
     BufferInfo *bufPtr,
     HANDLE CompPort,
     DWORD bytes,
-    DWORD error,
+    DWORD WSAerr,
     DWORD flags)
 {
     SocketInfo *newInfoPtr;     // New client object for accepted connections
     BufferInfo *newBufPtr;       // Used to post new receives on accepted connections
     BOOL bCleanupSocket = FALSE;
 
-    if (error == ERROR_OPERATION_ABORTED) {
+    if (WSAerr == ERROR_OPERATION_ABORTED) {
         FreeBufferObj(bufPtr);
         if (InterlockedDecrement(&infoPtr->OutstandingOps) == 0) {
 	    FreeSocketInfo(infoPtr);
@@ -1565,7 +1566,7 @@ HandleIo (
     }
 
     bufPtr->used = bytes;
-    bufPtr->error = error;
+    bufPtr->WSAerr = WSAerr;
 
     EnterCriticalSection(&infoPtr->critSec);
     if (bufPtr->operation == OP_ACCEPT) {
@@ -1626,7 +1627,7 @@ HandleIo (
         if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
             /* If for some reason the send call fails, clean up the connection. */
             FreeBufferObj(newBufPtr);
-            error = SOCKET_ERROR;
+            WSAerr = SOCKET_ERROR;
         }
         
         /*
@@ -1669,23 +1670,20 @@ HandleIo (
 	    if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
 		/* In the event the recv fails, clean up the connection */
 		FreeBufferObj(newBufPtr);
-		error = SOCKET_ERROR;
+		WSAerr = SOCKET_ERROR;
 	    }
         }
     } else if (bufPtr->operation == OP_WRITE) {
-
         FreeBufferObj(bufPtr);
-
-//        if (DoSends(infoPtr) != NO_ERROR) {
-//            dbgprint("Cleaning up inside OP_WRITE handler\n");
-//            error = SOCKET_ERROR;
-//        }
+    } else if (bufPtr->operation == OP_CONNECT) {
     }
 
     LeaveCriticalSection(&infoPtr->critSec);
 
     return;
 }
+
+/* ====================== Private memory heap ======================== */
 
 __inline LPVOID
 IocpAlloc (SIZE_T size)
@@ -1698,6 +1696,8 @@ IocpFree (LPVOID block)
 {
     return HeapFree(IocpSubSystem.heap, 0, block);
 }
+
+/* ========================= Linked-List ============================= */
 
 /* Bitmask macros. */
 #define mask_a( mask, val ) if ( ( mask & val ) != val ) { mask |= val; }
@@ -1982,4 +1982,148 @@ BOOL
 IocpLLIsNotEmpty(LPLLIST ll)
 {
     return (ll->lCount != 0 ? TRUE : FALSE);
+}
+
+/* ========================= Error mappings ========================== */
+
+/*
+ * The following table contains the mapping from WinSock errors to
+ * errno errors.
+ */
+
+static int wsaErrorTable1[] = {
+    EWOULDBLOCK,	/* WSAEWOULDBLOCK */
+    EINPROGRESS,	/* WSAEINPROGRESS */
+    EALREADY,		/* WSAEALREADY */
+    ENOTSOCK,		/* WSAENOTSOCK */
+    EDESTADDRREQ,	/* WSAEDESTADDRREQ */
+    EMSGSIZE,		/* WSAEMSGSIZE */
+    EPROTOTYPE,		/* WSAEPROTOTYPE */
+    ENOPROTOOPT,	/* WSAENOPROTOOPT */
+    EPROTONOSUPPORT,	/* WSAEPROTONOSUPPORT */
+    ESOCKTNOSUPPORT,	/* WSAESOCKTNOSUPPORT */
+    EOPNOTSUPP,		/* WSAEOPNOTSUPP */
+    EPFNOSUPPORT,	/* WSAEPFNOSUPPORT */
+    EAFNOSUPPORT,	/* WSAEAFNOSUPPORT */
+    EADDRINUSE,		/* WSAEADDRINUSE */
+    EADDRNOTAVAIL,	/* WSAEADDRNOTAVAIL */
+    ENETDOWN,		/* WSAENETDOWN */
+    ENETUNREACH,	/* WSAENETUNREACH */
+    ENETRESET,		/* WSAENETRESET */
+    ECONNABORTED,	/* WSAECONNABORTED */
+    ECONNRESET,		/* WSAECONNRESET */
+    ENOBUFS,		/* WSAENOBUFS */
+    EISCONN,		/* WSAEISCONN */
+    ENOTCONN,		/* WSAENOTCONN */
+    ESHUTDOWN,		/* WSAESHUTDOWN */
+    ETOOMANYREFS,	/* WSAETOOMANYREFS */
+    ETIMEDOUT,		/* WSAETIMEDOUT */
+    ECONNREFUSED,	/* WSAECONNREFUSED */
+    ELOOP,		/* WSAELOOP */
+    ENAMETOOLONG,	/* WSAENAMETOOLONG */
+    EHOSTDOWN,		/* WSAEHOSTDOWN */
+    EHOSTUNREACH,	/* WSAEHOSTUNREACH */
+    ENOTEMPTY,		/* WSAENOTEMPTY */
+    EAGAIN,		/* WSAEPROCLIM */
+    EUSERS,		/* WSAEUSERS */
+    EDQUOT,		/* WSAEDQUOT */
+    ESTALE,		/* WSAESTALE */
+    EREMOTE,		/* WSAEREMOTE */
+};
+
+/*
+ * These error code are very windows specific and have no POSIX
+ * translation, yet.
+ *
+ * TODO: Fixme!
+ */
+
+static int wsaErrorTable2[] = {
+    EINVAL,		/* WSASYSNOTREADY */
+    EINVAL,		/* WSAVERNOTSUPPORTED */
+    EINVAL,		/* WSANOTINITIALISED */
+    EINVAL,		/* WSAEDISCON */
+    EINVAL,		/* WSAENOMORE */
+    EINVAL,		/* WSAECANCELLED */
+    EINVAL,		/* WSAEINVALIDPROCTABLE */
+    EINVAL,		/* WSAEINVALIDPROVIDER */
+    EINVAL,		/* WSAEPROVIDERFAILEDINIT */
+    EINVAL,		/* WSASYSCALLFAILURE */
+    EINVAL,		/* WSASERVICE_NOT_FOUND */
+    EINVAL,		/* WSATYPE_NOT_FOUND */
+    EINVAL,		/* WSA_E_NO_MORE */
+    EINVAL,		/* WSA_E_CANCELLED */
+    EINVAL,		/* WSAEREFUSED */
+};
+
+/*
+ * These error code are very windows specific and have no POSIX
+ * translation, yet.
+ *
+ * TODO: Fixme!
+ */
+
+static int wsaErrorTable3[] = {
+    EINVAL,	/* WSAHOST_NOT_FOUND,	Authoritative Answer: Host not found */
+    EINVAL,	/* WSATRY_AGAIN,	Non-Authoritative: Host not found, or SERVERFAIL */
+    EINVAL,	/* WSANO_RECOVERY,	Non-recoverable errors, FORMERR, REFUSED, NOTIMP */
+    EINVAL,	/* WSANO_DATA,		Valid name, no data record of requested type */
+    EINVAL,	/* WSA_QOS_RECEIVERS,		at least one Reserve has arrived */
+    EINVAL,	/* WSA_QOS_SENDERS,		at least one Path has arrived */
+    EINVAL,	/* WSA_QOS_NO_SENDERS,		there are no senders */
+    EINVAL,	/* WSA_QOS_NO_RECEIVERS,	there are no receivers */
+    EINVAL,	/* WSA_QOS_REQUEST_CONFIRMED,	Reserve has been confirmed */
+    EINVAL,	/* WSA_QOS_ADMISSION_FAILURE,	error due to lack of resources */
+    EINVAL,	/* WSA_QOS_POLICY_FAILURE,	rejected for administrative reasons - bad credentials */
+    EINVAL,	/* WSA_QOS_BAD_STYLE,		unknown or conflicting style */
+    EINVAL,	/* WSA_QOS_BAD_OBJECT,		problem with some part of the filterspec or providerspecific buffer in general */
+    EINVAL,	/* WSA_QOS_TRAFFIC_CTRL_ERROR,	problem with some part of the flowspec */
+    EINVAL,	/* WSA_QOS_GENERIC_ERROR,	general error */
+    EINVAL,	/* WSA_QOS_ESERVICETYPE,	invalid service type in flowspec */
+    EINVAL,	/* WSA_QOS_EFLOWSPEC,		invalid flowspec */
+    EINVAL,	/* WSA_QOS_EPROVSPECBUF,	invalid provider specific buffer */
+    EINVAL,	/* WSA_QOS_EFILTERSTYLE,	invalid filter style */
+    EINVAL,	/* WSA_QOS_EFILTERTYPE,		invalid filter type */
+    EINVAL,	/* WSA_QOS_EFILTERCOUNT,	incorrect number of filters */
+    EINVAL,	/* WSA_QOS_EOBJLENGTH,		invalid object length */
+    EINVAL,	/* WSA_QOS_EFLOWCOUNT,		incorrect number of flows */
+    EINVAL,	/* WSA_QOS_EUNKOWNPSOBJ,	unknown object in provider specific buffer */
+    EINVAL,	/* WSA_QOS_EPOLICYOBJ,		invalid policy object in provider specific buffer */
+    EINVAL,	/* WSA_QOS_EFLOWDESC,		invalid flow descriptor in the list */
+    EINVAL,	/* WSA_QOS_EPSFLOWSPEC,		inconsistent flow spec in provider specific buffer */
+    EINVAL,	/* WSA_QOS_EPSFILTERSPEC,	invalid filter spec in provider specific buffer */
+    EINVAL,	/* WSA_QOS_ESDMODEOBJ,		invalid shape discard mode object in provider specific buffer */
+    EINVAL,	/* WSA_QOS_ESHAPERATEOBJ,	invalid shaping rate object in provider specific buffer */
+    EINVAL,	/* WSA_QOS_RESERVED_PETYPE,	reserved policy element in provider specific buffer */
+};
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpWinConvertWSAError --
+ *
+ *	This routine converts a WinSock error into an errno value.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Sets the errno global variable.
+ *
+ *----------------------------------------------------------------------
+ */
+
+static void
+IocpWinConvertWSAError(
+    DWORD errCode)	/* Win32 WSA error code. */		
+{
+    if ((errCode >= WSAEWOULDBLOCK) && (errCode <= WSAEREMOTE)) {
+	Tcl_SetErrno(wsaErrorTable1[errCode - WSAEWOULDBLOCK]);
+    } else if ((errCode >= WSASYSNOTREADY) && (errCode <= WSAEREFUSED)) {
+	Tcl_SetErrno(wsaErrorTable2[errCode - WSASYSNOTREADY]);
+    } else if ((errCode >= WSAHOST_NOT_FOUND) && (errCode <= WSA_QOS_RESERVED_PETYPE)) {
+	Tcl_SetErrno(wsaErrorTable3[errCode - WSAHOST_NOT_FOUND]);
+    } else {
+	Tcl_SetErrno(EINVAL);
+    }
 }

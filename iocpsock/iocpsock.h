@@ -187,13 +187,14 @@ typedef struct _List {
 typedef struct _BufferInfo {
     WSAOVERLAPPED ol;
     SOCKET socket;	    // Used for AcceptEx client socket
-    DWORD error;	    // Any error that occured for this operation.
+    DWORD WSAerr;	    // Any error that occured for this operation.
     BYTE *buf;		    // Buffer for recv/send/AcceptEx
     size_t buflen;	    // Length of the buffer
     size_t used;	    /* Length of the buffer used (post operation) */
-#   define OP_ACCEPT	0   // AcceptEx
-#   define OP_READ	1   // WSARecv/WSARecvFrom
-#   define OP_WRITE	2   // WSASend/WSASendTo
+#   define OP_ACCEPT	0   /* AcceptEx() */
+#   define OP_READ	1   /* WSARecv()/WSARecvFrom() */
+#   define OP_WRITE	2   /* WSASend()/WSASendTo() */
+#   define OP_CONNECT	3   /* ConnectEx */
     int operation;	    // Type of operation issued
     LPSOCKADDR addr;	    // addr storage space.
     int addrlen;	    // length of the protocol specific address
@@ -202,7 +203,7 @@ typedef struct _BufferInfo {
 } BufferInfo;
 
 
-#include "tclInt.h"
+#include "tclPort.h"
 
 // We need at least the Tcl_Obj interface that was started in 8.0
 #if TCL_MAJOR_VERSION < 8
@@ -214,6 +215,13 @@ typedef struct _BufferInfo {
         (TCL_MINOR_VERSION == 1 && TCL_RELEASE_LEVEL != TCL_FINAL_RELEASE))
 #   error "Stubs interface doesn't work in 8.0 and alpha/beta 8.1; only 8.1.0+"
 #endif
+
+/* tclWinPort.h sets these -- remove them */
+#undef getservbyname
+#undef getsockopt
+#undef ntohs
+#undef setsockopt
+
 
 typedef struct ThreadSpecificData {
     Tcl_ThreadId threadId;
@@ -300,9 +308,9 @@ extern Tcl_Channel	Iocp_OpenTcpServer (Tcl_Interp *interp,
 				CONST char *port, CONST char *host,
 				Tcl_TcpAcceptProc *acceptProc,
 				ClientData acceptProcData);
-extern DWORD		PostOverlappedAccept (SocketInfo *si,
+extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
 				BufferInfo *acceptobj);
-extern BufferInfo *	GetBufferObj (SocketInfo *si, size_t buflen);
+extern BufferInfo *	GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen);
 extern SocketInfo *	NewSocketInfo(SOCKET socket);
 extern int		HasSockets(Tcl_Interp *interp);
 extern char *		GetSysMsg(DWORD id);
