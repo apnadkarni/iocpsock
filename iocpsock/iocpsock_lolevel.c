@@ -82,6 +82,16 @@ static void			HandleIo(register SocketInfo *infoPtr,
 				    HANDLE compPort, DWORD bytes, DWORD error,
 				    DWORD flags);
 
+/* special hack jobs! */
+static BOOL PASCAL	OurConnectEx(SOCKET s,
+			    const struct sockaddr* name, int namelen,
+			    PVOID lpSendBuffer, DWORD dwSendDataLength,
+			    LPDWORD lpdwBytesSent,
+			    LPOVERLAPPED lpOverlapped);
+static BOOL PASCAL	OurDisonnectEx(SOCKET hSocket,
+			    LPOVERLAPPED lpOverlapped, DWORD dwFlags,
+			    DWORD reserved);
+
 /*
  * This structure describes the channel type structure for TCP socket
  * based I/O using the native overlapped interface along with completion
@@ -969,7 +979,8 @@ IocpCloseProc (
 	} else {
 
 	    /* The non-blocking close.  We don't return any errors to Tcl
-	     * and allow the instance to auto-destory itself . */
+	     * and allow the instance to auto-destory itself.  Listening sockets
+	     * are NEVER non-blocking. */
 
 	    BufferInfo *bufPtr;
 
@@ -982,17 +993,10 @@ IocpCloseProc (
 
 	    /* Decrement the artificial count. */
     	    if (InterlockedDecrement(&infoPtr->outstandingOps) > 0) {
-		if (infoPtr->proto->DisconnectEx != NULL
-			&& infoPtr->proto->type == SOCK_STREAM
-			&& !infoPtr->acceptProc) {
-
+		if (infoPtr->proto->type == SOCK_STREAM) {
 		    bufPtr = GetBufferObj(infoPtr, 0);
-		    /* WinXP+ only has this feature. */
 		    PostOverlappedDisconnect(infoPtr, bufPtr);
-
 		} else {
-		    //Tcl_Panic("no such logic for this code path, yet");
-		    /* TODO: dunno!? Is this safe? */
 		    infoPtr->flags |= IOCP_CLOSABLE;
 		}
 	    } else {
@@ -2540,8 +2544,8 @@ IocpInitProtocolData (SOCKET sock, WS2ProtocolData *pdata)
 		sizeof(pdata->DisconnectEx),
 		&bytes, NULL, NULL);
 	if (pdata->DisconnectEx == NULL) {
-	    /* There is no Win2K/NT4 emulation for this. */
-	    pdata->DisconnectEx = NULL;
+	    /* Use our lame Win2K/NT4 emulation for this. */
+	    pdata->DisconnectEx = OurDisonnectEx;
 	}
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&TransmitFileGuid, sizeof(GUID),
@@ -2853,3 +2857,18 @@ OurConnectEx (
     }
     return FALSE;
 }
+
+BOOL PASCAL
+OurDisonnectEx (
+    SOCKET hSocket,
+    LPOVERLAPPED lpOverlapped,
+    DWORD dwFlags,
+    DWORD reserved)
+{
+    BufferInfo *bufPtr;
+    bufPtr = CONTAINING_RECORD(lpOverlapped, BufferInfo, ol);
+    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
+	    (ULONG_PTR) bufPtr->parent, lpOverlapped);
+    return TRUE;
+}
+

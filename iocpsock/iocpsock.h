@@ -447,12 +447,6 @@ extern CONST char *	IocpErrMsg TCL_VARARGS_DEF(DWORD, arg1);
 extern CONST char *	IocpErrMsgVA (DWORD errorCode, va_list argList);
 extern CONST char *	IocpError TCL_VARARGS_DEF(Tcl_Interp *, arg1);
 
-/* special hack jobs! */
-extern BOOL PASCAL	OurConnectEx(SOCKET s,
-			    const struct sockaddr* name, int namelen,
-			    PVOID lpSendBuffer, DWORD dwSendDataLength,
-			    LPDWORD lpdwBytesSent,
-			    LPOVERLAPPED lpOverlapped);
 /*
  * ----------------------------------------------------------------------
  * Some stuff that needs to be switches or fconfigures, but aren't yet.
