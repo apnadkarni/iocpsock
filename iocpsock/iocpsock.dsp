@@ -98,6 +98,10 @@ SOURCE=.\iocpsock.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\iocpsock.rc
+# End Source File
+# Begin Source File
+
 SOURCE=.\iocpsock_hilevel.c
 # End Source File
 # Begin Source File
