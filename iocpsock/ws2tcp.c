@@ -324,10 +324,6 @@ CreateTcp4Socket(
 		    FreeSocketAddress(hostaddr);
 		    goto error;
 		}
-	    } else {
-		/* Operation completed now instead of being queued. */
-		HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes,
-			WSAerr, 0);
 	    }
 	} else {
 	    code = winSock.connect(sock, hostaddr->ai_addr, hostaddr->ai_addrlen);
