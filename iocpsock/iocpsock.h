@@ -333,6 +333,7 @@ typedef struct SocketInfo {
     DWORD lastError;		    /* Error code from last operation. */
     HANDLE allDone;		    /* manual reset event */
     LPLLIST llPendingRecv;	    /* Our pending recv list. */
+    LLNODE node;		    /* linked list node for the readySockts list */
 
 } SocketInfo;
 

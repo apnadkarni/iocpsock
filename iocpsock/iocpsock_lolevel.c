@@ -728,7 +728,8 @@ IocpEventCheckProc (
 
     while (evCount--) {
 	EnterCriticalSection(&tsdPtr->readySockets->lock);
-	infoPtr = IocpLLPopFront(tsdPtr->readySockets, IOCP_LL_NOLOCK, 0);
+	infoPtr = IocpLLPopFront(tsdPtr->readySockets,
+		IOCP_LL_NOLOCK | IOCP_LL_NODESTROY, 0);
 	/*
 	 * Flop the markedReady toggle.  This is used to improve event
 	 * loop efficiency to avoid unneccesary events being queued into
@@ -736,6 +737,7 @@ IocpEventCheckProc (
 	 */
 	if (infoPtr) InterlockedExchange(&infoPtr->markedReady, 0);
 	LeaveCriticalSection(&tsdPtr->readySockets->lock);
+	/* Safety check. */
 	if (!infoPtr) break;
 	/*
 	 * Not ready. accept in the Tcl layer hasn't happened yet or
@@ -945,7 +947,7 @@ IocpCloseProc (
 	/* Remove all pending ready socket notices that have yet to
 	 * be queued into Tcl's event loop. */
 	IocpLLPopAllCompare(infoPtr->tsdHome->readySockets, infoPtr,
-		0);
+		IOCP_LL_NODESTROY);
 
 	/* Remove all events queued in the event loop for this socket. */
 	Tcl_DeleteEvents(IocpRemovePendingEvents, infoPtr);
@@ -1658,6 +1660,7 @@ NewSocketInfo (SOCKET socket)
     infoPtr->remoteAddr = NULL;	    /* Remote sockaddr. */
     infoPtr->lastError = NO_ERROR;
     infoPtr->allDone = CreateEvent(NULL, TRUE, FALSE, NULL);
+    infoPtr->node.ll = NULL;
     return infoPtr;
 }
 
@@ -1672,7 +1675,8 @@ FreeSocketInfo (SocketInfo *infoPtr)
      * Remove all pending ready socket notices that have yet to be queued
      * into Tcl's event loop.
      */
-    IocpLLPopAllCompare(infoPtr->tsdHome->readySockets, infoPtr, 0);
+    IocpLLPopAllCompare(infoPtr->tsdHome->readySockets, infoPtr,
+	    IOCP_LL_NODESTROY);
 
     /* Just in case... */
     if (infoPtr->socket != INVALID_SOCKET) {
@@ -1777,7 +1781,7 @@ IocpZapTclNotifier (SocketInfo *infoPtr)
 	if (!InterlockedExchange(&infoPtr->markedReady, 1)) {
 	    /* No entry on the ready list.  Insert one. */
 	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
-		    NULL, IOCP_LL_NOLOCK);
+		    &infoPtr->node, IOCP_LL_NOLOCK);
 	}
 	LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
 	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
