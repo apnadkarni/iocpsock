@@ -1,9 +1,27 @@
 2003-02-14  davygrvy
-
 	== Tagged iocpsock_0_3 ==
 
+	* iocpsock_lolevel.c:
+		small error code changes that mean nothing in the big picture.
+
 	* readme.txt:
-		Moving to version 0.3
+		update the prose
+
+	* tclhttpd.patch.txt:
+		new file
+
+	* readme.txt:
+		update the prose, again edited.
+
+	* iocpsock_lolevel.c:
+		OP_ACCEPT logic in HandleIo changed to report a zero byte read, but only
+		post another WSARecv when more than zero bytes -- just like OP_READ.
+
+	* hackersguide.txt:
+		CompletionThread name changed to CompletionThreadProc
+
+	* readme.txt:
+		update the prose, again.
 
 2003-02-13  davygrvy
 	* ws2tcp.c:
