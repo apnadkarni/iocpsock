@@ -997,7 +997,8 @@ IocpCloseProc (
 		    bufPtr = GetBufferObj(infoPtr, 0);
 		    PostOverlappedDisconnect(infoPtr, bufPtr);
 		} else {
-		    winSock.WSASendDisconnect(infoPtr->socket, NULL);
+		    /* TODO: untested */
+		    CancelIo((HANDLE)infoPtr->socket);
 		}
 	    } else {
 		/* All pending operations have ended. */
