@@ -1,4 +1,4 @@
-iocpsock.dll -- ver 1.0 a/k/a "it's done!" (10:36 PM 4/29/2003)
+iocpsock11.dll -- ver 1.1.0 a/k/a "The big efficiency patch" (7:18 PM 3/3/2004)
 
 http://sf.net/project/showfiles.php?group_id=73356
 http://sf.net/projects/iocpsock
@@ -60,8 +60,12 @@ address.
 
   Q: Does this only work on NT?
   A: Yes.  Just Win2K and WinXP.  It might work on NT4, though.  It
-     can't work any of the Win9x flavors because completion ports are
+     can't work any of the Win9x flavors because completion ports are only
      an operating system feature of NT.
+
+* CHANGES from 1.0:
+  - Use of the event loop made more efficient.  All polling behavior
+    eradicated forever..  Pure feed-forward.
 
 * CHANGES from 0.99:
   - [read] bug fixed where if the there was nothing to read, bytes read
