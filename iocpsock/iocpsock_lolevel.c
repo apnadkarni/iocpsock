@@ -1692,7 +1692,7 @@ HandleIo (
     BufferInfo *newBufPtr;
     int i;
     SOCKADDR *local, *remote;
-    SIZE_T addr_storage = infoPtr->proto->addrLen + 16;
+    SIZE_T addr_storage;
     int localLen, remoteLen;
 
     EnterCriticalSection(&infoPtr->critSec);
@@ -1728,6 +1728,8 @@ HandleIo (
 	IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
 
 	if (bufPtr->WSAerr == NO_ERROR) {
+	    addr_storage = infoPtr->proto->addrLen + 16;
+
 	    /*
 	     * Get the address information from the decoder routine specific
 	     * to this socket's LSP.
