@@ -1,0 +1,36 @@
+Index: httpd.tcl
+===================================================================
+RCS file: /cvsroot/tclhttpd/tclhttpd/lib/httpd.tcl,v
+retrieving revision 1.73
+diff -c -r1.73 httpd.tcl
+*** httpd.tcl	3 Dec 2002 07:20:30 -0000	1.73
+--- httpd.tcl	7 Feb 2003 18:42:14 -0000
+***************
+*** 190,197 ****
+      if {[string length $name] == 0} {
+  	set Httpd(name) [info hostname]
+      }
+!     set cmd [list socket -server [list HttpdAccept \
+! 	    [list http $name $port]]]
+      if {[string length $ipaddr] != 0} {
+          lappend cmd -myaddr $ipaddr
+      }
+--- 190,207 ----
+      if {[string length $name] == 0} {
+  	set Httpd(name) [info hostname]
+      }
+! 
+!     ### davygrvy mod for Lyris.
+!     if {[catch {package require Iocpsock}]} {
+! 	### Use the stock socket command.
+! 	set cmd socket
+!     } else {
+! 	### Use the field patch.
+! 	set cmd socket2
+!     }
+! 
+!     lappend cmd -server [list HttpdAccept \
+! 	    [list http $name $port]]
+      if {[string length $ipaddr] != 0} {
+          lappend cmd -myaddr $ipaddr
+      }
