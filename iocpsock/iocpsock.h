@@ -416,7 +416,11 @@ extern int		HasSockets (Tcl_Interp *interp);
 extern char *		GetSysMsg (DWORD id);
 extern Tcl_Obj *	GetSysMsgObj (DWORD id);
 extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
+extern Tcl_ObjCmdProc	Iocp_IrdaDiscoveryCmd;
 extern FN_DECODEADDR	DecodeIpSockaddr;
+extern int		Iocp_IrdaDiscovery (Tcl_Interp *interp,
+			    Tcl_Obj **deviceList, int limit);
+
 
 /*
  * Callback structure for accept callback in a TCP server.

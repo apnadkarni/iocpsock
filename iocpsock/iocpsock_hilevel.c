@@ -18,6 +18,21 @@ static void	UnregisterTcpServerInterpCleanupProc (
 		    Tcl_Interp *interp, AcceptCallback *acceptCallbackPtr);
 
 
+int
+Iocp_IrdaDiscoveryCmd (
+    ClientData notUsed,			/* Not used. */
+    Tcl_Interp *interp,			/* Current interpreter. */
+    int objc,				/* Number of arguments. */
+    Tcl_Obj *CONST objv[])		/* Argument objects. */
+{
+    Tcl_Obj *discoveryData = NULL;
+    int result;
+    
+    result = Iocp_IrdaDiscovery(interp, &discoveryData, 20);
+    if (result == TCL_OK) Tcl_SetObjResult(interp, discoveryData);
+    return result;
+}
+
 /*
  *----------------------------------------------------------------------
  *

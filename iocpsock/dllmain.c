@@ -147,6 +147,7 @@ Iocpsock_Init (Tcl_Interp *interp)
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
     Tcl_CreateObjCommand(interp, "iocp_stats", Iocp_StatsObjCmd, 0L, 0L);
+    Tcl_CreateObjCommand(interp, "irda::discovery", Iocp_IrdaDiscoveryCmd, 0L, 0L);
     Tcl_PkgProvide(interp, "Iocpsock", IOCPSOCK_VERSION);
     return TCL_OK;
 }
