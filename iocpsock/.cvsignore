@@ -1,5 +1,7 @@
 Debug
 Release
+Debug_Static
+Release_Static
 *.opt
 *.ncb
 *.plg
@@ -8,7 +10,6 @@ Release
 *.obj
 *.i
 *.asm
-*.aps
 Makefile
 tcl.hpj
 tclConfig.sh
