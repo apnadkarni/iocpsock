@@ -459,7 +459,7 @@ AcceptCallbackProc (
         Tcl_Preserve((ClientData) script);
         Tcl_Preserve((ClientData) interp);
 
-	TclFormatInt(portBuf, port);
+	sprintf(portBuf, "%d", port);
         Tcl_RegisterChannel(interp, chan);
 
         /*

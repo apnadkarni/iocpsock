@@ -250,7 +250,7 @@ typedef struct _BufferInfo {
 } BufferInfo;
 
 #define __WIN32__
-#include "tclPort.h"
+#include "tclInt.h"
 
 /* We need at least the Tcl_Obj interface that was started in 8.0 */
 #if TCL_MAJOR_VERSION < 8
@@ -289,7 +289,13 @@ extern Tcl_ThreadDataKey dataKey;
 #define IOCP_ASYNC	    (1<<2)
 #define IOCP_CLOSABLE	    (1<<3)
 
-#pragma pack (push, 4)
+enum IocpRecvMode {
+    IOCP_RECVMODE_ZERO_BYTE,
+    IOCP_RECVMODE_FLOW_CTRL,
+    IOCP_RECVMODE_BURST_DETECT
+};
+
+#include <pshpack4.h>
 
 typedef struct SocketInfo {
     Tcl_Channel channel;	    /* Tcl channel for this socket. */
@@ -311,9 +317,16 @@ typedef struct SocketInfo {
     volatile LONG outstandingRecvs; /* Count of overlapped WSARecv() operations. */
     volatile LONG outstandingRecvCap; /* Limit of outstanding overlapped WSARecv
 				     * operations allowed. */
+    SIZE_T outstandingRecvBufferCap; /* limit to how many unread buffers
+				     * in llPendingRecv are allowed. */
+    int needRecvRestart;	    /* When the buffer cap is hit, this is set. */
+
+    enum IocpRecvMode recvMode;	    /* mode in use */
 
     int watchMask;		    /* events we are interested in. */
     WS2ProtocolData *proto;	    /* Network protocol info. */
+
+    CRITICAL_SECTION tsdLock;	    /* accessor for the TSD block */
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
 				     * origin. */
     /* For listening sockets: */
@@ -330,7 +343,7 @@ typedef struct SocketInfo {
     LLNODE node;		    /* linked list node for the readySockts list. */
 } SocketInfo;
 
-#pragma pack (pop)
+#include <poppack.h>
 
 typedef struct AcceptInfo {
     SOCKADDR_STORAGE local;
@@ -354,12 +367,12 @@ typedef struct CompletionPortInfo {
 			     * directly. */
     HANDLE NPPheap;	    /* Special private heap for all data that
 			     * will be set with special attributes for
-			     * the non-paged pool (WSABUF and OVERLAPPED)
-			     */
-    HANDLE thread;	    /* The single threads for handling the
-			     * completion routine. */
+			     * the non-paged pool (WSABUF and
+			     * OVERLAPPED) */
+    HANDLE thread;	    /* The single thread for handling the
+			     * completion routine for the entire
+			     * process. */
 } CompletionPortInfo;
-
 extern CompletionPortInfo IocpSubSystem;
 
 TCL_DECLARE_MUTEX(initLock)

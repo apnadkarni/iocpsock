@@ -1,0 +1,60 @@
+<STYLE TYPE="text/css">
+  H1 { font-size: x-large; color: red }
+  H2 { font-size: large; color: blue }
+  DT { color: brown }
+</STYLE>
+<hr/>
+<h1>IOCPSOCK version 3.0</h1>
+<br/>
+The <b>IOCPSOCK</b> extension contains two (2) commands provided to the interpreter:
+<dl>
+
+    <dt>socket2</dt>
+    <dd>
+        Has the exact syntax as the core's <a href="http://wiki.tcl.tk/1114"
+        target="_workspot">socket</a> command, but operates under a different
+        I/O model.  An IPv6 address can be used.  The different
+        <a href="http://wiki.tcl.tk/1469">fconfigure</a> options are as
+        follows:<p/>
+        <dl>
+            <dt>-backlog</dt>
+            <dd>
+                Sets (or gets) the pool count of AcceptEx calls on the
+                listening socket.  Keep raising this if you are prone to
+                many "peer disconnected" errors when starting to read
+                from a new connection or when clients trying to connect
+                are getting "connection refused" or "timeout" errors. The
+                sky is the limit on this setting.  The only limit to be
+                concerned about is available memory.  The calculation is
+                ~500 bytes * the backlog size of the non-paged pool will
+                be reserved (ie. ~0.5 * 200 == ~100K of the non-paged
+                pool).  The non-paged pool is a global resource and is
+                limited to about 1/4 of the physical memory.
+            </dd>
+            <dt>-sendcap</dt>
+            <dd>
+                Sets (or gets) the limit in terms of the count of concurrent
+                buffers allowed.  Think of this as a poor-man's throttle.
+                More means speedier, but the per socket resource limit is
+                raised.
+            </dd>
+            <dt>-recvmode</dt>
+            <dd>
+                Sets (or gets) the receive mode and properties of the mode.
+                Choices are <i>zero-byte</i>, or <i>burst</i>. <i>zero-byte</i>
+                is the lowest in terms of resource usage per socket, but
+                is not the speediest.  <i>burst</i> mode allows for reads
+                behind the scenes and will increase the concurrent pool
+                to match the in-coming (instantanious) load within the
+                limits specified.
+            </dd>
+        </dl>
+    </dd>
+
+    <dt>iocp_stats</dt>
+    <dd>
+        returns useful info about what's going on under the hood.
+    </dd>
+
+</dl>
+more details to follow..

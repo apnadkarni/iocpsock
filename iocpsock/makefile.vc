@@ -190,6 +190,10 @@ DOTVERSION	= 1.1
 DOTVERSION	= 1.2
 !elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 2
 DOTVERSION	= 2.0
+!elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 3
+DOTVERSION	= 3.0
+!elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 31
+DOTVERSION	= 3.1
 !elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 0
 MSG =^
 Can't get version string from iocpsock.h

@@ -4,6 +4,9 @@
  *
  *	Think of this file as being win/tclWinSock.c
  *
+ *  See http://support.microsoft.com/default.aspx?scid=kb;en-us;Q192800
+ *  for some help on the design aspects.
+ *
  * ----------------------------------------------------------------------
  * RCS: @(#) $Id$
  * ----------------------------------------------------------------------
@@ -64,11 +67,10 @@ static Tcl_DriverGetHandleProc	IocpGetHandleProc;
 static Tcl_DriverBlockModeProc	IocpBlockProc;
 
 #ifdef TCL_CHANNEL_VERSION_4
-static Tcl_DriverCutProc	IocpCutProc;
-static Tcl_DriverSpliceProc	IocpSpliceProc;
+static Tcl_DriverThreadActionProc IocpThreadActionProc;
 #else
-static void			IocpCutProc (ClientData instanceData);
-static void			IocpSpliceProc (ClientData instanceData);
+static void			IocpThreadActionProc (
+				    ClientData instanceData, int action);
 #endif
 
 static Tcl_ChannelTypeVersion   IocpGetTclMaxChannelVer (
@@ -88,6 +90,17 @@ static void			HandleIo(register SocketInfo *infoPtr,
 				    register BufferInfo *bufPtr,
 				    HANDLE compPort, DWORD bytes, DWORD error,
 				    DWORD flags);
+static void			RepostRecvs (SocketInfo *infoPtr,
+				    int chanBufSize);
+static int			FilterSingleOpRecvBuf (SocketInfo *infoPtr,
+				    BufferInfo *bufPtr, int bytesRead);
+static int			FilterPartialRecvBufMerge (SocketInfo *infoPtr,
+				    BufferInfo *bufPtr, int *bytesRead,
+				    int toRead, char *bufPos);
+static int			DoRecvBufMerge (SocketInfo *infoPtr,
+				    BufferInfo *bufPtr, int *bytesRead,
+				    int toRead, char **bufPos, int *gotError);
+
 
 /* special hack jobs! */
 static BOOL PASCAL	OurConnectEx(SOCKET s,
@@ -109,9 +122,9 @@ static BOOL PASCAL	OurDisconnectEx(SOCKET hSocket,
 Tcl_ChannelType IocpChannelType = {
     "iocp",		    /* Type name. */
 #ifdef TCL_CHANNEL_VERSION_4
-    TCL_CHANNEL_VERSION_4,  /* v4 channel */
+    TCL_CHANNEL_VERSION_4,  /* TIP #218. */
 #else
-    TCL_CHANNEL_VERSION_2,  /* v2 channel */
+    TCL_CHANNEL_VERSION_2,  /* Old way. */
 #endif
     IocpCloseProc,	    /* Close proc. */
     IocpInputProc,	    /* Input proc. */
@@ -125,9 +138,9 @@ Tcl_ChannelType IocpChannelType = {
     IocpBlockProc,	    /* Set socket into (non-)blocking mode. */
     NULL,		    /* flush proc. */
     NULL,		    /* handler proc. */
+    NULL,		    /* wide seek */
 #ifdef TCL_CHANNEL_VERSION_4
-    IocpCutProc,	    /* cut proc. */
-    IocpSpliceProc,	    /* splice proc. */
+    IocpThreadActionProc,   /* TIP #218. */
 #endif
 };
 
@@ -995,6 +1008,7 @@ IocpInputProc (
     int bytesRead = 0;
     DWORD timeout;
     BufferInfo *bufPtr;
+    int done, gotError = 0;
 
     *errorCodePtr = 0;
 
@@ -1016,73 +1030,31 @@ IocpInputProc (
     /* If we are async, don't block on the queue. */
     timeout = (infoPtr->flags & IOCP_ASYNC ? 0 : INFINITE);
 
-    /*
-     * Merge in as much as toRead will allow.
-     */
+    /* Merge in as much as toRead will allow. */
 
     if ((!(infoPtr->flags & IOCP_ASYNC))
 	    || IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
+
 	while ((bufPtr = IocpLLPopFront(infoPtr->llPendingRecv,
 		IOCP_LL_NODESTROY, timeout)) != NULL) {
-	    if (bufPtr->used == 0 && bytesRead) {
-		/* Have EOF or error, yet bytes were written to the channel buffer.
-		   Push it back on for later. We need EOF as a single operation. */
-		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
-			&bufPtr->node, 0);
+
+	    if (FilterSingleOpRecvBuf(infoPtr, bufPtr, bytesRead)) {
 		break;
 	    }
-	    if ((bytesRead + (int) bufPtr->used) > toRead) {
-		/* We need to do a partial copy to the channel buffer and
-		 * repost ourselves. */
-		BYTE *buffer;
-		SIZE_T howMuch = toRead - bytesRead;
-		if (bufPtr->last) {
-		    buffer = bufPtr->last;
-		} else {
-		    buffer = bufPtr->buf;
-		}
-		memcpy(bufPos, buffer, howMuch);
-		bufPtr->used -= howMuch;
-		bufPtr->last = buffer + howMuch;
-		bytesRead += howMuch;
-		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
-			&bufPtr->node, 0);
+	    if (FilterPartialRecvBufMerge(infoPtr, bufPtr, &bytesRead,
+		    toRead, bufPos)) {
 		break;
 	    }
-	    if (bufPtr->WSAerr != NO_ERROR) {
-		infoPtr->lastError = bufPtr->WSAerr;
-		IocpWinConvertWSAError(infoPtr->lastError);
-		FreeBufferObj(bufPtr);
-		goto error;
-	    } else {
-		BYTE *buffer;
-		if (bufPtr->used == 0) {
-		    infoPtr->flags |= IOCP_EOF;
-		    FreeBufferObj(bufPtr);
-		    return 0;
-		}
-		if (bufPtr->last) {
-		    buffer = bufPtr->last;
-		} else {
-		    buffer = bufPtr->buf;
-		}
-		memcpy(bufPos, buffer, bufPtr->used);
-		bytesRead += bufPtr->used;
-		bufPos += bufPtr->used;
-	    }
+	    done = DoRecvBufMerge(infoPtr, bufPtr, &bytesRead,
+		    toRead, &bufPos, &gotError);
+	    if (gotError) goto error;
+	    if (done) break;
 	    FreeBufferObj(bufPtr);
 	    /* When blocking, only read one. */
 	    if (!(infoPtr->flags & IOCP_ASYNC)) break;
 	}
-	if (infoPtr->outstandingRecvCap == 1
-		&& !(infoPtr->flags & IOCP_EOF)) {
-	    BufferInfo *newBufPtr = GetBufferObj(infoPtr, toRead);
-	    /* if an error occurs, it does not return an error code
-	     * from here, it will come through the completion port. */
-	    if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != NO_ERROR) {
-		FreeBufferObj(newBufPtr);
-	    }
-	}
+	RepostRecvs(infoPtr, toRead);
+
     } else {
 	/* If there's nothing to get, return EWOULDBLOCK. */
 	*errorCodePtr = EWOULDBLOCK;
@@ -1095,6 +1067,141 @@ error:
     *errorCodePtr = Tcl_GetErrno();
     return -1;
 }
+
+
+static int
+FilterPartialRecvBufMerge (
+    SocketInfo *infoPtr,
+    BufferInfo *bufPtr,
+    int *bytesRead,
+    int toRead,
+    char *bufPos)
+{
+    BYTE *buffer;
+    SIZE_T howMuch = toRead - *bytesRead;
+
+    if ((*bytesRead + (int) bufPtr->used) > toRead) {
+	/* We need to do a partial copy to the channel buffer and
+	 * repost ourselves. */
+	if (bufPtr->last) {
+	    buffer = bufPtr->last;
+	} else {
+	    buffer = bufPtr->buf;
+	}
+	memcpy(bufPos, buffer, howMuch);
+	bufPtr->used -= howMuch;
+	bufPtr->last = buffer + howMuch;
+	*bytesRead += howMuch;
+	IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
+		&bufPtr->node, 0);
+	return 1;
+    }
+    return 0;
+}
+
+static int
+FilterSingleOpRecvBuf (SocketInfo *infoPtr, BufferInfo *bufPtr, int bytesRead)
+{
+    if (bufPtr->used == 0 && bufPtr->buflen != 0 && bytesRead) {
+	/* Have EOF or error, yet bytes were written to the channel buffer.
+	   Push it back on for later. We need EOF as a single operation. */
+	IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
+		&bufPtr->node, 0);
+	return 1;
+    }
+    return 0;
+}
+
+static int
+DoRecvBufMerge (
+    SocketInfo *infoPtr,
+    BufferInfo *bufPtr,
+    int *bytesRead,
+    int toRead,
+    char **bufPos,
+    int *gotError)
+{
+    *gotError = 0;
+
+    if (bufPtr->WSAerr != NO_ERROR) {
+	infoPtr->lastError = bufPtr->WSAerr;
+	IocpWinConvertWSAError(infoPtr->lastError);
+	FreeBufferObj(bufPtr);
+	*gotError = 1;
+	return 1;
+    } else {
+	if (bufPtr->used == 0) {
+	    if (bufPtr->buflen != 0) {
+		/* got EOF */
+		infoPtr->flags |= IOCP_EOF;
+		/* A read value of zero indicates EOF to the generic layer. */
+		*bytesRead = 0;
+		FreeBufferObj(bufPtr);
+		return 1;
+	    } else {
+		/*
+		 * Got the zero-byte recv alert. Do a non-blocking
+		 * and non-posting WSARecv using the channel buffer
+		 * directly.
+		 */
+
+		WSABUF buffer;
+		DWORD NumberOfBytesRecvd, Flags;
+
+		buffer.len = toRead;
+		buffer.buf = *bufPos;
+		Flags = 0;
+		if (winSock.WSARecv(infoPtr->socket, &buffer, 1,
+			&NumberOfBytesRecvd, &Flags, 0L, 0L)) {
+		    IocpWinConvertWSAError(winSock.WSAGetLastError());
+		    *gotError = 1;
+		    FreeBufferObj(bufPtr);
+		    return 1;
+		}
+		*bytesRead += NumberOfBytesRecvd;
+	    }
+	} else {
+	    BYTE *buffer;
+	    if (bufPtr->last) {
+		buffer = bufPtr->last;
+	    } else {
+		buffer = bufPtr->buf;
+	    }
+	    memcpy(*bufPos, buffer, bufPtr->used);
+	    bytesRead += bufPtr->used;
+	    *bufPos += bufPtr->used;
+	}
+    }
+    return 0;
+}
+
+
+static void
+RepostRecvs (SocketInfo *infoPtr, int chanBufSize)
+{
+    BufferInfo *newBufPtr;
+
+    if (infoPtr->flags & IOCP_EOF) return;
+
+    if (infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE
+	    || infoPtr->recvMode == IOCP_RECVMODE_FLOW_CTRL) {
+	newBufPtr = GetBufferObj(infoPtr,
+		(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : chanBufSize));
+	/* if an error occurs, it does not return an error code
+	 * from here, it will come through the completion port. */
+	if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != NO_ERROR) {
+	    FreeBufferObj(newBufPtr);
+	}
+    } else if (infoPtr->recvMode == IOCP_RECVMODE_BURST_DETECT && infoPtr->needRecvRestart
+	    && IocpLLGetCount(infoPtr->llPendingRecv) < infoPtr->outstandingRecvBufferCap) {
+	newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
+	if (PostOverlappedRecv(infoPtr, newBufPtr, 1 /*useBurst*/) != NO_ERROR) {
+	    FreeBufferObj(newBufPtr);
+	}
+	infoPtr->needRecvRestart = 0;
+    }
+}
+
 
 static int
 IocpOutputProc (
@@ -1245,19 +1352,60 @@ IocpSetOptionProc (
 	InterlockedExchange(&infoPtr->outstandingSendCap, Integer);
 	return TCL_OK;
 
-    } else if (strcmp(optionName, "-recvburst") == 0) {
-	if (Tcl_GetInt(interp, value, &Integer) != TCL_OK) {
-	    return TCL_ERROR;
-	}
-	if (Integer < 1) {
+    } else if (strcmp(optionName, "-recvmode") == 0) {
+	CONST char **argv;
+	int argc, recvCap, bufferCap;
+
+        if (Tcl_SplitList(interp, value, &argc, &argv) == TCL_ERROR) {
+            return TCL_ERROR;
+        }
+
+	if (strcmp(argv[0], "zero-byte") == 0) {
+	    infoPtr->recvMode = IOCP_RECVMODE_ZERO_BYTE;
+	    InterlockedExchange(&infoPtr->outstandingRecvCap, 1);
+	    InterlockedExchange(&infoPtr->outstandingRecvBufferCap, 1);
+	} else if (strcmp(argv[0], "flow-controlled") == 0) {
+	    infoPtr->recvMode = IOCP_RECVMODE_FLOW_CTRL;
+	    InterlockedExchange(&infoPtr->outstandingRecvCap, 1);
+	    InterlockedExchange(&infoPtr->outstandingRecvBufferCap, 1);
+	} else if (strcmp(argv[0], "burst-detection") == 0) {
+	    if (argc == 3) {
+		if (Tcl_GetInt(interp, argv[1], &recvCap) != TCL_OK) {
+		    return TCL_ERROR;
+		}
+		if (Tcl_GetInt(interp, argv[2], &bufferCap) != TCL_OK) {
+		    return TCL_ERROR;
+		}
+		if (recvCap < 1) {
+		    if (interp) {
+			Tcl_AppendResult(interp,
+			    "only a positive integer greater than zero is "
+			    "allowed", NULL);
+		    }
+		    return TCL_ERROR;
+		}
+		infoPtr->recvMode = IOCP_RECVMODE_BURST_DETECT;
+		InterlockedExchange(&infoPtr->outstandingRecvCap, recvCap);
+		InterlockedExchange(&infoPtr->outstandingRecvBufferCap, bufferCap);
+	    } else {
+		if (interp) {
+		    Tcl_AppendResult(interp,
+			"burst-detection must be followed by an integer for "
+			"the concurrency limit and another integer for the "
+			"buffer limit count as a list.", NULL);
+		}
+		return TCL_ERROR;
+	    }
+	} else {
 	    if (interp) {
 		Tcl_AppendResult(interp,
-		"only a positive integer greater than zero is allowed",
-			NULL);
+		    "unknown option for -recvmode: must be one of "
+		    "zero-byte, flow-controlled or {burst-detection "
+		    "<WSARecv_limit> <buffer_limit>}.", NULL);
 	    }
 	    return TCL_ERROR;
 	}
-	InterlockedExchange(&infoPtr->outstandingRecvCap, Integer);
+
 	return TCL_OK;
     }
 
@@ -1265,10 +1413,10 @@ IocpSetOptionProc (
 
     if (infoPtr->acceptProc) {
 	return Tcl_BadChannelOption(interp, optionName,
-		"keepalive nagle backlog sendcap recvburst");
+		"keepalive nagle backlog sendcap recvmode");
     } else {
 	return Tcl_BadChannelOption(interp, optionName,
-		"keepalive nagle sendcap recvburst");
+		"keepalive nagle sendcap recvmode");
     }
 }
 
@@ -1306,7 +1454,7 @@ IocpGetOptionProc (
 		infoPtr->flags |= IOCP_EOF;
 	    }
 	    return TCL_OK;
-#if 1   /* for debugging only */
+#if _DEBUG   /* for debugging only */
 	} else if (strncmp(optionName, "-ops", len) == 0) {
 	    TclFormatInt(buf, infoPtr->outstandingOps);
 	    Tcl_DStringAppendElement(dsPtr, buf);
@@ -1522,18 +1670,34 @@ IocpGetOptionProc (
         }
     }
 
-    if (len == 0 || !strncmp(optionName, "-recvburst", len)) {
+    if (len == 0 || !strncmp(optionName, "-recvmode", len)) {
         if (len == 0) {
-            Tcl_DStringAppendElement(dsPtr, "-recvburst");
-            Tcl_DStringStartSublist(dsPtr);
+            Tcl_DStringAppendElement(dsPtr, "-recvmode");
         }
-	TclFormatInt(buf, infoPtr->outstandingRecvCap);
-	Tcl_DStringAppendElement(dsPtr, buf);
-	TclFormatInt(buf, infoPtr->outstandingRecvs);
-	Tcl_DStringAppendElement(dsPtr, buf);
-        if (len == 0) {
-            Tcl_DStringEndSublist(dsPtr);
-        } else {
+	switch (infoPtr->recvMode) {
+	    case IOCP_RECVMODE_ZERO_BYTE:
+		Tcl_DStringAppendElement(dsPtr, "zero-byte");
+		break;
+	    case IOCP_RECVMODE_FLOW_CTRL:
+		Tcl_DStringAppendElement(dsPtr, "flow-controlled");
+		break;
+	    case IOCP_RECVMODE_BURST_DETECT:
+		if (len == 0) {
+		    Tcl_DStringStartSublist(dsPtr);
+		}
+		Tcl_DStringAppendElement(dsPtr, "burst-detection");
+		TclFormatInt(buf, infoPtr->outstandingRecvCap);
+		Tcl_DStringAppendElement(dsPtr, buf);
+		TclFormatInt(buf, infoPtr->outstandingRecvs);
+		Tcl_DStringAppendElement(dsPtr, buf);
+		if (len == 0) {
+		    Tcl_DStringEndSublist(dsPtr);
+		}
+		break;
+	    default:
+		Tcl_Panic("improper enumerator in IocpGetOptionProc");
+	}
+        if (len != 0) {
             return TCL_OK;
         }
     }
@@ -1541,10 +1705,10 @@ IocpGetOptionProc (
     if (len > 0) {
 	if (infoPtr->acceptProc) {
 	    return Tcl_BadChannelOption(interp, optionName,
-		"peername sockname keepalive nagle backlog sendcap recvburst");
+		"peername sockname keepalive nagle backlog sendcap recvmode");
 	} else {
 	    return Tcl_BadChannelOption(interp, optionName,
-		"peername sockname keepalive nagle sendcap recvburst");
+		"peername sockname keepalive nagle sendcap recvmode");
 	}
     }
 
@@ -1611,22 +1775,23 @@ IocpGetHandleProc (
 }
 
 static void
-IocpCutProc (ClientData instanceData)
-{
-    SocketInfo *infoPtr = (SocketInfo *) instanceData;
-
-    /* Unable to turn off reading, therefore don't notify
-     * anyone during the move. */
-    infoPtr->tsdHome = NULL;
-}
-
-static void
-IocpSpliceProc (ClientData instanceData)
+IocpThreadActionProc (ClientData instanceData, int action)
 {
     ThreadSpecificData *tsdPtr = InitSockets();
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
 
-    infoPtr->tsdHome = tsdPtr;
+    EnterCriticalSection(&infoPtr->tsdLock);
+    switch (action) {
+    case TCL_CHANNEL_THREAD_INSERT:
+	infoPtr->tsdHome = tsdPtr;
+	break;
+    case TCL_CHANNEL_THREAD_REMOVE:
+	/* Unable to turn off reading, therefore don't notify
+	 * anyone during the move. */
+	infoPtr->tsdHome = NULL;
+	break;
+    }
+    LeaveCriticalSection(&infoPtr->tsdLock);
 }
 
 /* =================================================================== */
@@ -1652,6 +1817,9 @@ NewSocketInfo (SOCKET socket)
     infoPtr->outstandingAcceptCap = IOCP_ACCEPT_CAP;
     infoPtr->outstandingRecvs = 0;
     infoPtr->outstandingRecvCap = IOCP_RECV_CAP;
+    infoPtr->needRecvRestart = 0;
+    InitializeCriticalSectionAndSpinCount(&infoPtr->tsdLock, 400);
+    infoPtr->recvMode = IOCP_RECVMODE_ZERO_BYTE;
     infoPtr->watchMask = 0;
     infoPtr->readyAccepts = NULL;
     infoPtr->acceptProc = NULL;
@@ -1678,6 +1846,8 @@ FreeSocketInfo (SocketInfo *infoPtr)
 	InterlockedDecrement(&StatOpenSockets);
 	winSock.closesocket(infoPtr->socket);
     }
+
+    DeleteCriticalSection(&infoPtr->tsdLock);
 
     if (infoPtr->localAddr) {
 	IocpFree(infoPtr->localAddr);
@@ -1763,6 +1933,7 @@ NewAcceptSockInfo (SOCKET socket, SocketInfo *infoPtr)
 	    infoPtr->outstandingSendCap);
     InterlockedExchange(&newInfoPtr->outstandingRecvCap,
 	    infoPtr->outstandingRecvCap);
+    newInfoPtr->recvMode = infoPtr->recvMode;
 
     return newInfoPtr;
 }
@@ -1775,6 +1946,7 @@ NewAcceptSockInfo (SOCKET socket, SocketInfo *infoPtr)
 static void
 IocpZapTclNotifier (SocketInfo *infoPtr)
 {
+    EnterCriticalSection(&infoPtr->tsdLock);
     /*
      * If we are in the middle of a thread transfer on the channel,
      * infoPtr->tsdHome will be NULL.
@@ -1787,8 +1959,10 @@ IocpZapTclNotifier (SocketInfo *infoPtr)
 		    &infoPtr->node, IOCP_LL_NOLOCK);
 	}
 	LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
+	/* this is safe to call from any thread. */
 	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
     }
+    LeaveCriticalSection(&infoPtr->tsdLock);
 }
 
 /* takes buffer ownership */
@@ -1949,6 +2123,8 @@ PostOverlappedRecv (
     DWORD bytes = 0, flags, WSAerr;
     int rc;
 
+    bufPtr->WSAerr = NO_ERROR;
+
     if (infoPtr->flags & IOCP_CLOSING) return WSAENOTCONN;
 
     /* Recursion limit */
@@ -1997,16 +2173,9 @@ PostOverlappedRecv (
 
     if (rc == SOCKET_ERROR) {
 	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
+	    InterlockedDecrement(&infoPtr->outstandingRecvs);
 	    bufPtr->WSAerr = WSAerr;
-	    /*
-	     * Eventhough we know about the error now, post this to the
-	     * port manually.  If we sent this to the revc'd linklist
-	     * now, we run the risk of placing this error ahead of good
-	     * data waiting in the port behind us (this thread).
-	     */
-	    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
-		(ULONG_PTR) infoPtr, &bufPtr->ol);
-	    return NO_ERROR;
+	    return WSAerr;
 	}
     } else if (bytes > 0 && useBurst) {
 	BufferInfo *newBufPtr;
@@ -2261,9 +2430,8 @@ again:
 #else
     }
     __except (error = GetExceptionCode(), EXCEPTION_EXECUTE_HANDLER) {
-	Tcl_Panic("Big ERROR!  IOCP Completion thread died with exception code: %#x\n"
-		"You MUST restart the application.  "
-		"All socket communication has halted.\n", error);
+	Tcl_Panic("Big ERROR!  IOCP Completion thread died with exception"
+		" code: %#x\n", error);
     }
 
     return error;
@@ -2369,11 +2537,14 @@ HandleIo (
 
 	    /* post IOCP_INITIAL_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
-		newBufPtr = GetBufferObj(newInfoPtr, IOCP_RECV_BUFSIZE);
-		if (PostOverlappedRecv(newInfoPtr, newBufPtr, 0)
+		newBufPtr = GetBufferObj(newInfoPtr,
+			(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
+		if ((WSAerr = PostOverlappedRecv(newInfoPtr, newBufPtr, 0))
 			!= NO_ERROR) {
-		    FreeBufferObj(newBufPtr);
-		    break;
+		    /* The new connection is not valid. */
+		    newInfoPtr->flags |= IOCP_CLOSING;
+		    PostOverlappedDisconnect(newInfoPtr, newBufPtr);
+		    goto recycle;
 		}
 	    }
 
@@ -2381,6 +2552,8 @@ HandleIo (
 	    IocpAlertToTclNewAccept(infoPtr, newInfoPtr);
 
 	    if (bytes > 0) {
+		/* Only if we asked for AcceptEx to give us an initial
+		 * recv with the accept. */
 		IocpPushRecvAlertToTcl(newInfoPtr, bufPtr);
 	    } else {
 		/* No data received from AcceptEx(). */
@@ -2389,8 +2562,8 @@ HandleIo (
 
 	} else if (bufPtr->WSAerr == WSA_OPERATION_ABORTED ||
 		bufPtr->WSAerr == WSAENOTSOCK) {
-	    /* The operation was cancelled and the socket must be closing.
-	     * Do NOT replace this returning AcceptEx. */
+	    /* The operation was cancelled.  The listening socket must
+	     * be closing.  Do NOT replace this returning AcceptEx. */
 	    FreeBufferObj(bufPtr);
 	    break;
 
@@ -2406,19 +2579,21 @@ HandleIo (
 
 	} else {
 	    /*
-	     * Possible SYN flood in progress. We WANT this returning
-	     * AcceptEx that had an error to be replaced.  Some of the
-	     * errors sampled are:
+	     * Possible spoofed SYN flood in progress. We WANT this
+	     * returning AcceptEx that had an error to be replaced.
+	     * An AcceptEx can fail with the same errors as ConnectEx,
+	     * believe it or not!  Some of the errors sampled are:
 	     *
 	     * WSAEHOSTUNREACH, WSAETIMEDOUT, WSAENETUNREACH
 	     */
 	    InterlockedIncrement(&StatFailedAcceptExCalls);
 	    FreeBufferObj(bufPtr);
 	}
-    
+
+recycle:
 	/*
 	 * Post another new AcceptEx() to replace this one that just
-	 * fired.
+	 * completed.
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, 0);
@@ -2439,19 +2614,40 @@ HandleIo (
 	InterlockedDecrement(&infoPtr->outstandingRecvs);
 
 	if (bytes > 0) {
-	    if (infoPtr->outstandingRecvCap > 1) {
-		/*
-		 * Create a new buffer object to replace the one that just
-		 * came in, but use a hard-coded size for now until a
-		 * method to control the receive buffer size exists.
-		 *
-		 * TODO: make an fconfigure for this and store it in the
-		 * SocketInfo struct.
-		 */
+	    /*
+	     * Don't replace this buffer if we hit the cap.  Not until the
+	     * buffers get consumed will the receiving be restarted.
+	     */
 
-		newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-		if (PostOverlappedRecv(infoPtr, newBufPtr, 1) != NO_ERROR) {
-		    FreeBufferObj(newBufPtr);
+	    if (infoPtr->recvMode == IOCP_RECVMODE_BURST_DETECT) {
+		if (IocpLLGetCount(infoPtr->llPendingRecv)
+			< infoPtr->outstandingRecvBufferCap) {
+		    /*
+		     * Create a new buffer object to replace the one that just
+		     * came in, but use the hard-coded size of
+		     * IOCP_RECV_BUFSIZE.
+		     */
+
+		    newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
+		    if ((WSAerr = PostOverlappedRecv(infoPtr, newBufPtr, 1))
+			    != NO_ERROR) {
+			if (newBufPtr->WSAerr != NO_ERROR) {
+			    /*
+			     * Eventhough we know about the error now, post
+			     * this to the port manually.  If we sent this
+			     * to the revc'd linklist now, we run the risk
+			     * of placing this error ahead of good data
+			     * waiting in the port behind us (this thread).
+			     */
+			    InterlockedIncrement(&infoPtr->outstandingOps);
+			    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
+				(ULONG_PTR) infoPtr, &newBufPtr->ol);
+			} else {
+			    FreeBufferObj(newBufPtr);
+			}
+		    }
+		} else {
+		    infoPtr->needRecvRestart = 1;
 		}
 	    }
 
@@ -2530,8 +2726,11 @@ HandleIo (
 
 	    /* post IOCP_INITIAL_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
-		newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-		if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != NO_ERROR) {
+		newBufPtr = GetBufferObj(infoPtr,
+			(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0
+			: IOCP_RECV_BUFSIZE));
+		if (PostOverlappedRecv(infoPtr, newBufPtr, 0)
+			!= NO_ERROR) {
 		    FreeBufferObj(bufPtr);
 		    break;
 		}

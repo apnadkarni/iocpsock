@@ -411,7 +411,8 @@ CreateTcpSocket(
 
 	    /* post IOCP_INITIAL_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
-		bufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
+		bufPtr = GetBufferObj(infoPtr,
+			(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
 		PostOverlappedRecv(infoPtr, bufPtr, 0);
 	    }
 #if 0

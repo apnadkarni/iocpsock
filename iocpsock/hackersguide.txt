@@ -34,4 +34,4 @@ I mentioned before we only use one completion thread.  Why is that?  If more tha
 one completion thread was used, consideration for packet order would be needed.  I
 avoid this by only using one thread <G>.  Think of it this way, one port splits to
 two service threads then back to a single linkedlist.  There is no guarentee that
-the order though that is maintained.
+the order though that is maintained.  Or, A one->many->one problem regarding order.

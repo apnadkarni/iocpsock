@@ -91,15 +91,15 @@ Iocp_StatsObjCmd (
 
     newResult = Tcl_NewObj();
     Tcl_AppendStringsToObj(newResult, Start, "Sockets open:", Middle, 0L);
-    TclFormatInt(buf, StatOpenSockets);
+    sprintf(buf, "%ld", StatOpenSockets);
     Tcl_AppendStringsToObj(newResult, buf, End, Start, "AcceptEx calls that returned an error:", Middle, 0L);
-    TclFormatInt(buf, StatFailedAcceptExCalls);
+    sprintf(buf, "%ld", StatFailedAcceptExCalls);
     Tcl_AppendStringsToObj(newResult, buf, End, Start, "Unreplaced AcceptEx calls:", Middle, 0L);
-    TclFormatInt(buf, StatFailedReplacementAcceptExCalls);
+    sprintf(buf, "%ld", StatFailedReplacementAcceptExCalls);
     Tcl_AppendStringsToObj(newResult, buf, End, Start, "General pool bytes in use:", Middle, 0L);
-    TclFormatInt(buf, StatGeneralBytesInUse);
+    sprintf(buf, "%ld", StatGeneralBytesInUse);
     Tcl_AppendStringsToObj(newResult, buf, End, Start, "Special pool bytes in use:", Middle, 0L);
-    TclFormatInt(buf, StatSpecialBytesInUse);
+    sprintf(buf, "%ld", StatSpecialBytesInUse);
     Tcl_AppendStringsToObj(newResult, buf, End, 0L);
     Tcl_SetObjResult(interp, newResult);
     return TCL_OK;
