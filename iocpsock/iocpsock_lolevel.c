@@ -883,7 +883,7 @@ error:
 	if (!InterlockedExchange(&infoPtr->markedReady, 1)) {
 	    /* No entry on the ready list.  Insert one. */
 	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
-		    NULL, IOCP_LL_NOLOCK);
+		    &infoPtr->node, IOCP_LL_NOLOCK);
 	}
     }
     LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
