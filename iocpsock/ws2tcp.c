@@ -181,13 +181,13 @@ CreateTcpSocket(
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    /* discover both ipv6 and ipv4 */
+    /* discover both/either ipv6 and ipv4. */
     if (! CreateSocketAddress(host, port, &hints, &hostaddr)) {
 	goto error;
     }
-    /* if we have more than one, choose ipv4 */
     addr = hostaddr;
-    if (addr->ai_next) {
+    /* if we have more than one and being passive, choose ipv4. */
+    if (addr->ai_next && host == NULL) {
 	while (addr->ai_family != AF_INET && addr->ai_next) {
 	    addr = addr->ai_next;
 	}
