@@ -2,6 +2,7 @@ console show
 
 package require Iocpsock
 set server {216.91.56.64}
+set server 192.168.0.102
 
 proc TestClientRead {s i} {
     if {[string length [set e [fconfigure $s -error]]]} {
@@ -10,7 +11,7 @@ proc TestClientRead {s i} {
 	return
     }
     if {![catch {read $s} reply]} {
-        #puts "recieved: $reply"
+        #puts "recieved"
 	catch {close $s}
 	return
     }
@@ -25,7 +26,7 @@ proc TestClientWrite {s i} {
 	close $s
 	return
     }
-    catch {puts $s "hello?"}
+    catch {puts -nonewline $s "hello?"}
     fileevent $s writable {}
 }
 
@@ -36,10 +37,10 @@ proc connect {{howmany {1}}} {
 	    return "Barfed at $a with $msg"
 	}
 	fconfigure $s -blocking 0 -buffering none -translation binary
-	fconfigure $s -sendpool 1 -recvburst 3
+	fconfigure $s -sendcap 2 -recvburst 3
 	fileevent $s readable [list TestClientRead $s $a]
 	fileevent $s writable [list TestClientWrite $s $a]
-	if {$a % 20} {update}
+	if {$a % 200} {update}
     }
     return
 }

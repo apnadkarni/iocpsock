@@ -15,7 +15,7 @@ proc GotRead {s} {
 	return
     }
     if {![catch {read $s}]} {
-	catch {puts $s "hi there"}
+	catch {puts -nonewline $s "hi there"}
     }
     if {[eof $s]} {
 	#puts "closing $s"
@@ -23,6 +23,6 @@ proc GotRead {s} {
     }
 }
 set s [socket2 -server accept -myaddr [info hostname] 5150]
-fconfigure $s -acceptpool 500
+fconfigure $s -backlog 500
 
 catch {console show}
