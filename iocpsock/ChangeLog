@@ -1,3 +1,15 @@
+2004-03-12  davygrvy
+	* testme.cmd:
+		set defaults so they work in my environment.. hehe just me!
+
+	* makefile.vc:
+		aweful grepping logic rears its ugly head.
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		fconfigure renames and new async close() behavior (NOT FINISHED
+		YET)
+
 2004-03-10  davygrvy
 	* .cvsignore:
 	* dllmain.c:
