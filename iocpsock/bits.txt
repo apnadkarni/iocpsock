@@ -17,3 +17,9 @@ proc gotRead {s} {
 }
 load iocpsock.dll
 set s [socket2 -server accept -myaddr [info hostname] 1234]
+
+
+proc doit {} {set s [socket [info host] 1234];puts $s "lala";flush $s;return $s}
+
+
+http://localhost/macClasII_2.hfx
