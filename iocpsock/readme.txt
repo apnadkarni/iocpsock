@@ -38,10 +38,10 @@ Per socket resources are now tunable.  The new fconfigures are:
 		socket.  For query, it returns the cap and actual
 		in-use in a list.
 
--recvburst:	Sets the cap allowed to the "(A)utomatic (B)urst (D)etection".
-		If set to one, ABD is turned off in favor of normal
-		flow control.  For server sockets, this setting is
-		copied to new connections.  For query, it returns the
+-recvburst:	Sets the cap allowed to the "(A)utomatic (B)urst
+		(D)etection".  If set to one, ABD is turned off in favor
+		of normal flow control.  For server sockets, this setting
+		is copied to new connections.  For query, it returns the
 		cap and actual in-use in a list.
 
 To see ABD in action: http://iocpsock.sourceforge.net/netio.jpg
@@ -66,12 +66,46 @@ My suggestions are:
 -sendcap	20		1
 -recvburst	20		1
 
+I'm still experimenting with the tunable fconfigures and might decide
+on different suggestions in the future.  Today, while testing the
+original OS bug that this extension what written specifically to
+overcome appears to have been fixed in a M$ service pack for XP!  I'll
+try to find the root of this (my) confusion I'm having over the next
+few days.
+
 It's amazingly stable.  It provides one command called [socket2] and
 behaves just like [socket], but with the added fconfigures.
 
 It does IPv6, but is mostly untested in that respect.  The -sockname
 and -peername fconfigures don't do IPv6 yet, though, but you can
 create IPv6 sockets just by using an IPv6 address.
+
+IMPORTANT things to know:
+
+1) Don't set the -buffersize fconfigure to less than 4096.  This
+limitation will be fixed in a future release.  Call me lazy..
+
+2) The readable file event handler is only notified once per event
+to read.  Because of my design for efficiency, no polling behavior
+is used.  IOW, when the readable event handler is called (because
+some bytes came in to the socket) and the script does not, for some
+reason, call [read] or [gets] and no more bytes follow, the readable
+event handler will not be called again (unless UpdateInterest() is
+called by the generic layer, which is not a guarentee that it will do
+so).  The same is true for the EOF condition.  If the readable event
+handler does not close the socket for the [read] that returns an
+empty string followed by an [eof] that returns true, the readable
+event handler WILL NOT BE CALLED over and over until it does close
+the socket unlike the core socket driver which will repeat unhandled
+events.  FYI, the core socket repeats events because it is a polling
+design, just look at SocketSetupProc() in win/tclWinSock.c and you'll
+see that each iteration of the event loop must poll every socket
+instance open to see if it is in a ready state.
+
+My thoughts on this are simple..  Use a good script for the readable
+handler that behaves properly and please.. always check for [eof]
+after you [read] or [gets], not before.
+
 
 * FAQ:
 
@@ -85,7 +119,7 @@ create IPv6 sockets just by using an IPv6 address.
      (and data) arrives allowing the operation to happen wholly in
      kernel-mode so that not only do we get notification, but we get
      the data of the operation too.  Instead of "what's ready?", it's
-     "what's been done?"
+     "here's what got done"
 
   Q: Gimme some links.  I want to read up on this.
   A: http://www.cswl.com/whiteppr/tech/rtime.html
@@ -94,9 +128,10 @@ create IPv6 sockets just by using an IPv6 address.
      http://msdn.microsoft.com/library/en-us/winsock/winsock/overlapped_i_o_2.asp
 
   Q: Does this only work on NT?
-  A: Yes.  Just Win2K and WinXP.  It might work on NT4, though.  It
+  A: Yes.  Just Win2K and WinXP.  I did try it once on NT4, though.  It
      can't work any of the Win9x flavors because completion ports are only
      an operating system feature of the NT flavors.
+
 
 * CHANGES from 1.1:
   - new fconfigures: -backlog (in place of -ovrlpd), -sendcap, -recvburst.
