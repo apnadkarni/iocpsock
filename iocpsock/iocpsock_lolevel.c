@@ -656,7 +656,7 @@ IocpThreadExitHandler (ClientData clientData)
 
     Tcl_DeleteEventSource(IocpEventSetupProc, IocpEventCheckProc, NULL);
     if (initialized) {
-	IocpLLPopAll(tsdPtr->readySockets, NULL, 0);
+	IocpLLPopAll(tsdPtr->readySockets, NULL, IOCP_LL_NODESTROY);
 	IocpLLDestroy(tsdPtr->readySockets);
 	tsdPtr->readySockets = NULL;
     }
@@ -1072,7 +1072,8 @@ IocpInputProc (
 		 * Notice that we don't place the socket on the ready
 		 * list.  UpdateInterest() at the end of DoReadChars()
 		 * in generic/tclIO.c will do this for us by forcing
-		 * a verify through our watchProc.
+		 * a verify through our watchProc.  If you don't beleive
+		 * me, use a step-debugger and see for yourself.
 		 */
 		break;
 	    }
@@ -1147,7 +1148,12 @@ IocpOutputProc (
 
     bufPtr = GetBufferObj(infoPtr, toWrite);
     memcpy(bufPtr->buf, buf, toWrite);
-    PostOverlappedSend(infoPtr, bufPtr);
+    if (PostOverlappedSend(infoPtr, bufPtr) == WSAENOBUFS) {
+	/* Would have been over the sendcap value. */
+	*errorCodePtr = EWOULDBLOCK;
+	return -1;
+    }
+
 
     /*
      * Let errors come back through the completion port or else we risk
@@ -2043,12 +2049,19 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
     wbuf.buf = bufPtr->buf;
     wbuf.len = bufPtr->buflen;
 
+    /* Recursion limit */
+    if (InterlockedIncrement(&infoPtr->outstandingSends)
+	    > infoPtr->outstandingSendCap) {
+	InterlockedDecrement(&infoPtr->outstandingSends);
+	/* Best choice I could think of for an error value. */
+	return WSAENOBUFS;
+    }
+
     /*
      * Increment the outstanding overlapped counts for this socket.
      */
 
     InterlockedIncrement(&infoPtr->outstandingOps);
-    InterlockedIncrement(&infoPtr->outstandingSends);
 
     if (infoPtr->proto->type == SOCK_STREAM) {
 	rc = winSock.WSASend(infoPtr->socket, &wbuf, 1, &bytes, 0,
