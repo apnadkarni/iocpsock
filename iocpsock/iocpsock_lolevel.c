@@ -37,7 +37,7 @@ GUID TransmitFileGuid		= WSAID_TRANSMITFILE;
 Tcl_ThreadDataKey dataKey;
 
 /* local prototypes */
-static void			InitSockets();
+static ThreadSpecificData *	InitSockets();
 static DWORD			InitializeIocpSubSystem();
 static Tcl_ExitProc		IocpExitHandler;
 static Tcl_ExitProc		IocpThreadExitHandler;
@@ -55,17 +55,25 @@ static Tcl_DriverGetOptionProc	IocpGetOptionProc;
 static Tcl_DriverWatchProc	IocpWatchProc;
 static Tcl_DriverGetHandleProc	IocpGetHandleProc;
 static Tcl_DriverBlockModeProc	IocpBlockProc;
-/*static Tcl_DriverCutProc	IocpCutProc;
-static Tcl_DriverSpliceProc	IocpSpliceProc;*/
+#ifdef TCL_CHANNEL_VERSION_4
+static Tcl_DriverCutProc	IocpCutProc;
+static Tcl_DriverSpliceProc	IocpSpliceProc;
+#else
+static void IocpCutProc _ANSI_ARGS_((ClientData instanceData));
+static void IocpSpliceProc _ANSI_ARGS_((ClientData instanceData));
+#endif
 
-static void	    IocpAlertToTclNewAccept (SocketInfo *infoPtr,
-			    SocketInfo *newClient);
-static void	    IocpAcceptOne (SocketInfo *infoPtr);
-static void	    IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr);
-static void	    IocpZapTclNotifier (SocketInfo *infoPtr);
-static DWORD	    PostOverlappedSend (SocketInfo *infoPtr,
-			    BufferInfo *sendobj);
-static DWORD WINAPI CompletionThreadProc (LPVOID lpParam);
+static Tcl_ChannelTypeVersion   IocpGetTclMaxChannelVer (
+				    Tcl_ChannelTypeVersion maxAllowed);
+static void			IocpAlertToTclNewAccept (SocketInfo *infoPtr,
+				    SocketInfo *newClient);
+static void			IocpAcceptOne (SocketInfo *infoPtr);
+static void			IocpPushRecvAlertToTcl(SocketInfo *infoPtr,
+				    BufferInfo *bufPtr);
+static void			IocpZapTclNotifier (SocketInfo *infoPtr);
+static DWORD			PostOverlappedSend (SocketInfo *infoPtr,
+				    BufferInfo *sendobj);
+static DWORD WINAPI		CompletionThreadProc (LPVOID lpParam);
 
 /*
  * This structure describes the channel type structure to Tcl's generic layer
@@ -76,7 +84,11 @@ static DWORD WINAPI CompletionThreadProc (LPVOID lpParam);
 
 Tcl_ChannelType IocpChannelType = {
     "iocp",		    /* Type name. */
+#ifdef TCL_CHANNEL_VERSION_4
+    TCL_CHANNEL_VERSION_4,  /* v4 channel */
+#else
     TCL_CHANNEL_VERSION_2,  /* v2 channel */
+#endif
     IocpCloseProc,	    /* Close proc. */
     IocpInputProc,	    /* Input proc. */
     IocpOutputProc,	    /* Output proc. */
@@ -89,8 +101,11 @@ Tcl_ChannelType IocpChannelType = {
     IocpBlockProc,	    /* Set socket into (non-)blocking mode. */
     NULL,		    /* flush proc. */
     NULL,		    /* handler proc. */
-    /*IocpCutProc,          /* cut proc. */
-    /*IocpSpliceProc,	    /* splice proc. */
+    NULL,		    /* wide seek proc. */
+#ifdef TCL_CHANNEL_VERSION_4
+    IocpCutProc,	    /* cut proc. */
+    IocpSpliceProc,	    /* splice proc. */
+#endif
 };
 
 
@@ -108,12 +123,14 @@ typedef struct SocketEvent {
 
 
 
-static void
+static ThreadSpecificData *
 InitSockets()
 {
     WSADATA wsaData;
     OSVERSIONINFO os;
-    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+    ThreadSpecificData *tsdPtr;
+
+    tsdPtr = (ThreadSpecificData *) TCL_TSD_INIT(&dataKey);
 
     /* global/once init */
     if (!initialized) {
@@ -130,7 +147,7 @@ InitSockets()
 	else if (winSock.hModule = LoadLibraryA("winsock.dll"));
 	else {
 	    winsockLoadErr = TCL_WSE_NOTFOUND;
-	    return;
+	    return NULL;
 	}
 
 	/*
@@ -392,6 +409,26 @@ InitSockets()
 	    }
 	}
 
+	/*
+	 * Assert our Tcl_ChannelType struct to the true version this core
+	 * can accept, but not above the version of our design.
+	 */
+
+	IocpChannelType.version =
+		IocpGetTclMaxChannelVer(IocpChannelType.version);
+
+	switch ((int)IocpChannelType.version) {
+	    case TCL_CHANNEL_VERSION_1:
+		/* Oldest Tcl_ChannelType struct. */
+		IocpChannelType.version =
+			(Tcl_ChannelTypeVersion) IocpBlockProc;
+		break;
+	    default:
+		/* No other Tcl_ChannelType struct maniputions are known at
+		 * this time. */
+		break;
+	}
+
 	os.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
 	GetVersionEx(&os);
 
@@ -416,15 +453,40 @@ InitSockets()
 	tsdPtr->needAwake = CreateEvent(NULL, TRUE, FALSE, NULL);
     }
 
-    return;
+    return tsdPtr;
 
 unloadLibrary:
     initialized = 0;
     FreeLibrary(winSock.hModule);
     winSock.hModule = NULL;
-    return;
+    return NULL;
 }
 
+Tcl_ChannelTypeVersion
+IocpGetTclMaxChannelVer (Tcl_ChannelTypeVersion maxAllowed)
+{
+    Tcl_ChannelType fake;
+
+    if (maxAllowed == (Tcl_ChannelTypeVersion) 0x1) {
+	return maxAllowed;
+    }
+
+    /*
+     * Stubs slot empty.  Must be TCL_CHANNEL_VERSION_1
+     */
+    if (Tcl_ChannelVersion == NULL) {
+	return TCL_CHANNEL_VERSION_1;
+    }
+    
+    /* Tcl_ChannelVersion only touches the ->version field. */
+    fake.version = maxAllowed;
+
+    while (Tcl_ChannelVersion(&fake) == TCL_CHANNEL_VERSION_1) {
+	fake.version = (Tcl_ChannelTypeVersion)((int)fake.version - 1);
+	if (fake.version == (Tcl_ChannelTypeVersion) 0x1) break;
+    }
+    return fake.version;
+}
 
 int
 HasSockets(Tcl_Interp *interp)
@@ -489,7 +551,7 @@ InitializeIocpSubSystem ()
 	goto done;
     }
 
-    /* Create the private memory heap. */
+    /* Create the general private memory heap. */
     IocpSubSystem.heap = HeapCreate(0, IOCP_HEAP_START_SIZE, 0);
     if (IocpSubSystem.heap == NULL) {
 	error = GetLastError();
@@ -497,10 +559,23 @@ InitializeIocpSubSystem ()
 	goto done;
     }
 
+    /* Create the special private memory heap. */
+    IocpSubSystem.NPPheap = HeapCreate(0, IOCP_HEAP_START_SIZE, 0);
+    if (IocpSubSystem.NPPheap == NULL) {
+	error = GetLastError();
+	HeapDestroy(IocpSubSystem.heap);
+	CloseHandle(IocpSubSystem.port);
+	goto done;
+    }
+
+    /* Create the one worker thread that services the completion port
+     * for all sockets. */
     IocpSubSystem.thread = CreateThread(NULL, 0, CompletionThreadProc,
 	    &IocpSubSystem, 0, NULL);
     if (IocpSubSystem.thread == NULL) {
 	error = TCL_WSE_CANTSTARTHANDLERTHREAD;
+	HeapDestroy(IocpSubSystem.heap);
+	HeapDestroy(IocpSubSystem.NPPheap);
 	CloseHandle(IocpSubSystem.port);
 	goto done;
     }
@@ -528,8 +603,10 @@ IocpExitHandler (ClientData clientData)
 	/* Close the completion port object. */
 	CloseHandle(IocpSubSystem.port);
 
-	/* Tear down the private memory heap. */
+	/* Tear down the private memory heaps. */
 	HeapDestroy(IocpSubSystem.heap);
+	HeapDestroy(IocpSubSystem.NPPheap);
+
 	initialized = 0;
 	winSock.WSACleanup();
 	FreeLibrary(winSock.hModule);
@@ -569,8 +646,10 @@ IocpEventSetupProc (
     ClientData clientData,
     int flags)
 {
-    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+    ThreadSpecificData *tsdPtr;
     Tcl_Time blockTime = {0, 0};
+
+    tsdPtr = InitSockets();
 
     if (!(flags & TCL_FILE_EVENTS)) {
 	return;
@@ -602,10 +681,12 @@ IocpEventCheckProc (
     ClientData clientData,
     int flags)
 {
-    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+    ThreadSpecificData *tsdPtr;
     SocketInfo *infoPtr;
     SocketEvent *evPtr;
     int evCount;
+
+    tsdPtr = InitSockets();
 
     if (!(flags & TCL_FILE_EVENTS)) {
 	return;
@@ -672,11 +753,13 @@ IocpEventProc (
 	return 1;
     }
 
-    if (infoPtr->watchMask & TCL_READABLE && IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
+    if (infoPtr->watchMask & TCL_READABLE &&
+	    IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
 	readyMask |= TCL_READABLE;
     }
 
-    if (infoPtr->watchMask & TCL_WRITABLE && infoPtr->readyMask & TCL_WRITABLE) {
+    if (infoPtr->watchMask & TCL_WRITABLE &&
+	    infoPtr->readyMask & TCL_WRITABLE) {
 	readyMask |= TCL_WRITABLE;
 	infoPtr->readyMask &= ~(TCL_WRITABLE);
     }
@@ -688,10 +771,11 @@ IocpEventProc (
 void
 IocpAcceptOne (SocketInfo *infoPtr)
 {
-    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+    ThreadSpecificData *tsdPtr;
     char channelName[16 + TCL_INTEGER_SPACE];
     IocpAcceptInfo *acptInfo;
 
+    tsdPtr = InitSockets();
     acptInfo = IocpLLPopFront(infoPtr->readyAccepts, IOCP_LL_NODESTROY, 0);
 
     /* if the actual count doesn't lineup with the notices, don't barf. */
@@ -705,22 +789,23 @@ IocpAcceptOne (SocketInfo *infoPtr)
      * just in case we hit this issue.
      */
     wsprintfA(channelName, "iocp%p", acptInfo->clientInfo);
-    acptInfo->clientInfo->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
-	    (ClientData) acptInfo->clientInfo, (TCL_READABLE | TCL_WRITABLE));
-    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-translation",
-	    "auto crlf") == TCL_ERROR) {
+    acptInfo->clientInfo->channel = Tcl_CreateChannel(&IocpChannelType,
+	    channelName, (ClientData) acptInfo->clientInfo,
+	    (TCL_READABLE | TCL_WRITABLE));
+    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel,
+	    "-translation", "auto crlf") == TCL_ERROR) {
 	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
 	return;
     }
-    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-eofchar", "")
-	    == TCL_ERROR) {
+    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel,
+	    "-eofchar", "") == TCL_ERROR) {
 	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
 	return;
     }
 
     // Had to add this!
-    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-blocking", "0")
-	    == TCL_ERROR) {
+    if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel,
+	    "-blocking", "0") == TCL_ERROR) {
 	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
 	return;
     }
@@ -779,9 +864,14 @@ IocpCloseProc (
     ClientData instanceData,	/* The socket to close. */
     Tcl_Interp *interp)		/* Unused. */
 {
-    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     int errorCode = 0, err;
+
+    if (IocpChannelType.version <= TCL_CHANNEL_VERSION_3 ||
+	    IocpChannelType.version ==
+	    (Tcl_ChannelTypeVersion) IocpBlockProc) {
+	IocpCutProc(instanceData);
+    }
 
     // The core wants to close channels after the exit handler!
     // Our heap is gone!
@@ -1237,7 +1327,8 @@ IocpWatchProc (
 
     if (!infoPtr->acceptProc) {    
         infoPtr->watchMask = mask;
-	if (mask) {
+	if (mask & TCL_WRITABLE || (mask & TCL_READABLE &&
+		IocpLLIsNotEmpty(infoPtr->llPendingRecv))) {
 	    /* Add a trip through the next event loop iteration to
 	     * verify. */
 	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
@@ -1296,9 +1387,10 @@ IocpCutProc (ClientData instanceData)
 static void
 IocpSpliceProc (ClientData instanceData)
 {
-    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+    ThreadSpecificData *tsdPtr;
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
 
+    tsdPtr = InitSockets();
     infoPtr->tsdHome = tsdPtr;
 }
 
@@ -1416,14 +1508,14 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
     BufferInfo *bufPtr;
 
     /* Allocate the object. */
-    bufPtr = IocpAlloc(sizeof(BufferInfo));
+    bufPtr = IocpNPPAlloc(sizeof(BufferInfo));
     if (bufPtr == NULL) {
 	return NULL;
     }
     /* Allocate the buffer. */
-    bufPtr->buf = IocpAlloc(sizeof(BYTE)*buflen);
+    bufPtr->buf = IocpNPPAlloc(sizeof(BYTE)*buflen);
     if (bufPtr->buf == NULL) {
-	IocpFree(bufPtr);
+	IocpNPPFree(bufPtr);
 	return NULL;
     }
     bufPtr->socket = INVALID_SOCKET;
@@ -1444,8 +1536,8 @@ FreeBufferObj (BufferInfo *bufPtr)
     if (bufPtr->socket != INVALID_SOCKET) {
 	winSock.closesocket(bufPtr->socket);
     }
-    IocpFree(bufPtr->buf);
-    IocpFree(bufPtr);
+    IocpNPPFree(bufPtr->buf);
+    IocpNPPFree(bufPtr);
 }
 
 SocketInfo *
@@ -2048,6 +2140,8 @@ done:
 /* =================================================================== */
 /* ====================== Private memory heap ======================== */
 
+/* general pool */
+
 __inline LPVOID
 IocpAlloc (SIZE_T size)
 {
@@ -2064,11 +2158,35 @@ IocpReAlloc (LPVOID block, SIZE_T size)
     return p;
 }
 
-
 __inline BOOL
 IocpFree (LPVOID block)
 {
     return HeapFree(IocpSubSystem.heap, 0, block);
+}
+
+/* special pool */
+
+__inline LPVOID
+IocpNPPAlloc (SIZE_T size)
+{
+    LPVOID p;
+    p = HeapAlloc(IocpSubSystem.NPPheap, HEAP_ZERO_MEMORY, size);
+    return p;
+}
+
+__inline LPVOID
+IocpNPPReAlloc (LPVOID block, SIZE_T size)
+{
+    LPVOID p;
+    p = HeapReAlloc(IocpSubSystem.NPPheap, HEAP_ZERO_MEMORY, block, size);
+    return p;
+}
+
+
+__inline BOOL
+IocpNPPFree (LPVOID block)
+{
+    return HeapFree(IocpSubSystem.NPPheap, 0, block);
 }
 
 /* =================================================================== */

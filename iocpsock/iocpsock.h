@@ -311,9 +311,12 @@ extern Tcl_ChannelType IocpChannelType;
  */
 typedef struct CompletionPortInfo {
     HANDLE port;	    /* The completion port handle. */
-    HANDLE heap;	    /* Private heap used for WSABUFs and other
-			     * objects that don't need to interact with
-			     * Tcl directly. */
+    HANDLE heap;	    /* General private heap used for objects 
+			     * that don't need to interact with Tcl
+			     * directly. */
+    HANDLE NPPheap;	    /* Special private heap for all data that
+			     * will be set for the non-paged pool
+			     * (WSABUF and OVERLAPPED) */
     HANDLE thread;	    /* The single threads for handling the
 			     * completion routine. */
 } CompletionPortInfo;
@@ -355,6 +358,9 @@ extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
 extern __inline LPVOID	IocpAlloc (SIZE_T size);
 extern __inline LPVOID  IocpReAlloc (LPVOID block, SIZE_T size);
 extern __inline BOOL	IocpFree (LPVOID block);
+extern __inline LPVOID	IocpNPPAlloc (SIZE_T size);
+extern __inline LPVOID  IocpNPPReAlloc (LPVOID block, SIZE_T size);
+extern __inline BOOL	IocpNPPFree (LPVOID block);
 
 
 /* Thread safe linked-list management. */
