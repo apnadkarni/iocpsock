@@ -67,7 +67,7 @@ Iocpsock_Init (Tcl_Interp *interp)
     Tcl_Obj *result;
 
 #ifdef USE_TCL_STUBS
-    if (Tcl_InitStubs(interp, "8.1", 0) == NULL) {
+    if (Tcl_InitStubs(interp, "8.3", 0) == NULL) {
 	return TCL_ERROR;
     }
 #endif
