@@ -397,6 +397,7 @@ InitSockets()
     }
 
     if (tsdPtr->threadId == 0) {
+	Tcl_CreateEventSource(IocpEventSetupProc, IocpEventCheckProc, NULL);
 	Tcl_CreateThreadExitHandler(IocpThreadExitHandler, tsdPtr);
 	tsdPtr->threadId = Tcl_GetCurrentThread();
 	tsdPtr->readySockets = IocpLLCreate();
@@ -514,7 +515,6 @@ InitializeIocpSubSystem ()
     IocpSubSystem.watchDogThread = CreateThread(NULL, 0,
 	    WatchDogThreadProc, IocpSubSystem.stop, 0, NULL);
 
-    Tcl_CreateEventSource(IocpEventSetupProc, IocpEventCheckProc, NULL);
     Tcl_CreateExitHandler(IocpExitHandler, NULL);
 
 done:
@@ -565,8 +565,6 @@ IocpExitHandler (ClientData clientData)
 	winSock.WSACleanup();
 	FreeLibrary(winSock.hModule);
 	winSock.hModule = NULL;
-
-	Tcl_DeleteEventSource(IocpEventSetupProc, IocpEventCheckProc, NULL);
     }
 }
 
@@ -574,7 +572,13 @@ void
 IocpThreadExitHandler (ClientData clientData)
 {
     ThreadSpecificData *tsdPtr = (ThreadSpecificData *) clientData;
-//    IocpLLDestroy(tsdPtr->readySockets, 0);
+
+    Tcl_DeleteEventSource(IocpEventSetupProc, IocpEventCheckProc, NULL);
+    if (initialized) {
+	IocpLLPopAll(tsdPtr->readySockets, NULL, 0);
+	IocpLLDestroy(tsdPtr->readySockets);
+	tsdPtr->readySockets = NULL;
+    }
 }
 
 
@@ -2064,6 +2068,9 @@ IocpLLPushBack(
 {
     LPLLNODE tmp;
 
+    if (!ll) {
+	return NULL;
+    }
     EnterCriticalSection(&ll->lock);
     if (!pnode) {
 	pnode = IocpAlloc(sizeof(LLNODE));
@@ -2112,6 +2119,9 @@ IocpLLPushFront(
 {
     LPLLNODE tmp;
 
+    if (!ll) {
+	return NULL;
+    }
     EnterCriticalSection(&ll->lock);
     if (!pnode) {
 	pnode = IocpAlloc(sizeof(LLNODE));
@@ -2160,6 +2170,9 @@ IocpLLPopAll(
 {
     LPLLNODE tmp1, tmp2;
 
+    if (!ll) {
+	return FALSE;
+    }
     if (snode && snode->ll) {
 	ll = snode->ll;
     }
@@ -2206,6 +2219,9 @@ IocpLLPopAllCompare(
 {
     LPLLNODE tmp1, tmp2;
 
+    if (!ll) {
+	return FALSE;
+    }
     if (mask_n(dwState, IOCP_LL_NOLOCK)) {
 	EnterCriticalSection(&ll->lock);
     }
@@ -2356,6 +2372,9 @@ IocpLLPopBack(
     LPLLNODE tmp;
     LPVOID vp;
 
+    if (!ll) {
+	return NULL;
+    }
     EnterCriticalSection(&ll->lock);
     if (!ll->front && !ll->back) {
 	LeaveCriticalSection(&ll->lock);
@@ -2393,6 +2412,9 @@ IocpLLPopFront(
     LPLLNODE tmp;
     LPVOID vp;
 
+    if (!ll) {
+	return NULL;
+    }
     EnterCriticalSection(&ll->lock);
     if (!ll->lCount) {
 	LeaveCriticalSection(&ll->lock);
@@ -2417,7 +2439,7 @@ IocpLLPopFront(
  *	self explanatory.
  *
  * Results:
- *	Boolean for If the linked-list has entries.
+ *	Boolean for if the linked-list has entries.
  *
  * Side effects:
  *	None.
@@ -2429,6 +2451,9 @@ BOOL
 IocpLLIsNotEmpty (LPLLIST ll)
 {
     BOOL b;
+    if (!ll) {
+	return 0;
+    }
     EnterCriticalSection(&ll->lock);
     b = (ll->lCount != 0);
     LeaveCriticalSection(&ll->lock);
