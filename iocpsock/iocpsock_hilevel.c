@@ -46,17 +46,19 @@ static void	UnregisterTcpServerInterpCleanupProc (
  */
 
 int
-Iocp_SocketObjCmd(notUsed, interp, objc, objv)
-    ClientData notUsed;			/* Not used. */
-    Tcl_Interp *interp;			/* Current interpreter. */
-    int objc;				/* Number of arguments. */
-    Tcl_Obj *CONST objv[];		/* Argument objects. */
+Iocp_SocketObjCmd (
+    ClientData notUsed,			/* Not used. */
+    Tcl_Interp *interp,			/* Current interpreter. */
+    int objc,				/* Number of arguments. */
+    Tcl_Obj *CONST objv[])		/* Argument objects. */
 {
     static CONST char *socketOptions[] = {
-	"-async", "-myaddr", "-myport","-server", "-protocol", "-lookup", NULL
+	"-async", "-myaddr", "-myport","-server", "-protocol", "-lookup", 
+	"-qos", NULL
     };
     enum socketOptions {
-	SKT_ASYNC, SKT_MYADDR, SKT_MYPORT, SKT_SERVER, SKT_PROTO, SKT_LOOKUP
+	SKT_ASYNC, SKT_MYADDR, SKT_MYPORT, SKT_SERVER, SKT_PROTO, SKT_LOOKUP,
+	SKT_QOS
     };
     int optionIndex, a, server;
     char *arg, *copyScript, *host, *script;
@@ -145,6 +147,16 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
 		/* add code here */
 		break;
 	    }
+	    case SKT_QOS: {
+		a++;
+                if (a >= objc) {
+		    Tcl_AppendResult(interp,
+			    "no argument given for -qos option", NULL);
+		    return TCL_ERROR;
+		}
+		/* add code here */
+		break;
+	    }
 	    default: {
 		Tcl_Panic("Iocp_SocketObjCmd: bad option index to SocketOptions");
 	    }
@@ -164,11 +176,11 @@ Iocp_SocketObjCmd(notUsed, interp, objc, objv)
 wrongNumArgs:
 	Tcl_AppendResult(interp, "wrong # args: should be either:\n",
 		Tcl_GetString(objv[0]),
-                " ?-protocol type? ?-myaddr addr? ?-myport myport? ?-async? host port\n",
+                " ?-protocol type? ?-qos flowspecs? ?-myaddr addr? ?-myport myport? ?-async? host port\n",
 		Tcl_GetString(objv[0]),
-                " -server command ?-protocol type? ?-myaddr addr? port\n",
+                " -server command ?-protocol type? ?-qos flowspecs? ?-myaddr addr? port\n",
 		Tcl_GetString(objv[0]),
-		" -lookup host ?-protocol type? ?-command command?", NULL);
+		" -lookup name ?-protocol type? ?-command command?", NULL);
         return TCL_ERROR;
     }
 
@@ -244,8 +256,8 @@ wrongNumArgs:
  */
 
 static void
-IocpServerCloseProc(callbackData)
-    ClientData callbackData;	/* The data passed in the call to
+IocpServerCloseProc (
+    ClientData callbackData)	/* The data passed in the call to
                                  * Tcl_CreateCloseHandler. */
 {
     AcceptCallback *acceptCallbackPtr;
@@ -281,10 +293,10 @@ IocpServerCloseProc(callbackData)
  */
 
 static void
-RegisterTcpServerInterpCleanup(interp, acceptCallbackPtr)
-    Tcl_Interp *interp;		/* Interpreter for which we want to be
+RegisterTcpServerInterpCleanup (
+    Tcl_Interp *interp,		/* Interpreter for which we want to be
                                  * informed of deletion. */
-    AcceptCallback *acceptCallbackPtr;
+    AcceptCallback *acceptCallbackPtr)
     				/* The accept callback record whose
                                  * interp field we want set to NULL when
                                  * the interpreter is deleted. */
@@ -334,10 +346,10 @@ RegisterTcpServerInterpCleanup(interp, acceptCallbackPtr)
 
 	/* ARGSUSED */
 static void
-IocpAcceptCallbacksDeleteProc(clientData, interp)
-    ClientData clientData;	/* Data which was passed when the assocdata
+IocpAcceptCallbacksDeleteProc (
+    ClientData clientData,	/* Data which was passed when the assocdata
                                  * was registered. */
-    Tcl_Interp *interp;		/* Interpreter being deleted - not used. */
+    Tcl_Interp *interp)		/* Interpreter being deleted - not used. */
 {
     Tcl_HashTable *hTblPtr;
     Tcl_HashEntry *hPtr;
@@ -375,10 +387,10 @@ IocpAcceptCallbacksDeleteProc(clientData, interp)
  */
 
 static void
-UnregisterTcpServerInterpCleanupProc(interp, acceptCallbackPtr)
-    Tcl_Interp *interp;		/* Interpreter in which the accept callback
+UnregisterTcpServerInterpCleanupProc (
+    Tcl_Interp *interp,		/* Interpreter in which the accept callback
                                  * record was registered. */
-    AcceptCallback *acceptCallbackPtr;
+    AcceptCallback *acceptCallbackPtr)
     				/* The record for which to delete the
                                  * registration. */
 {
@@ -415,15 +427,15 @@ UnregisterTcpServerInterpCleanupProc(interp, acceptCallbackPtr)
  */
 
 static void
-AcceptCallbackProc(callbackData, chan, address, port)
-    ClientData callbackData;		/* The data stored when the callback
+AcceptCallbackProc (
+    ClientData callbackData,		/* The data stored when the callback
                                          * was created in the call to
                                          * Tcl_OpenTcpServer. */
-    Tcl_Channel chan;			/* Channel for the newly accepted
+    Tcl_Channel chan,			/* Channel for the newly accepted
                                          * connection. */
-    char *address;			/* Address of client that was
+    char *address,			/* Address of client that was
                                          * accepted. */
-    int port;				/* Port of client that was accepted. */
+    int port)				/* Port of client that was accepted. */
 {
     AcceptCallback *acceptCallbackPtr;
     Tcl_Interp *interp;

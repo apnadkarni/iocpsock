@@ -33,10 +33,37 @@ static SocketInfo *	CreateTcpSocket(Tcl_Interp *interp,
 				int server, CONST char *myaddr,
 				CONST char *myport, int async);
 
+const FLOWSPEC flowspec_notraffic = {QOS_NOT_SPECIFIED,
+                                     QOS_NOT_SPECIFIED,
+                                     QOS_NOT_SPECIFIED,
+                                     QOS_NOT_SPECIFIED,
+                                     QOS_NOT_SPECIFIED,
+                                     SERVICETYPE_NOTRAFFIC,
+                                     QOS_NOT_SPECIFIED,
+                                     QOS_NOT_SPECIFIED};
+
+const FLOWSPEC flowspec_g711 = {8500,
+                                680,
+                                17000,
+                                QOS_NOT_SPECIFIED,
+                                QOS_NOT_SPECIFIED,
+                                SERVICETYPE_CONTROLLEDLOAD,
+                                340,
+                                340};
+
+const FLOWSPEC flowspec_guaranteed = {17000,
+                                      1260,
+                                      34000,
+                                      QOS_NOT_SPECIFIED,
+                                      QOS_NOT_SPECIFIED,
+                                      SERVICETYPE_GUARANTEED,
+                                      340,
+                                      340};
+
 /*
  *----------------------------------------------------------------------
  *
- * Iocp_OpenTcp4Client --
+ * Iocp_OpenTcpClient --
  *
  *	Opens a TCP client socket and creates a channel around it.
  *
@@ -96,7 +123,7 @@ Iocp_OpenTcpClient(
 /*
  *----------------------------------------------------------------------
  *
- * Iocp_OpenTcp4Server --
+ * Iocp_OpenTcpServer --
  *
  *	Opens a TCP server socket and creates a channel around it.
  *
@@ -172,6 +199,7 @@ CreateTcpSocket(
     WS2ProtocolData *pdata;
     ADDRINFO hints;
     LPADDRINFO addr;
+    WSAPROTOCOL_INFO wpi;
     ThreadSpecificData *tsdPtr = InitSockets();
 
     ZeroMemory(&hints, sizeof(hints));
@@ -232,8 +260,11 @@ CreateTcpSocket(
 	Tcl_Panic("very bad protocol family returned from getaddrinfo()");
     }
 
-    sock = winSock.WSASocket(pdata->af, pdata->type,
-	    pdata->protocol, NULL, 0, WSA_FLAG_OVERLAPPED);
+    code = FindProtocolInfo(pdata->af, pdata->type, pdata->protocol,
+	    XP1_QOS_SUPPORTED, &wpi);
+
+    sock = winSock.WSASocket(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO,
+	    FROM_PROTOCOL_INFO, &wpi, 0, WSA_FLAG_OVERLAPPED);
     if (sock == INVALID_SOCKET) {
 	goto error2;
     }
@@ -383,6 +414,27 @@ CreateTcpSocket(
 		bufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
 		PostOverlappedRecv(infoPtr, bufPtr, 0);
 	    }
+	    {
+		int ret;
+		QOS clientQos;
+		DWORD dwBytes;
+
+		ZeroMemory(&clientQos, sizeof(QOS));
+		clientQos.SendingFlowspec = flowspec_g711;
+		clientQos.ReceivingFlowspec =  flowspec_notraffic;
+		clientQos.ProviderSpecific.buf = NULL;
+		clientQos.ProviderSpecific.len = 0;
+
+		/*clientQos.SendingFlowspec.ServiceType |= 
+			SERVICE_NO_QOS_SIGNALING;
+		clientQos.ReceivingFlowspec.ServiceType |= 
+			SERVICE_NO_QOS_SIGNALING;*/
+
+		ret = winSock.WSAIoctl(sock, SIO_SET_QOS, &clientQos, 
+		    sizeof(clientQos), NULL, 0, &dwBytes, NULL, NULL);
+	    }
+		bufPtr = GetBufferObj(infoPtr, QOS_BUFFER_SZ);
+		PostOverlappedQOS(infoPtr, bufPtr);
 	}
     }
 

@@ -1,5 +1,7 @@
 #include "iocpsock.h"
 
+Tcl_ObjCmdProc	Iocp_StatsObjCmd;
+
 /* Globals */
 HMODULE iocpModule = NULL;
 
@@ -59,6 +61,29 @@ GetSysMsgObj(DWORD id)
     return Tcl_NewStringObj(GetSysMsg(id), -1);
 }
 
+int
+Iocp_StatsObjCmd (
+    ClientData notUsed,			/* Not used. */
+    Tcl_Interp *interp,			/* Current interpreter. */
+    int objc,				/* Number of arguments. */
+    Tcl_Obj *CONST objv[])		/* Argument objects. */
+{
+    Tcl_Obj *newResult;
+    char buf[TCL_INTEGER_SPACE];
+
+    newResult = Tcl_NewStringObj("Sockets open: ", -1);
+    TclFormatInt(buf, StatOpenSockets);
+    Tcl_AppendStringsToObj(newResult, buf, "\nFailed AcceptEx calls: ", 0L);
+    TclFormatInt(buf, StatFailedAcceptExCalls);
+    Tcl_AppendStringsToObj(newResult, buf, "\nGeneral pool bytes in use: ", 0L);
+    TclFormatInt(buf, StatGeneralBytesInUse);
+    Tcl_AppendStringsToObj(newResult, buf, "\nSpecial pool bytes in use: ", 0L);
+    TclFormatInt(buf, StatSpecialBytesInUse);
+    Tcl_AppendStringsToObj(newResult, buf, 0L);
+    Tcl_SetObjResult(interp, newResult);
+    return TCL_OK;
+}
+
 
 /* Set the EXTERN macro to export declared functions. */
 #undef TCL_STORAGE_CLASS
@@ -101,6 +126,7 @@ Iocpsock_Init (Tcl_Interp *interp)
     Tcl_MutexUnlock(&initLock);
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
+    Tcl_CreateObjCommand(interp, "iocp_stats", Iocp_StatsObjCmd, 0L, 0L);
     Tcl_PkgProvide(interp, "Iocpsock", IOCPSOCK_VERSION);
     return TCL_OK;
 }

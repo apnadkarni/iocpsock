@@ -15,10 +15,10 @@
 #define IOCPSOCK_MAJOR_VERSION   2
 #define IOCPSOCK_MINOR_VERSION   0
 #define IOCPSOCK_RELEASE_LEVEL   TCL_FINAL_RELEASE
-#define IOCPSOCK_RELEASE_SERIAL  0
+#define IOCPSOCK_RELEASE_SERIAL  1
 
 #define IOCPSOCK_VERSION	"2.0"
-#define IOCPSOCK_PATCH_LEVEL	"2.0.0"
+#define IOCPSOCK_PATCH_LEVEL	"2.0.1"
 
 
 #ifndef RC_INVOKED
@@ -155,6 +155,10 @@ typedef struct {
 extern WinsockProcs winSock;
 extern int initialized;
 extern HMODULE iocpModule;
+extern LONG StatOpenSockets;
+extern LONG StatFailedAcceptExCalls;
+extern LONG StatGeneralBytesInUse;
+extern LONG StatSpecialBytesInUse;
 
 /* wspiapi.h doesn't like typedefs, so fix it. */
 #define inet_addr	winSock.inet_addr
@@ -248,9 +252,10 @@ typedef struct _BufferInfo {
 #   define OP_WRITE	2   /* WSASend()/WSASendTo() */
 #   define OP_CONNECT	3   /* ConnectEx() */
 #   define OP_DISCONNECT 4  /* DisconnectEx() */
-#   define OP_TRANSMIT	5   /* TransmitFile() */
-#   define OP_IOCTL	6   /* WSAIoctl() */
-#   define OP_LOOKUP	7   /* TODO: For future use, WSANSIoctl()?? */
+#   define OP_QOS	5   /* Quality of Service notices. */
+#   define OP_TRANSMIT	6   /* TransmitFile() */
+#   define OP_IOCTL	7   /* WSAIoctl() */
+#   define OP_LOOKUP	8   /* TODO: For future use, WSANSIoctl()?? */
     int operation;	    /* Type of operation issued */
     LPSOCKADDR addr;	    /* addr storage space for WSARecvFrom/WSASendTo. */
     LLNODE node;	    /* linked list node */
@@ -283,6 +288,8 @@ typedef struct ThreadSpecificData {
 } ThreadSpecificData;
 
 extern Tcl_ThreadDataKey dataKey;
+
+#define QOS_BUFFER_SZ 16000
 
 /*
  * The following structure is used to store the data associated with
@@ -331,10 +338,8 @@ typedef struct SocketInfo {
     LPSOCKADDR remoteAddr;	    /* Remote sockaddr. */
 
     DWORD lastError;		    /* Error code from last operation. */
-    HANDLE allDone;		    /* manual reset event */
     LPLLIST llPendingRecv;	    /* Our pending recv list. */
-    LLNODE node;		    /* linked list node for the readySockts list */
-
+    LLNODE node;		    /* linked list node for the readySockts list. */
 } SocketInfo;
 
 #pragma pack (pop)
@@ -377,6 +382,8 @@ extern int		CreateSocketAddress (const char *addr,
 			    const char *port, LPADDRINFO inhints,
 			    LPADDRINFO *result);
 extern void		FreeSocketAddress(LPADDRINFO addrinfo);
+extern BOOL		FindProtocolInfo(int af, int type, int protocol, DWORD flags,
+			    WSAPROTOCOL_INFO *pinfo);
 extern Tcl_Channel	Iocp_OpenTcpClient (Tcl_Interp *interp,
 			    CONST char *port, CONST char *host,
 			    CONST char *myaddr, CONST char *myport,
@@ -389,6 +396,8 @@ extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
 			    BufferInfo *acceptobj, int useBurst);
 extern DWORD		PostOverlappedRecv (SocketInfo *infoPtr,
 			    BufferInfo *recvobj, int useBurst);
+extern DWORD		PostOverlappedQOS (SocketInfo *infoPtr,
+			    BufferInfo *bufPtr);
 extern void		IocpWinConvertWSAError(DWORD errCode);
 extern void		FreeBufferObj(BufferInfo *obj);
 
@@ -396,8 +405,6 @@ extern BufferInfo *	GetBufferObj (SocketInfo *infoPtr,
 			    SIZE_T buflen);
 extern SocketInfo *	NewSocketInfo (SOCKET socket);
 extern void		FreeSocketInfo (SocketInfo *infoPtr);
-extern BOOL		FindProtocolInfo(int af, int type, int protocol,
-			    DWORD flags, WSAPROTOCOL_INFO *pinfo);
 extern int		HasSockets (Tcl_Interp *interp);
 extern char *		GetSysMsg (DWORD id);
 extern Tcl_Obj *	GetSysMsgObj (DWORD id);
@@ -426,8 +433,6 @@ extern LPLLNODE		IocpLLPushFront (LPLLIST ll, LPVOID lpItem,
 				LPLLNODE pnode, DWORD dwState);
 extern BOOL		IocpLLPop (LPLLNODE pnode, DWORD dwState);
 extern BOOL		IocpLLPopAll (LPLLIST ll, LPLLNODE snode,
-				DWORD dwState);
-extern BOOL		IocpLLPopAllCompare (LPLLIST ll, LPVOID lpItem,
 				DWORD dwState);
 extern LPVOID		IocpLLPopBack (LPLLIST ll, DWORD dwState,
 				DWORD timeout);
@@ -475,7 +480,7 @@ extern CONST char *	IocpError TCL_VARARGS_DEF(Tcl_Interp *, arg1);
  */
 
 /* This is the -backlog fconfigure's default value. */
-#define IOCP_ACCEPT_CAP		    5
+#define IOCP_ACCEPT_CAP		    20
 
 /*
  * We do not want an initial recv() with a new connection.  Use of this

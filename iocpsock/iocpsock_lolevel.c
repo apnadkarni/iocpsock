@@ -20,12 +20,18 @@
 #define TCL_WSE_NOTALL11FUNCS		3
 #define TCL_WSE_NOTALL2XFUNCS		4
 #define TCL_WSE_CANTSTARTHANDLERTHREAD	5
-static DWORD winsockLoadErr = 0;
+static DWORD winsockLoadErr	= 0;
 
 /* some globals defined. */
 WinsockProcs winSock;
-int initialized = 0;
+int initialized			= 0;
 CompletionPortInfo IocpSubSystem;
+
+/* Stats being collected */
+LONG StatOpenSockets		= 0;
+LONG StatFailedAcceptExCalls	= 0;
+LONG StatGeneralBytesInUse	= 0;
+LONG StatSpecialBytesInUse	= 0;
 
 /* file-scope globals */
 GUID AcceptExGuid		= WSAID_ACCEPTEX;
@@ -160,9 +166,9 @@ InitSockets()
 	 * Try ws2_32.dll first, if available.
 	 */
 
-	if (winSock.hModule = LoadLibraryA("ws2_32.dll"));
-	else if (winSock.hModule = LoadLibraryA("wsock32.dll"));
-	else if (winSock.hModule = LoadLibraryA("winsock.dll"));
+	if ((winSock.hModule = LoadLibraryA("ws2_32.dll")) != 0L);
+	else if ((winSock.hModule = LoadLibraryA("wsock32.dll")) != 0L);
+	else if ((winSock.hModule = LoadLibraryA("winsock.dll")) != 0L);
 	else {
 	    winsockLoadErr = TCL_WSE_NOTFOUND;
 	    return NULL;
@@ -922,7 +928,8 @@ IocpCloseProc (
     Tcl_Interp *interp)		/* Unused. */
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
-    int errorCode = 0, err;
+    int errorCode = 0;
+    BufferInfo *bufPtr;
 
     /*
      * The core wants to close channels after the exit handler!
@@ -933,12 +940,12 @@ IocpCloseProc (
 	/* Flip the bit so no new stuff can ever come in again. */
 	InterlockedExchange(&infoPtr->markedReady, 1);
 
-	/* Setting this means all returning operations will get
-	 * trashed. */
-	infoPtr->flags |= IOCP_CLOSING;
-
 	/* artificially increment the count. */
 	InterlockedIncrement(&infoPtr->outstandingOps);
+
+	/* Setting this means all returning operations will get
+	 * trashed and no new operations are allowed. */
+	infoPtr->flags |= IOCP_CLOSING;
 
 	/* Tcl now doesn't recognize us anymore, so don't let this
 	 * dangle. */
@@ -950,69 +957,18 @@ IocpCloseProc (
 	/* Remove all events queued in the event loop for this socket. */
 	Tcl_DeleteEvents(IocpRemovePendingEvents, infoPtr);
 
-	if (!(infoPtr->flags & IOCP_ASYNC)) {
-
-	    /*
-	     * The blocking close.  We wait for all references to return.
-	     */
-
-	    /* Only send a disconnect when the socket is a stream one and
-	     * is not a listening socket */
-	    if (infoPtr->proto->type == SOCK_STREAM && !infoPtr->acceptProc) {
-		err = winSock.WSASendDisconnect(infoPtr->socket, NULL);
-	    } else {
-		err = winSock.closesocket(infoPtr->socket);
-		infoPtr->socket = INVALID_SOCKET;
-	    }
-	    if (err == SOCKET_ERROR) {
-		IocpWinConvertWSAError(winSock.WSAGetLastError());
-		errorCode = Tcl_GetErrno();
-	    }
-
-	    /*
-	     * Block waiting for all the pending operations to finish before
-	     * deleting the SocketInfo structure.  The main intent is to delete
-	     * it here and we must wait for all pending operation to complete
-	     * to do this.
-	     */
-
-	    if (InterlockedDecrement(&infoPtr->outstandingOps) > 0) {
-		WaitForSingleObject(infoPtr->allDone, INFINITE);
-	    }
-
-	    FreeSocketInfo(infoPtr);
-
+	if (!infoPtr->acceptProc) {
+	    /* Queue this client socket up for auto-destroy. */
+	    bufPtr = GetBufferObj(infoPtr, 0);
+	    PostOverlappedDisconnect(infoPtr, bufPtr);
 	} else {
-
-	    /*
-	     * The non-blocking close.  We don't return any errors to Tcl
-	     * and allow the instance to auto-destory itself.  Listening
-	     * sockets are NEVER non-blocking.
-	     */
-
-	    BufferInfo *bufPtr;
-
-	    /* Decrement the artificial count. */
-    	    if (InterlockedDecrement(&infoPtr->outstandingOps) > 0) {
-#if 0
-		if (infoPtr->proto->type == SOCK_STREAM
-			|| infoPtr->proto->type == SOCK_SEQPACKET
-			|| infoPtr->proto->type == SOCK_RDM) {
-#endif
-		bufPtr = GetBufferObj(infoPtr, 0);
-		PostOverlappedDisconnect(infoPtr, bufPtr);
-#if 0
-		} else {
-		    /* TODO: untested.  I doubt this will work. */
-		    infoPtr->flags |= IOCP_CLOSABLE;
-		    CancelIo((HANDLE)infoPtr->socket);
-		}
-#endif
-	    } else {
-		/* All pending operations have ended. */
-		FreeSocketInfo(infoPtr);
-	    }
-
+	    /* Close this listening socket directly. */
+	    infoPtr->flags |= IOCP_CLOSABLE;
+	    InterlockedDecrement(&infoPtr->outstandingOps);
+	    /* collect stats */
+	    InterlockedDecrement(&StatOpenSockets);
+	    winSock.closesocket(infoPtr->socket);
+	    infoPtr->socket = INVALID_SOCKET;
 	}
     }
 
@@ -1658,6 +1614,9 @@ NewSocketInfo (SOCKET socket)
 {
     SocketInfo *infoPtr;
 
+    /* collect stats */
+    InterlockedIncrement(&StatOpenSockets);
+
     infoPtr = IocpAlloc(sizeof(SocketInfo));
     infoPtr->channel = NULL;
     infoPtr->socket = socket;
@@ -1671,12 +1630,11 @@ NewSocketInfo (SOCKET socket)
     infoPtr->outstandingRecvs = 0;
     infoPtr->outstandingRecvCap = IOCP_RECV_CAP;
     infoPtr->watchMask = 0;
-    infoPtr->readyAccepts = NULL;  
+    infoPtr->readyAccepts = NULL;
     infoPtr->acceptProc = NULL;
     infoPtr->localAddr = NULL;	    /* Local sockaddr. */
     infoPtr->remoteAddr = NULL;	    /* Remote sockaddr. */
     infoPtr->lastError = NO_ERROR;
-    infoPtr->allDone = CreateEvent(NULL, TRUE, FALSE, NULL);
     infoPtr->node.ll = NULL;
     return infoPtr;
 }
@@ -1693,6 +1651,8 @@ FreeSocketInfo (SocketInfo *infoPtr)
 
     /* Just in case... */
     if (infoPtr->socket != INVALID_SOCKET) {
+	/* collect stats */
+	InterlockedDecrement(&StatOpenSockets);
 	winSock.closesocket(infoPtr->socket);
     }
 
@@ -1720,7 +1680,6 @@ FreeSocketInfo (SocketInfo *infoPtr)
 	}
 	IocpLLDestroy(infoPtr->llPendingRecv);
     }
-    CloseHandle(infoPtr->allDone);
     IocpFree(infoPtr);
 }
 
@@ -2153,6 +2112,42 @@ PostOverlappedDisconnect (SocketInfo *infoPtr, BufferInfo *bufPtr)
     return NO_ERROR;
 }
 
+DWORD
+PostOverlappedQOS (SocketInfo *infoPtr, BufferInfo *bufPtr)
+{
+    int rc;
+    DWORD bytes = 0, WSAerr;
+
+    /*
+     * Increment the outstanding overlapped count for this socket.
+     */
+    InterlockedIncrement(&infoPtr->outstandingOps);
+    bufPtr->operation = OP_QOS;
+
+    rc = winSock.WSAIoctl(infoPtr->socket, SIO_GET_QOS, NULL, 0,
+	    bufPtr->buf, bufPtr->buflen, &bytes, &bufPtr->ol, NULL);
+
+    if (rc == SOCKET_ERROR) {
+	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
+	    /*
+	     * Eventhough we know about the error now, post this to the
+	     * port manually, anyways.
+	     */
+
+	    bufPtr->WSAerr = WSAerr;
+	    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
+		(ULONG_PTR) infoPtr, &bufPtr->ol);
+	}
+    } else {
+	/*
+	 * The WSAIoctl completed now and is queued to the port.
+	 */
+	__asm nop;
+    }
+
+    return NO_ERROR;
+}
+
 
 /* =================================================================== */
 /* ================== Lo-level Completion handler ==================== */
@@ -2245,7 +2240,7 @@ again:
 	char msg[50];
 	DWORD dummy;
 	HANDLE where;
-	wsprintf(msg, "Big ERROR!  Completion thread died with exception %#x\n"
+	wsprintf(msg, "Big ERROR!  Completion thread died with exception code: %#x\n"
 		"You MUST restart the application.  "
 		"All socket communication has halted.\n", error);
 	OutputDebugString(msg);
@@ -2254,9 +2249,9 @@ again:
 	    WriteFile(where, msg, strlen(msg), &dummy, NULL);
 	}
     }
-#endif
 
     return error;
+#endif
 }
 
 /*
@@ -2401,6 +2396,7 @@ HandleIo (
 	     *
 	     * WSAEHOSTUNREACH, WSAETIMEDOUT, WSAENETUNREACH
 	     */
+	    InterlockedIncrement(&StatFailedAcceptExCalls);
 	    FreeBufferObj(bufPtr);
 	}
     
@@ -2443,7 +2439,7 @@ HandleIo (
 		}
 	    }
 
-	} else if (infoPtr->flags & IOCP_CLOSING && infoPtr->flags & IOCP_ASYNC) {
+	} else if (infoPtr->flags & IOCP_CLOSING) {
 	    infoPtr->flags |= IOCP_CLOSABLE;
 	    FreeBufferObj(bufPtr);
 	    break;
@@ -2530,9 +2526,18 @@ HandleIo (
 	break;
 
     case OP_DISCONNECT:
+	/* remove the extra ref count. */
+	InterlockedDecrement(&infoPtr->outstandingOps);
 	infoPtr->flags |= IOCP_CLOSABLE;
 	FreeBufferObj(bufPtr);
 	break;
+
+    case OP_QOS: {
+	/* TODO: make this do something useful. */
+	QOS *stuff = (QOS *) bufPtr->buf;
+	FreeBufferObj(bufPtr);
+	break;
+	}
 
     case OP_TRANSMIT:
     case OP_LOOKUP:
@@ -2543,13 +2548,9 @@ HandleIo (
 
 done:
     if (InterlockedDecrement(&infoPtr->outstandingOps) <= 0
-	    && infoPtr->flags & IOCP_CLOSING) {
+	    && infoPtr->flags & IOCP_CLOSABLE) {
 	/* This is the last operation. */
-	if (infoPtr->flags & IOCP_ASYNC && infoPtr->flags & IOCP_CLOSABLE) {
-	    FreeSocketInfo(infoPtr);
-	} else {
-	    SetEvent(infoPtr->allDone);
-	}
+	FreeSocketInfo(infoPtr);
     }
 }
 
@@ -2564,6 +2565,7 @@ IocpAlloc (SIZE_T size)
 {
     LPVOID p;
     p = HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, size);
+    if (p) InterlockedExchangeAdd(&StatGeneralBytesInUse, size);
     return p;
 }
 
@@ -2571,14 +2573,22 @@ __inline LPVOID
 IocpReAlloc (LPVOID block, SIZE_T size)
 {
     LPVOID p;
+    SIZE_T oldSize;
+    oldSize = HeapSize(IocpSubSystem.heap, 0, block);
     p = HeapReAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, block, size);
+    if (p) InterlockedExchangeAdd(&StatGeneralBytesInUse, ((LONG)size - oldSize));
     return p;
 }
 
 __inline BOOL
 IocpFree (LPVOID block)
 {
-    return HeapFree(IocpSubSystem.heap, 0, block);
+    BOOL code;
+    SIZE_T oldSize;
+    oldSize = HeapSize(IocpSubSystem.heap, 0, block);
+    code = HeapFree(IocpSubSystem.heap, 0, block);
+    if (code) InterlockedExchangeAdd(&StatGeneralBytesInUse, -((LONG)oldSize));
+    return code;
 }
 
 /* special pool */
@@ -2588,6 +2598,7 @@ IocpNPPAlloc (SIZE_T size)
 {
     LPVOID p;
     p = HeapAlloc(IocpSubSystem.NPPheap, HEAP_ZERO_MEMORY, size);
+    if (p) InterlockedExchangeAdd(&StatSpecialBytesInUse, size);
     return p;
 }
 
@@ -2595,14 +2606,22 @@ __inline LPVOID
 IocpNPPReAlloc (LPVOID block, SIZE_T size)
 {
     LPVOID p;
+    SIZE_T oldSize;
+    oldSize = HeapSize(IocpSubSystem.NPPheap, 0, block);
     p = HeapReAlloc(IocpSubSystem.NPPheap, HEAP_ZERO_MEMORY, block, size);
+    if (p) InterlockedExchangeAdd(&StatSpecialBytesInUse, ((LONG)size - oldSize));
     return p;
 }
 
 __inline BOOL
 IocpNPPFree (LPVOID block)
 {
-    return HeapFree(IocpSubSystem.NPPheap, 0, block);
+    BOOL code;
+    SIZE_T oldSize;
+    oldSize = HeapSize(IocpSubSystem.NPPheap, 0, block);
+    code = HeapFree(IocpSubSystem.NPPheap, 0, block);
+    if (code) InterlockedExchangeAdd(&StatSpecialBytesInUse, -((LONG)oldSize));
+    return code;
 }
 
 
@@ -2799,12 +2818,14 @@ BOOL FindProtocolInfo(int af, int type,
 		(buf[i].iSocketType == type) &&
 		(buf[i].iProtocol == protocol)) {
             if ((buf[i].dwServiceFlags1 & flags) == flags) {
-                memcpy(&pinfo, &buf[i], sizeof(WSAPROTOCOL_INFO));
+                memcpy(pinfo, &buf[i], sizeof(WSAPROTOCOL_INFO));
                 IocpFree(buf);
                 return TRUE;
             }
         }
     }
+    /* LSP with flag combination not found.. */
+    winSock.WSASetLastError(WSAEOPNOTSUPP);
     IocpFree(buf);
     return FALSE;
 }
