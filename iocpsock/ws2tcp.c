@@ -33,6 +33,7 @@ static SocketInfo *	CreateTcpSocket(Tcl_Interp *interp,
 				int server, CONST char *myaddr,
 				CONST char *myport, int async);
 
+#if 0
 const FLOWSPEC flowspec_notraffic = {QOS_NOT_SPECIFIED,
                                      QOS_NOT_SPECIFIED,
                                      QOS_NOT_SPECIFIED,
@@ -59,6 +60,7 @@ const FLOWSPEC flowspec_guaranteed = {17000,
                                       SERVICETYPE_GUARANTEED,
                                       340,
                                       340};
+#endif
 
 /*
  *----------------------------------------------------------------------
@@ -111,12 +113,7 @@ Iocp_OpenTcpClient(
         Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
         return (Tcl_Channel) NULL;
     }
-    // Had to add this!
-    if (Tcl_SetChannelOption(NULL, infoPtr->channel, "-blocking", "0")
-	    == TCL_ERROR) {
-	Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
-	return (Tcl_Channel) NULL;
-    }
+
     return infoPtr->channel;
 }
 
@@ -261,7 +258,10 @@ CreateTcpSocket(
     }
 
     code = FindProtocolInfo(pdata->af, pdata->type, pdata->protocol,
-	    XP1_QOS_SUPPORTED, &wpi);
+	    0 /*XP1_QOS_SUPPORTED*/, &wpi);
+    if (code == FALSE) {
+	goto error2;
+    }
 
     sock = winSock.WSASocket(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO,
 	    FROM_PROTOCOL_INFO, &wpi, 0, WSA_FLAG_OVERLAPPED);
@@ -414,6 +414,7 @@ CreateTcpSocket(
 		bufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
 		PostOverlappedRecv(infoPtr, bufPtr, 0);
 	    }
+#if 0
 	    {
 		int ret;
 		QOS clientQos;
@@ -435,6 +436,7 @@ CreateTcpSocket(
 	    }
 		bufPtr = GetBufferObj(infoPtr, QOS_BUFFER_SZ);
 		PostOverlappedQOS(infoPtr, bufPtr);
+#endif
 	}
     }
 
