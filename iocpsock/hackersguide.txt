@@ -1,12 +1,31 @@
 This document will evolve.
 
 First start in iocpsock_lolevel.c:InitializeIocpSubSystem().  The completion port
-is created there along with the thread(s) to service it.
+is created there along with the thread to service the port.
 
-Jump down to CompletionThreadProc().  Each thread idles in GetQueuedCompletionStatus()
-waiting for work.
+Jump down to CompletionThreadProc().  The one-and-only thread idles in
+GetQueuedCompletionStatus() waiting for work.  More than one thread isn't needed
+and would not increase efficiency.
 
 Next look at HandleIo().  The guts are all there.  Unlike WSAAsyncSelect() where all
 you'd get is a notice that you need to call recv() from an FD_READ, completion ports
 give you result of the read operation in the buffer you handed it when the operation
-was initially posted prior to the data coming in.
+was initially posted prior to the data coming in. IOW, it's all about "what got done",
+not "what is ready".
+
+This allows us to queue many more than just one overlapped operation.  Because of
+this, the kernel side of socket operation can copy directly to our own buffers
+(zero-copy) and context switch more efficiently -- a constant bucket brigade of data
+flowing.  But having many more than one buffer ready on the kernel side, the default
+internal buffers are never used and the bucket brigade goes right to user mode.
+
+A method for burst detection is also used.  When a replacement WSARecv is called
+when one just came in on the port (to HandleIo) and the operation completed
+immediately instead of getting queued for overlapped, this indicates that all prior
+WSARecv calls have completed and are now queued to the port behind us and the
+default internal buffers are being used.  When this happens, burst is triggered
+and PostOverlappedRecv is called recursivly until the WSA_IO_PENDING condition
+is hit and the socket is completely drained.  This has the side effect of
+increasing the count of operations on the socket.  No method is included for
+returning the overlapped count to its normal count.  This shouldn't be a problem
+with short lived sockets.
