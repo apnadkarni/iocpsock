@@ -116,24 +116,6 @@ extern WinsockProcs winSock;
 extern int initialized;
 
 /*
- * Only one subsystem is ever created, but we group it within a
- * struct just to be organized.
- */
-typedef struct {
-    HANDLE port;	    /* The completion port handle. */
-    HANDLE heap;	    /* Private heap used for WSABUFs and other
-			     * objects that don't need to interact with
-			     * Tcl directly. */
-#   define MAX_COMPLETION_THREAD_COUNT	32
-			    /* Maximum number of completion threads
-			     * allowed. */
-    HANDLE threads[MAX_COMPLETION_THREAD_COUNT];
-			    /* The array of threads for handling the
-			     * completion routines. */
-} CompletionPortInfo;
-extern CompletionPortInfo IocpSubSystem;
-
-/*
  * Specific protocol information is stored here and shared to all
  * SocketInfo objects of that type.
  */
@@ -154,24 +136,25 @@ extern GUID gGetAcceptExSockaddrsGuid;
 			    /* GUID used for the WSAIoctl call to get
 			     * GetAcceptExSockaddrs() from the LSP. */
 
-/*
- * This is our per I/O buffer. It contains a WSAOVERLAPPED structure as well
- * as other necessary information for handling an IO operation on a socket.
- */
-typedef struct _BUFFER_OBJ {
-    WSAOVERLAPPED ol;
-    SOCKET socket;	    // Used for AcceptEx client socket
-    BYTE *buf;		    // Buffer for recv/send/AcceptEx
-    size_t buflen;	    // Length of the buffer
-#   define OP_ACCEPT	0   // AcceptEx
-#   define OP_READ	1   // WSARecv/WSARecvFrom
-#   define OP_WRITE	2   // WSASend/WSASendTo
-    int operation;	    // Type of operation issued
-    SOCKADDR_STORAGE addr;  // addr storage space.
-    int addrlen;	    // length of the protocol specific address
-    ULONG IoOrder;	    // Order in which this I/O was posted
-    struct _BUFFER_OBJ  *next;
-} BUFFER_OBJ;
+/* Linked-List node object. */
+struct S_ListNode;
+struct S_List;
+typedef struct S_ListNode
+{
+    struct S_ListNode *next;	/* node in front */
+    struct S_ListNode *prev;	/* node in back */
+    struct S_List *ll;		/* parent lined-list */
+    LPVOID lpItem;		/* storage item */
+}   LLNODE, *LPLLNODE;
+
+/* Linked-List object. */
+typedef struct S_List
+{
+    struct S_ListNode *front;	/* head of list */
+    struct S_ListNode *back;	/* tail of list */
+    LONG lCount;		/* nodes contained */
+    CRITICAL_SECTION lock;	/* accessor lock */
+}   LLIST, *LPLLIST;
 
 
 #include "tclInt.h"
@@ -189,34 +172,31 @@ typedef struct _BUFFER_OBJ {
 
 
 typedef struct ThreadSpecificData {
-    Tcl_AsyncHandler asyncToken;
-    Tcl_ThreadId     threadId;
+    Tcl_ThreadId threadId;
+    LPLLIST readySockets;
 } ThreadSpecificData;
-static Tcl_ThreadDataKey dataKey;
+extern Tcl_ThreadDataKey dataKey;
 
+/*
+ * This is our per I/O buffer. It contains a WSAOVERLAPPED structure as well
+ * as other necessary information for handling an IO operation on a socket.
+ */
+typedef struct _BufferInfo {
+    WSAOVERLAPPED ol;
+    SOCKET socket;	    // Used for AcceptEx client socket
+    BYTE *buf;		    // Buffer for recv/send/AcceptEx
+    size_t buflen;	    // Length of the buffer
+    size_t used;	    /* Length of the buffer used (post operation) */
+#   define OP_ACCEPT	0   // AcceptEx
+#   define OP_READ	1   // WSARecv/WSARecvFrom
+#   define OP_WRITE	2   // WSASend/WSASendTo
+    int operation;	    // Type of operation issued
+    SOCKADDR_STORAGE addr;  // addr storage space.
+    int addrlen;	    // length of the protocol specific address
+    ULONG IoOrder;	    // Order in which this I/O was posted
+    LLNODE node;	    /* linked list node */
+} BufferInfo;
 
-/* Linked-List node object. */
-struct S_ListNode;
-struct S_List;
-typedef struct S_ListNode
-{
-    struct S_ListNode *next;
-    struct S_ListNode *prev;
-    struct S_List *ll;
-    struct S_ListNode **lppNode;
-    LPVOID lpItem;
-}   LLNODE, *LPLLNODE;
-
-/* Linked-List object. */
-typedef struct S_List
-{
-    struct S_ListNode *front;
-    struct S_ListNode *back;
-    LPSTR szName;
-    INT iNameSz;
-    LONG lCount;
-    CRITICAL_SECTION lock;
-}   LLIST, *LPLLIST;
 
 /*
  * The following structure is used to store the data associated with
@@ -229,32 +209,60 @@ typedef struct SocketInfo {
     SOCKET socket;		   /* Windows SOCKET handle. */
     WS2ProtocolData *proto;
     CRITICAL_SECTION critSec;	    /* accessor lock */
-    Tcl_AsyncHandler asyncToken;    /* What notifier to alert when I/O is ready */
-    Tcl_ThreadId threadId;	    /* parent thread */
-    int readyMask;		    /* Are we ready for a read or write? */
+    ThreadSpecificData *tsdHome;    /* TSD block for getting back to our origin. */
+    LPLLIST readyAccepts;	    /* ready accepts() in queue (used for listening sockets only) */
+    Tcl_TcpAcceptProc *acceptProc;  /* Proc to call on accept. */
+    ClientData acceptProcData;	    /* The data for the accept proc. */
+//    int readyMask;		    /* Are we ready for a read or write? */
     BOOL bClosing;
-    Tcl_TcpAcceptProc *acceptProc; /* Proc to call on accept. */
-    ClientData acceptProcData;	   /* The data for the accept proc. */
-    DWORD lastError;		   /* Error code from last message. */
+    DWORD lastError;		    /* Error code from last message. */
     volatile LONG OutstandingOps;	    
     ULONG LastSendIssued; // Last sequence number sent
     ULONG IoCountIssued;
-    BUFFER_OBJ *OutOfOrderSends;// List of send buffers that completed out of order
-    BUFFER_OBJ **PendingAccepts;    // Pending AcceptEx buffers 
+    BufferInfo *OutOfOrderSends;// List of send buffers that completed out of order
+    BufferInfo **PendingAccepts;    // Pending AcceptEx buffers 
 				    //   (used for listening sockets only)
     LPLLIST llPendingRecv; //Our pending recv list.
     LPLLIST llPendingSend; //Our pending send list.
 
 } SocketInfo;
 
+typedef struct IocpAcceptInfo {
+    SOCKADDR_STORAGE local;
+    int localLen;
+    SOCKADDR_STORAGE remote;
+    int remoteLen;
+    SocketInfo *clientInfo;
+} IocpAcceptInfo;
 
 extern Tcl_ChannelType IocpChannelType;
+
+/*
+ * Only one subsystem is ever created, but we group it within a
+ * struct just to be organized.
+ */
+typedef struct CompletionPortInfo {
+    HANDLE port;	    /* The completion port handle. */
+    HANDLE heap;	    /* Private heap used for WSABUFs and other
+			     * objects that don't need to interact with
+			     * Tcl directly. */
+#   define MAX_COMPLETION_THREAD_COUNT	16
+			    /* Maximum number of completion threads
+			     * allowed. */
+    HANDLE threads[MAX_COMPLETION_THREAD_COUNT];
+			    /* The array of threads for handling the
+			     * completion routines. */
+    LPLLIST gFreeBufStack;  /* Global stack for holding free buffers. */
+
+} CompletionPortInfo;
+extern CompletionPortInfo IocpSubSystem;
+
 
 
 TCL_DECLARE_MUTEX(initLock)
 
-extern int		CreateSocketAddress (CONST char *addr,
-				CONST char *port, WS2ProtocolData *pdata,
+extern int		CreateSocketAddress (const char *addr,
+				const char *port, WS2ProtocolData *pdata,
 				LPADDRINFO *result);
 extern void		FreeSocketAddress(LPADDRINFO addrinfo);
 extern Tcl_Channel	Iocp_OpenTcpClient (Tcl_Interp *interp,
@@ -266,8 +274,8 @@ extern Tcl_Channel	Iocp_OpenTcpServer (Tcl_Interp *interp,
 				Tcl_TcpAcceptProc *acceptProc,
 				ClientData acceptProcData);
 extern DWORD		PostOverlappedAccept (SocketInfo *si,
-				BUFFER_OBJ *acceptobj);
-extern BUFFER_OBJ *	GetBufferObj (SocketInfo *si, size_t buflen);
+				BufferInfo *acceptobj);
+extern BufferInfo *	GetBufferObj (SocketInfo *si, size_t buflen);
 extern SocketInfo *	NewSocketInfo(SOCKET socket);
 extern int		HasSockets(Tcl_Interp *interp);
 extern char *		GetSysMsg(DWORD id);

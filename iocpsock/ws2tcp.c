@@ -1,4 +1,5 @@
 #include "iocpsock.h"
+#include "iocpsock_util.h"
 
 static GUID guidAcceptEx = WSAID_ACCEPTEX;
 static GUID guidGetAcceptExSockaddrs = WSAID_GETACCEPTEXSOCKADDRS;
@@ -182,10 +183,8 @@ CreateTcp4Socket(
     infoPtr = NewSocketInfo(sock);
     infoPtr->proto = &tcp4ProtoData;
 
-    /* This calling thread is our target to get back to
-     * when any accept/read/sends complete. */
-    infoPtr->asyncToken = tsdPtr->asyncToken;
-    infoPtr->threadId = tsdPtr->threadId;
+    /* Info needed to get back to this thread. */
+    infoPtr->tsdHome = tsdPtr;
 
 
     /* Associate the socket and its SocketInfo struct to the completion
@@ -225,17 +224,21 @@ CreateTcp4Socket(
 	}
 
         // Keep track of the pending AcceptEx operations
-        infoPtr->PendingAccepts = (BUFFER_OBJ **) HeapAlloc(
+        infoPtr->PendingAccepts = (BufferInfo **) HeapAlloc(
                 IocpSubSystem.heap,
                 HEAP_ZERO_MEMORY,
-                (sizeof(BUFFER_OBJ *) * 20));
+		(sizeof(BufferInfo *) * 20));
 
-	/* pre-queue 20 accepts with the wsabufs only 128 bytes per. */
+	/* pre-queue 20 accepts. */
         for(i=0; i < 20 ;i++) {
-	    BUFFER_OBJ *acceptobj;
-            infoPtr->PendingAccepts[i] = acceptobj = GetBufferObj(infoPtr, 512);
+	    BufferInfo *acceptobj;
+	    acceptobj = GetBufferObj(infoPtr, 512);
+            infoPtr->PendingAccepts[i] = acceptobj;
             PostOverlappedAccept(infoPtr, acceptobj);
         }
+
+	/* create the queue for holding ready ones */
+	infoPtr->readyAccepts = TSLLCreate();
 
     } else {
 

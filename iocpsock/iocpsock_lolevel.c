@@ -1,4 +1,13 @@
-// Think of this file as being win/tclWinSock.c
+/* ----------------------------------------------------------------------
+ *
+ * iocpsock_lolevel.c --
+ *
+ *	Think of this file as being win/tclWinSock.c
+ *
+ * ----------------------------------------------------------------------
+ * RCS: @(#) $Id$
+ * ----------------------------------------------------------------------
+ */
 
 #include "iocpsock.h"
 #include "iocpsock_util.h"
@@ -23,6 +32,7 @@ int initialized = 0;
 CompletionPortInfo IocpSubSystem;
 GUID gAcceptExGuid = WSAID_ACCEPTEX;
 GUID gGetAcceptExSockaddrsGuid = WSAID_GETACCEPTEXSOCKADDRS;
+Tcl_ThreadDataKey dataKey;
 
 /* file scope globals. */
 static DWORD numCPUs;
@@ -33,8 +43,10 @@ static void			InitSockets();
 static DWORD			InitializeIocpSubSystem();
 static Tcl_ExitProc		IocpExitHandler;
 static Tcl_ExitProc		IocpThreadExitHandler;
-static Tcl_AsyncProc		IocpAsyncCallback;
-static Tcl_EventProc		IocpEventCallback;
+static Tcl_EventProc		IocpEventProc;
+
+static Tcl_EventSetupProc	IocpEventSetupProc;
+static Tcl_EventCheckProc	IocpEventCheckProc;
 
 static Tcl_DriverCloseProc	IocpCloseProc;
 static Tcl_DriverInputProc	IocpInputProc;
@@ -45,20 +57,26 @@ static Tcl_DriverWatchProc	IocpWatchProc;
 static Tcl_DriverGetHandleProc	IocpGetHandleProc;
 static Tcl_DriverBlockModeProc	IocpBlockProc;
 
-static void		    FreeBufferObj(BUFFER_OBJ *obj);
-static void		    FreeSocketInfo(SocketInfo *si);
-static DWORD		    PostOverlappedRecv(SocketInfo *si,
-				    BUFFER_OBJ *recvobj);
-static DWORD		    PostOverlappedSend(SocketInfo *si,
-				    BUFFER_OBJ *sendobj);
-static void		    InsertPendingSend(SocketInfo *si,
-				    BUFFER_OBJ *send);
-static int		    DoSends(SocketInfo *si);
-static void		    HandleIo(SocketInfo *si, BUFFER_OBJ *buf,
-				    HANDLE CompPort,
-				    DWORD BytesTransfered, DWORD error,
-				    DWORD flags);
-static DWORD WINAPI	    CompletionThread(LPVOID lpParam);
+static void	    IocpAlertToTclNewAccept(SocketInfo *infoPtr, SocketInfo *newClient,
+			    SOCKADDR_STORAGE *LocalSockaddr,
+			    int LocalSockaddrLen, SOCKADDR_STORAGE *RemoteSockaddr,
+			    int RemoteSockaddrLen);
+static void	    IocpAcceptOne (SocketInfo *infoPtr);
+
+static void	    FreeBufferObj(BufferInfo *obj);
+static void	    FreeSocketInfo(SocketInfo *si);
+static DWORD	    PostOverlappedRecv(SocketInfo *si,
+			    BufferInfo *recvobj);
+static DWORD	    PostOverlappedSend(SocketInfo *si,
+			    BufferInfo *sendobj);
+//static void	    InsertPendingSend(SocketInfo *si,
+//			    BufferInfo *send);
+//static int	    DoSends(SocketInfo *si);
+static void	    HandleIo(SocketInfo *si, BufferInfo *buf,
+			    HANDLE CompPort,
+			    DWORD BytesTransfered, DWORD error,
+			    DWORD flags);
+static DWORD WINAPI    CompletionThread(LPVOID lpParam);
 
 
 /*
@@ -371,20 +389,21 @@ InitSockets()
 
 	    if (os.dwPlatformId == VER_PLATFORM_WIN32_NT) {
 		winsockLoadErr = InitializeIocpSubSystem();
-		if (winsockLoadErr != NO_ERROR) {
-		    goto unloadLibrary;
-		};
 	    } else {
-		/* InitializeOldSubSystem(); */
+		// TODO (long-term): put the old WSAAsyncSelect channel driver code in here too.
+		/* winsockLoadErr = InitializeOldSubSystem(); */
 		Tcl_Panic("Barf! Can't run IOCP on non-NT systems, sorry.");
+	    }
+	    if (winsockLoadErr != NO_ERROR) {
+		goto unloadLibrary;
 	    }
 	}
     }
 
-    if (tsdPtr->asyncToken == NULL) {
+    if (tsdPtr->threadId == 0) {
 	Tcl_CreateThreadExitHandler(IocpThreadExitHandler, NULL);
-	tsdPtr->asyncToken = Tcl_AsyncCreate(IocpAsyncCallback, NULL);
 	tsdPtr->threadId = Tcl_GetCurrentThread();
+	tsdPtr->readySockets = TSLLCreate();
     }
 
     return;
@@ -446,10 +465,12 @@ HasSockets(Tcl_Interp *interp)
 static DWORD
 InitializeIocpSubSystem ()
 {
+#define IOCP_HEAP_START_SIZE	(si.dwPageSize*64)  /* about 256k */
     DWORD i, error = NO_ERROR;
     SYSTEM_INFO si;
 
     GetSystemInfo(&si);
+
     /* Create the completion port. */
     IocpSubSystem.port = CreateIoCompletionPort(
 	    INVALID_HANDLE_VALUE, NULL, (ULONG_PTR)NULL, 0);
@@ -459,7 +480,7 @@ InitializeIocpSubSystem ()
     }
 
     /* Create the private memory heap. */
-    IocpSubSystem.heap = HeapCreate(0, (si.dwPageSize*128), 0);
+    IocpSubSystem.heap = HeapCreate(0, IOCP_HEAP_START_SIZE, 0);
     if (IocpSubSystem.heap == NULL) {
 	error = GetLastError();
 	CloseHandle(IocpSubSystem.port);
@@ -474,7 +495,7 @@ InitializeIocpSubSystem ()
 
 
 
-    /* HACK! HACK! HACK!   AVOID OUT-OF-ORDER PROBLEMS FOR NOW */
+    // TODO: remove me when out-of-order issue is solved!
     numCPUs = 1;
 
 
@@ -489,14 +510,18 @@ InitializeIocpSubSystem ()
 	    CloseHandle(IocpSubSystem.port);
 	    goto done;
 	}
-//	SetThreadIdealProcessor(IocpSubSystem.threads[i], i);
-//	SetThreadPriority(IocpSubSystem.threads[i],
-//		THREAD_PRIORITY_BELOW_NORMAL);
+	SetThreadIdealProcessor(IocpSubSystem.threads[i], i);
     }
+
+    /* Create the LinkedList for storing free buffers */
+    IocpSubSystem.gFreeBufStack = TSLLCreate();
+
+    Tcl_CreateEventSource(IocpEventSetupProc, IocpEventCheckProc, NULL);
     Tcl_CreateExitHandler(IocpExitHandler, NULL);
 
 done:
     return error;
+#undef IOCP_HEAP_START_SIZE
 }
 
 void
@@ -506,7 +531,7 @@ IocpExitHandler (ClientData clientData)
 
     if (initialized) {
 	for (i = 0, j = numCPUs; i < numCPUs; i++, j--) {
-	    /* Cause one of the waiting threads to exit. */
+	    /* Cause one of the waiting I/O handler threads to exit. */
 	    PostQueuedCompletionStatus(IocpSubSystem.port, 0, 0, 0);
 
 	    /* Wait for one to exit from the group. */
@@ -531,6 +556,9 @@ IocpExitHandler (ClientData clientData)
 	/* Close the completion port object. */
 	CloseHandle(IocpSubSystem.port);
 
+	/* Destroy the free buffers linkedlist. */
+	TSLLDestroy(IocpSubSystem.gFreeBufStack, 0);
+
 	/* Tear down the private memory heap. */
 	HeapDestroy(IocpSubSystem.heap);
 	initialized = 0;
@@ -544,40 +572,159 @@ void
 IocpThreadExitHandler (ClientData clientData)
 {
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
-    /* sanity check */
-    if (tsdPtr->asyncToken) Tcl_AsyncDelete(tsdPtr->asyncToken);
+    TSLLDestroy(tsdPtr->readySockets, 0);
 }
 
-static int
-IocpAsyncCallback(
+/*
+ *-----------------------------------------------------------------------
+ * IocpEventSetupProc --
+ *
+ *  Happens before the event loop is to wait in the notifier.
+ *
+ *-----------------------------------------------------------------------
+ */
+static void
+IocpEventSetupProc (
     ClientData clientData,
-    Tcl_Interp *interp,
-    int code)
+    int flags)
 {
-    return code;
+    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+    Tcl_Time blockTime = {0, 0};
+
+    if (!(flags & TCL_FILE_EVENTS)) {
+	return;
+    }
+
+    /*
+     * If any ready events exist now, avoid waiting in the notifier.
+     * This function call is very inexpensive.
+     */
+
+    if (TSLLIsNotEmpty(tsdPtr->readySockets)) {
+	Tcl_SetMaxBlockTime(&blockTime);
+    }
 }
 
+/*
+ *-----------------------------------------------------------------------
+ * IocpEventCheckProc --
+ *
+ *  Happens after the notifier has waited.
+ *
+ *-----------------------------------------------------------------------
+ */
+static void
+IocpEventCheckProc (
+    ClientData clientData,
+    int flags)
+{
+    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+    SocketInfo *infoPtr;
+    SocketEvent *evPtr;
+
+    if (!(flags & TCL_FILE_EVENTS)) {
+	return;
+    }
+
+    /*
+     * Do we have any jobs to queue?
+     */
+
+    while ((infoPtr = TSLLPopFront(tsdPtr->readySockets, LL_NODESTROY)) != NULL) {
+	evPtr = (SocketEvent *) ckalloc(sizeof(SocketEvent));
+	evPtr->header.proc = IocpEventProc;
+	evPtr->infoPtr = infoPtr;
+	Tcl_QueueEvent((Tcl_Event *) evPtr, TCL_QUEUE_TAIL);
+    }
+}
+
+/*
+ *-----------------------------------------------------------------------
+ * IocpEventProc --
+ *
+ *  Tcl's event loop is now servicing this.
+ *
+ *-----------------------------------------------------------------------
+ */
 static int
-IocpEventCallback(
+IocpEventProc(
     Tcl_Event *evPtr,		/* Event to service. */
     int flags)			/* Flags that indicate what events to
 				 * handle, such as TCL_FILE_EVENTS. */
 {
     SocketInfo *infoPtr = ((SocketEvent *)evPtr)->infoPtr;
+    int readyMask = 0;
 
     if (!(flags & TCL_FILE_EVENTS)) {
 	return 0;
     }
-    Tcl_NotifyChannel(infoPtr->channel, infoPtr->readyMask);
+
+    /*
+     * If an accept is ready, pop just one.  We can't pop all of them
+     * or it would be greedy to the event loop and cause the granularity
+     * to increase -- which is bad.
+     */
+
+    if (infoPtr->readyAccepts != NULL
+	    && TSLLIsNotEmpty(infoPtr->readyAccepts)) {
+	IocpAcceptOne(infoPtr);
+	return 1;
+    }
+
+    if (TSLLIsNotEmpty(infoPtr->llPendingRecv)) {
+	readyMask |= TCL_READABLE;
+    }
+
+    Tcl_NotifyChannel(infoPtr->channel, readyMask);
     return 1;
 }
 
+void
+IocpAcceptOne (SocketInfo *infoPtr)
+{
+    char channelName[16 + TCL_INTEGER_SPACE];
+    IocpAcceptInfo *ai;
+
+    ai = TSLLPopFront(infoPtr->readyAccepts, 0);
+    wsprintfA(channelName, "iocp%d", ai->clientInfo->socket);
+    ai->clientInfo->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
+	    (ClientData) ai->clientInfo, (TCL_READABLE | TCL_WRITABLE));
+    if (Tcl_SetChannelOption(NULL, ai->clientInfo->channel, "-translation",
+	    "auto crlf") == TCL_ERROR) {
+	Tcl_Close((Tcl_Interp *) NULL, ai->clientInfo->channel);
+	return;
+    }
+    if (Tcl_SetChannelOption(NULL, ai->clientInfo->channel, "-eofchar", "")
+	    == TCL_ERROR) {
+	Tcl_Close((Tcl_Interp *) NULL, ai->clientInfo->channel);
+	return;
+    }
+
+    /*
+     * Invoke the accept callback procedure.
+     *
+     * TODO: move this to the protocol specific files so the type cast,
+     * conversion and invokation signature are proper for the address
+     * type.
+     */
+
+    if (infoPtr->acceptProc != NULL) {
+	(infoPtr->acceptProc) (infoPtr->acceptProcData,
+		ai->clientInfo->channel,
+		winSock.inet_ntoa(((SOCKADDR_IN *)&ai->remote)->sin_addr),
+		winSock.ntohs(((SOCKADDR_IN *)&ai->remote)->sin_port));
+    }
+
+    HeapFree(IocpSubSystem.heap, 0, ai);
+}
+
 /*
- *----------------------------------------------------------------------
+ *-----------------------------------------------------------------------
  *
  * CreateSocketAddress --
  *
- *	This function initializes a ADDRINFO structure for a host and port.
+ *	This function initializes a ADDRINFO structure for a host and
+ *	port.
  *
  * Results:
  *	1 if the host was valid, 0 if the host could not be converted to
@@ -586,18 +733,18 @@ IocpEventCallback(
  * Side effects:
  *	Fills in the *ADDRINFO structure.
  *
- *----------------------------------------------------------------------
+ *-----------------------------------------------------------------------
  */
 
 int
 CreateSocketAddress(
-     CONST char *addr,
-     CONST char *port,
+     const char *addr,
+     const char *port,
      WS2ProtocolData *pdata,
-     LPADDRINFO *addrinfo)
+     LPADDRINFO *paddrinfo)
 {
     ADDRINFO hints;
-    LPADDRINFO lphints;
+    LPADDRINFO phints;
     int result;
 
     if (pdata != NULL) {
@@ -606,12 +753,12 @@ CreateSocketAddress(
 	hints.ai_family = pdata->af;
 	hints.ai_socktype = pdata->type;
 	hints.ai_protocol = pdata->protocol;
-	lphints = &hints;
+	phints = &hints;
     } else {
-	lphints = NULL;
+	phints = NULL;
     }
 
-    result = getaddrinfo(addr, port, lphints, addrinfo);
+    result = getaddrinfo(addr, port, phints, paddrinfo);
 
     if (result != 0) {
 	winSock.WSASetLastError(result);
@@ -642,7 +789,28 @@ IocpInputProc(instanceData, buf, toRead, errorCodePtr)
     int toRead;			/* Maximum number of bytes to read. */
     int *errorCodePtr;		/* Where to store error codes. */
 {
-    return 0; /* bytesRead */
+    SocketInfo *infoPtr = (SocketInfo *) instanceData;
+    char *bufPos = buf;
+    int bytesRead = 0;
+    BufferInfo *bo;
+
+    /*
+     * Merge as much as toRead will allow.
+     */
+    while ((bo = TSLLPopFront(infoPtr->llPendingRecv, 0)) != NULL) {
+	if (bytesRead + (int) bo->used > toRead) {
+	    /* Too large, push it back on for later. */
+	    TSLLPushFront(infoPtr->llPendingRecv, bo, NULL);
+	    // TODO: re-notify!
+	    break;
+	}
+	memcpy(bufPos, bo->buf, bo->used);
+	bytesRead += bo->used;
+	bufPos += bo->used;
+	FreeBufferObj(bo);
+    }
+
+    return bytesRead;
 }
 
 static int
@@ -703,6 +871,8 @@ IocpSetOptionProc (
 	return TCL_OK;
     }
 
+// TODO: pass this also to a protocol specific option routine.
+
     return Tcl_BadChannelOption(interp, optionName, "keepalive nagle");
 }
 
@@ -735,18 +905,9 @@ IocpGetOptionProc(instanceData, interp, optionName, dsPtr)
 
     if ((len > 1) && (optionName[1] == 'e') &&
 	    (strncmp(optionName, "-error", len) == 0)) {
-	int optlen;
-	DWORD err;
-	int ret;
-    
-	optlen = sizeof(int);
-	ret = winSock.getsockopt(sock, SOL_SOCKET, SO_ERROR,
-		(char *)&err, &optlen);
-	if (ret == SOCKET_ERROR) {
-	    err = winSock.WSAGetLastError();
-	}
-	if (err) {
-	    Tcl_DStringAppend(dsPtr, GetSysMsg(err), -1);
+	if (infoPtr->lastError != NO_ERROR) {
+	    Tcl_DStringAppend(dsPtr, GetSysMsg(infoPtr->lastError), -1);
+	    infoPtr->lastError = NO_ERROR;
 	}
 	return TCL_OK;
     }
@@ -913,22 +1074,57 @@ IocpGetHandleProc(instanceData, direction, handlePtr)
 }
 
 
-// WARNING!!!  must only be called from the Tcl thread.
+/* takes buffer ownership */
+void
+IocpAlertToTclNewAccept (
+    SocketInfo *infoPtr,
+    SocketInfo *newClient,
+    SOCKADDR_STORAGE *LocalSockaddr,
+    int LocalSockaddrLen,
+    SOCKADDR_STORAGE *RemoteSockaddr,
+    int RemoteSockaddrLen)
+{
+    IocpAcceptInfo *ai;
+
+    ai = (IocpAcceptInfo *) HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, sizeof(IocpAcceptInfo));
+    memcpy(&ai->local, LocalSockaddr, LocalSockaddrLen);
+    ai->localLen = LocalSockaddrLen;
+    memcpy(&ai->remote, RemoteSockaddr, RemoteSockaddrLen);
+    ai->remoteLen = RemoteSockaddrLen;
+    ai->clientInfo = newClient;
+
+    /*
+     * Queue this accept's data into the listening channel's info block.
+     */
+    TSLLPushBack(infoPtr->readyAccepts, ai, NULL);
+
+    /*
+     * Let IocpCheckProc() know this channel has something ready
+     * that needs servicing.
+     */
+    TSLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+
+    /* In case Tcl is asleep in the notifier, wake it up. */
+    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+}
+
+
 SocketInfo *
 NewSocketInfo(socket)
     SOCKET socket;
 {
     SocketInfo *infoPtr;
 
-    infoPtr = (SocketInfo *) ckalloc(sizeof(SocketInfo));
+    infoPtr = (SocketInfo *) HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, sizeof(SocketInfo));
     infoPtr->socket = socket;
     infoPtr->bClosing = FALSE;
+    infoPtr->readyAccepts = NULL;  
 //    infoPtr->flags = 0;
 //    infoPtr->watchEvents = 0;
 //    infoPtr->readyEvents = 0;
 //    infoPtr->selectEvents = 0;
     infoPtr->acceptProc = NULL;
-    infoPtr->lastError = 0;
+    infoPtr->lastError = NO_ERROR;
     infoPtr->OutstandingOps = 0;
     infoPtr->IoCountIssued = 0;
     infoPtr->OutOfOrderSends = NULL;
@@ -946,23 +1142,26 @@ void
 FreeSocketInfo(SocketInfo *si)
 {
     DeleteCriticalSection(&si->critSec);
-    ckfree((char *)si);
+    if (si->readyAccepts) {
+	TSLLDestroy(si->readyAccepts, 0);
+    }
+    HeapFree(IocpSubSystem.heap, 0, si);
 }
 
-BUFFER_OBJ *
+BufferInfo *
 GetBufferObj(SocketInfo *si, size_t buflen)
 {
-    BUFFER_OBJ *newobj=NULL;
+    BufferInfo *newobj=NULL;
 
     // Allocate the object
-    newobj = (BUFFER_OBJ *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(BUFFER_OBJ));
+    newobj = (BufferInfo *)HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, sizeof(BufferInfo));
     if (newobj == NULL)
     {
 //        fprintf(stderr, "GetBufferObj: HeapAlloc failed: %d\n", GetLastError());
 //        ExitProcess(-1);
     }
     // Allocate the buffer
-    newobj->buf = (BYTE *) HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(BYTE)*buflen);
+    newobj->buf = (BYTE *) HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, sizeof(BYTE)*buflen);
     if (newobj->buf == NULL)
     {
 //        fprintf(stderr, "GetBufferObj: HeapAlloc failed: %d\n", GetLastError());
@@ -974,188 +1173,204 @@ GetBufferObj(SocketInfo *si, size_t buflen)
 }
 
 void
-FreeBufferObj(BUFFER_OBJ *obj)
+FreeBufferObj(BufferInfo *bufPtr)
 {
-    HeapFree(GetProcessHeap(), 0, obj->buf);
-    HeapFree(GetProcessHeap(), 0, obj);
+    HeapFree(IocpSubSystem.heap, 0, bufPtr->buf);
+    HeapFree(IocpSubSystem.heap, 0, bufPtr);
 }
 
 SocketInfo *
-NewAcceptSockInfo(SOCKET s, SocketInfo *si)
+NewAcceptSockInfo(SOCKET s, SocketInfo *infoPtr)
 {
-    SocketInfo *sockobj;
+    SocketInfo *newInfoPtr;
 
-    sockobj = (SocketInfo *)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, sizeof(SocketInfo));
-    if (sockobj == NULL)
+    newInfoPtr = (SocketInfo *) HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, sizeof(SocketInfo));
+    if (newInfoPtr == NULL)
     {
-//	Do something logical.
+	return NULL;
     }
 
     // Initialize the members
-    sockobj->socket = s;
-    sockobj->proto = si->proto;
-    sockobj->asyncToken = si->asyncToken;
-    sockobj->threadId = si->threadId;
+    newInfoPtr->socket = s;
+    newInfoPtr->proto = infoPtr->proto;
+    newInfoPtr->tsdHome = infoPtr->tsdHome;
 
     // For TCP we initialize the IO count to one since the AcceptEx is posted
     //    to receive data
-    sockobj->IoCountIssued = ((si->proto->protocol == IPPROTO_TCP) ? 1 : 0);
+//    sockobj->IoCountIssued = ((si->proto->protocol == IPPROTO_TCP) ? 1 : 0);
 
-    InitializeCriticalSection(&sockobj->critSec);
+    InitializeCriticalSection(&newInfoPtr->critSec);
+    newInfoPtr->llPendingRecv = TSLLCreate(); //Our pending recv list.
+    newInfoPtr->llPendingSend = TSLLCreate(); //Our pending send list.
 
-    return sockobj;
+    return newInfoPtr;
 }
 
 
 DWORD
-PostOverlappedAccept(SocketInfo *si, BUFFER_OBJ *acceptobj)
+PostOverlappedAccept(SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
-    DWORD bytes;
+    DWORD bytes, err;
     int rc;
     unsigned int addr_stoage = sizeof(SOCKADDR_STORAGE) + 16;
 
-    acceptobj->operation = OP_ACCEPT;
+    bufPtr->operation = OP_ACCEPT;
 
     /*
      * Create a ready client socket of the same type for a future
      * incoming connection.
      */
-    acceptobj->socket = winSock.WSASocketA(si->proto->af,
-	    si->proto->type, si->proto->protocol, NULL, 0,
+
+    bufPtr->socket = winSock.WSASocketA(infoPtr->proto->af,
+	    infoPtr->proto->type, infoPtr->proto->protocol, NULL, 0,
 	    WSA_FLAG_OVERLAPPED);
 
-    if (acceptobj->socket == INVALID_SOCKET) {
+    if (bufPtr->socket == INVALID_SOCKET) {
 	return SOCKET_ERROR;
     }
 
     /*
      * The buffer can not be smaller than this.
      */
-    _ASSERT(acceptobj->buflen >=
-	    ((sizeof(SOCKADDR_STORAGE) + 16) * 2));
+
+    _ASSERT(bufPtr->buflen >= ((sizeof(SOCKADDR_STORAGE) + 16) * 2));
 
     /*
      * Use the special function for overlapped accept() that is provided
-     * by the LSP for this socket type.
+     * by the LSP of this socket type.
      */
-    rc = si->proto->AcceptEx(si->socket, acceptobj->socket,
-	    acceptobj->buf, acceptobj->buflen - (addr_stoage * 2),
-	    addr_stoage, addr_stoage, &bytes, &acceptobj->ol);
 
+    rc = infoPtr->proto->AcceptEx(infoPtr->socket, bufPtr->socket,
+	    bufPtr->buf, bufPtr->buflen - (addr_stoage * 2),
+	    addr_stoage, addr_stoage, &bytes, &bufPtr->ol);
+
+    err = winSock.WSAGetLastError();
     if (rc == FALSE) {
-	DWORD err = winSock.WSAGetLastError();
 	if (err != WSA_IO_PENDING) {
 	    //GetSysMsg(err);
 	    return SOCKET_ERROR;
 	}
+	/*
+	 * Increment the outstanding overlapped count for this socket.
+	 */
+	InterlockedIncrement(&infoPtr->OutstandingOps);
+    } else {
+	/* the AcceptEx operation completed now, instead of being posted. */
+        HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes, err, 0);
     }
-
-    /*
-     * Increment the outstanding overlapped count for this socket.
-     */
-    InterlockedIncrement(&si->OutstandingOps);
 
     return NO_ERROR;
 }
 
 DWORD
-PostOverlappedRecv(SocketInfo *si, BUFFER_OBJ *recvobj)
+PostOverlappedRecv(SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
     WSABUF wbuf;
-    DWORD bytes, flags;
+    DWORD bytes, flags, err;
     int rc;
 
-    recvobj->operation = OP_READ;
-    wbuf.buf = recvobj->buf;
-    wbuf.len = recvobj->buflen;
+    bufPtr->operation = OP_READ;
+    wbuf.buf = bufPtr->buf;
+    wbuf.len = bufPtr->buflen;
     flags = 0;
 
-    EnterCriticalSection(&si->critSec);
+    EnterCriticalSection(&infoPtr->critSec);
 
     // Assign the IO order to this receive. This must be performned within
     //    the critical section. The operation of assigning the IO count and posting
     //    the receive cannot be interupted.
-    recvobj->IoOrder = si->IoCountIssued;
-    si->IoCountIssued++;
+    bufPtr->IoOrder = infoPtr->IoCountIssued;
+    infoPtr->IoCountIssued++;
 
-    if (si->proto->type == SOCK_STREAM) {
-	rc = winSock.WSARecv(si->socket, &wbuf, 1, &bytes, &flags,
-		&recvobj->ol, NULL);
+    if (infoPtr->proto->type == SOCK_STREAM) {
+	rc = winSock.WSARecv(infoPtr->socket, &wbuf, 1, &bytes, &flags,
+		&bufPtr->ol, NULL);
     } else {
-	rc = winSock.WSARecvFrom(si->socket, &wbuf, 1, &bytes, &flags,
-		(SOCKADDR *)&recvobj->addr, &recvobj->addrlen,
-		&recvobj->ol, NULL);
+	rc = winSock.WSARecvFrom(infoPtr->socket, &wbuf, 1, &bytes, &flags,
+		(SOCKADDR *)&bufPtr->addr, &bufPtr->addrlen,
+		&bufPtr->ol, NULL);
     }
 
-    LeaveCriticalSection(&si->critSec);
+    LeaveCriticalSection(&infoPtr->critSec);
 
+    err = winSock.WSAGetLastError();
     if (rc == SOCKET_ERROR) {
-        if (winSock.WSAGetLastError() != WSA_IO_PENDING) {
-//            dbgprint("PostRecv: WSARecv* failed: %d\n", WSAGetLastError());
-            return SOCKET_ERROR;
-        }
+	if (err != WSA_IO_PENDING) {
+	    //GetSysMsg(err);
+	    return SOCKET_ERROR;
+	}
+	/*
+	 * Increment the outstanding overlapped count for this socket.
+	 */
+	InterlockedIncrement(&infoPtr->OutstandingOps);
+    } else {
+	/* the WSARecv(From) operation completed now, instead of being posted. */
+        HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes, err, flags);
     }
-
-    // Increment outstanding overlapped operations
-    InterlockedIncrement(&si->OutstandingOps);
 
     return NO_ERROR;
 }
 
 DWORD
-PostOverlappedSend(SocketInfo *si, BUFFER_OBJ *sendobj)
+PostOverlappedSend(SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
-    WSABUF  wbuf;
-    DWORD   bytes;
-    int     rc;
+    WSABUF wbuf;
+    DWORD bytes, err;
+    int rc;
 
-    sendobj->operation = OP_WRITE;
+    bufPtr->operation = OP_WRITE;
+    wbuf.buf = bufPtr->buf;
+    wbuf.len = bufPtr->buflen;
 
-    wbuf.buf = sendobj->buf;
-    wbuf.len = sendobj->buflen;
-
-    EnterCriticalSection(&si->critSec);
+    EnterCriticalSection(&infoPtr->critSec);
 
     /* Incrmenting the last send issued and issuing the send should not
      * be interuptable. */
-    si->LastSendIssued++;
+    infoPtr->LastSendIssued++;
 
-    if (si->proto->type == SOCK_STREAM) {
-	rc = winSock.WSASend(si->socket, &wbuf, 1, &bytes, 0,
-		&sendobj->ol, NULL);
+    if (infoPtr->proto->type == SOCK_STREAM) {
+	rc = winSock.WSASend(infoPtr->socket, &wbuf, 1, &bytes, 0,
+		&bufPtr->ol, NULL);
     } else {
-	rc = winSock.WSASendTo(si->socket, &wbuf, 1, &bytes, 0,
-                (SOCKADDR *)&sendobj->addr, sendobj->addrlen,
-		&sendobj->ol, NULL);
+	rc = winSock.WSASendTo(infoPtr->socket, &wbuf, 1, &bytes, 0,
+                (SOCKADDR *)&bufPtr->addr, bufPtr->addrlen,
+		&bufPtr->ol, NULL);
     }
 
-    LeaveCriticalSection(&si->critSec);
+    LeaveCriticalSection(&infoPtr->critSec);
 
+    err = winSock.WSAGetLastError();
     if (rc == SOCKET_ERROR) {
-	if (winSock.WSAGetLastError() != WSA_IO_PENDING) {
-            return SOCKET_ERROR;
-        }
+	if (err != WSA_IO_PENDING) {
+	    //GetSysMsg(err);
+	    return SOCKET_ERROR;
+	}
+	/*
+	 * Increment the outstanding overlapped count for this socket.
+	 */
+	InterlockedIncrement(&infoPtr->OutstandingOps);
+    } else {
+	/* the WSASend(To) operation completed now, instead of being posted. */
+        HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes, err, 0);
     }
-
-    /* Increment the outstanding operation count. */
-    InterlockedIncrement(&si->OutstandingOps);
 
     return NO_ERROR;
 }
 
+/*
 void
-InsertPendingSend(SocketInfo *si, BUFFER_OBJ *send)
+InsertPendingSend(SocketInfo *infoPtr, BufferInfo *send)
 {
-    BUFFER_OBJ *ptr, *prev = NULL;
+    BufferInfo *ptr, *prev = NULL;
 
 
-    EnterCriticalSection(&si->critSec);
+    EnterCriticalSection(&infoPtr->critSec);
     send->next = NULL;
 
     // This loop finds the place to put the send within the list.
     //    The send list is in the same order as the receives were
     //    posted.
-    ptr = si->OutOfOrderSends;
+    ptr = infoPtr->OutOfOrderSends;
     while (ptr) {
 	if (send->IoOrder < ptr->IoOrder) {
 	    break;
@@ -1165,7 +1380,7 @@ InsertPendingSend(SocketInfo *si, BUFFER_OBJ *send)
     }
     if (prev == NULL) {
 	// Inserting at head
-	si->OutOfOrderSends = send;
+	infoPtr->OutOfOrderSends = send;
 	send->next = ptr;
     } else {
 	// Insertion somewhere in the middle
@@ -1173,37 +1388,38 @@ InsertPendingSend(SocketInfo *si, BUFFER_OBJ *send)
 	send->next = ptr;
     }
 
-    LeaveCriticalSection(&si->critSec);
+    LeaveCriticalSection(&infoPtr->critSec);
 }
 
 static int
-DoSends(SocketInfo *si)
+DoSends(SocketInfo *infoPtr)
 {
-    BUFFER_OBJ *sendobj;
-    int ret;
+    BufferInfo *bufPtr;
+    int ret = NO_ERROR;
 
     ret = NO_ERROR;
-    EnterCriticalSection(&si->critSec);
+    EnterCriticalSection(&infoPtr->critSec);
 
-    sendobj = si->OutOfOrderSends;
-    while ((sendobj) && (sendobj->IoOrder == si->LastSendIssued)) {
-        if (PostOverlappedSend(si, sendobj) != NO_ERROR) {
-            FreeBufferObj(sendobj);
+    bufPtr = infoPtr->OutOfOrderSends;
+    while ((bufPtr) && (bufPtr->IoOrder == infoPtr->LastSendIssued)) {
+        if (PostOverlappedSend(infoPtr, bufPtr) != NO_ERROR) {
+            FreeBufferObj(bufPtr);
             ret = SOCKET_ERROR;
             break;
         }
-        si->OutOfOrderSends = sendobj = sendobj->next;
+        infoPtr->OutOfOrderSends = bufPtr = bufPtr->next;
     }
 
-    LeaveCriticalSection(&si->critSec);
+    LeaveCriticalSection(&infoPtr->critSec);
     return ret;
 }
+*/
 
 /*
  *----------------------------------------------------------------------
  * CompletionThread --
  *
- *	The "main" for the I/O handling thread(s).
+ *	The "main" for the I/O handling thread(s).  One thread per CPU.
  *
  * Results:
  *
@@ -1225,8 +1441,8 @@ DWORD WINAPI
 CompletionThread (LPVOID lpParam)
 {
     CompletionPortInfo *cpinfo = (CompletionPortInfo *)lpParam;
-    SocketInfo *sockInfoPtr;
-    BUFFER_OBJ *bufobj = NULL;
+    SocketInfo *infoPtr;
+    BufferInfo *bufPtr;
     OVERLAPPED *lpOverlapped = NULL;
     DWORD BytesTransfered, Flags, Error;
     BOOL  ok;
@@ -1235,32 +1451,32 @@ CompletionThread (LPVOID lpParam)
 	Error = NO_ERROR;
 
 	ok = GetQueuedCompletionStatus(cpinfo->port,
-		&BytesTransfered, (PULONG_PTR)&sockInfoPtr,
+		&BytesTransfered, (PULONG_PTR)&infoPtr,
 		&lpOverlapped, INFINITE);
 
-	if (ok && !sockInfoPtr) {
+	if (ok && !infoPtr) {
 	    /* A NULL key indicates closure time for this thread. */
 	    break;
 	}
 
 	/*
 	 * Use the pointer to the overlapped structure and derive from it
-	 * the top of the parent BUFFER_OBJ structure it sits in.  If the
+	 * the top of the parent BufferInfo structure it sits in.  If the
 	 * position of the overlapped structure moves around within the
-	 * BUFFER_OBJ structure declaration, this function will _not_ need
+	 * BufferInfo structure declaration, this function will _not_ need
 	 * to be modified.
 	 */
 
-	bufobj = CONTAINING_RECORD(lpOverlapped, BUFFER_OBJ, ol);
+	bufPtr = CONTAINING_RECORD(lpOverlapped, BufferInfo, ol);
 
 	if (!ok) {
 	    /*
-	     * If GetQueuedCompletionStatus() returned a failure, call
-	     * WSAGetOverlappedResult() to translate the error into a
-	     * Winsock error code.
+	     * If GetQueuedCompletionStatus() returned a failure on the
+	     * operation, call WSAGetOverlappedResult() to translate the
+	     * error into a Winsock error code.
 	     */
 
-	    ok = winSock.WSAGetOverlappedResult(sockInfoPtr->socket,
+	    ok = winSock.WSAGetOverlappedResult(infoPtr->socket,
 		    lpOverlapped, &BytesTransfered, FALSE, &Flags);
 
 	    if (!ok) {
@@ -1269,44 +1485,44 @@ CompletionThread (LPVOID lpParam)
 	}
 
 	/* Go handle the IO operation. */
-        HandleIo(sockInfoPtr, bufobj, cpinfo->port, BytesTransfered,
-		Error, Flags);
+        HandleIo(infoPtr, bufPtr, cpinfo->port, BytesTransfered, Error,
+		Flags);
     }
     return 0;
 }
 
 void
 HandleIo (
-    SocketInfo *si,
-    BUFFER_OBJ *buf,
+    SocketInfo *infoPtr,
+    BufferInfo *bufPtr,
     HANDLE CompPort,
     DWORD BytesTransfered,
     DWORD error,
     DWORD flags)
 {
-    SocketInfo *clientobj = NULL;     // New client object for accepted connections
-    BUFFER_OBJ *recvobj=NULL;       // Used to post new receives on accepted connections
+    SocketInfo *newInfoPtr;     // New client object for accepted connections
+    BufferInfo *newBufPtr;       // Used to post new receives on accepted connections
     BOOL bCleanupSocket = FALSE;
 
-    if (error != NO_ERROR) {
+//    if (error != NO_ERROR) {
         /*
 	 * An error occured on a TCP socket, free the associated per I/O
 	 * buffer and see if there are any more outstanding operations.
 	 * If so we must wait until they are complete as well.
          */
 
-        FreeBufferObj(buf);
+//        FreeBufferObj(buf);
 
-        if (InterlockedDecrement(&si->OutstandingOps) == 0) {
+//        if (InterlockedDecrement(&si->OutstandingOps) == 0) {
 //            dbgprint("Freeing socket obj in GetOverlappedResult\n");
-	    FreeSocketInfo(si);
-        }
-        return;
-    }
+//	    FreeSocketInfo(si);
+//        }
+//        return;
+//    }
 
-    EnterCriticalSection(&si->critSec);
-    if (buf->operation == OP_ACCEPT) {
-        HANDLE hrc;
+    EnterCriticalSection(&infoPtr->critSec);
+    if (bufPtr->operation == OP_ACCEPT) {
+        HANDLE hcp;
         SOCKADDR_STORAGE *LocalSockaddr=NULL, *RemoteSockaddr=NULL;
         int LocalSockaddrLen, RemoteSockaddrLen;
 
@@ -1314,125 +1530,163 @@ HandleIo (
 	 * Get the address information that is specific to this LSP's
 	 * decoder.
 	 */
-        si->proto->GetAcceptExSockaddrs(buf->buf,
-		buf->buflen - ((sizeof(SOCKADDR_STORAGE) + 16) * 2),
+        infoPtr->proto->GetAcceptExSockaddrs(bufPtr->buf,
+		bufPtr->buflen - ((sizeof(SOCKADDR_STORAGE) + 16) * 2),
                 sizeof(SOCKADDR_STORAGE) + 16,
 		sizeof(SOCKADDR_STORAGE) + 16,
 		(SOCKADDR **)&LocalSockaddr, &LocalSockaddrLen,
                 (SOCKADDR **)&RemoteSockaddr, &RemoteSockaddrLen);
 
+	/*TODO: On XP, do this socket ioctl: SO_UPDATE_ACCEPT_CONTEXT, maybe.
+	  to inherit options from the parent. */
 
+        /* Get a new SocketInfo for the new client connection. */
+        newInfoPtr = NewAcceptSockInfo(bufPtr->socket, infoPtr);
 
-        /* Get a new SOCKET_OBJ for the new client connection. */
-        clientobj = NewAcceptSockInfo(buf->socket, si);
+	/* Alert Tcl to this new connection. */
+	IocpAlertToTclNewAccept(infoPtr, newInfoPtr, LocalSockaddr, LocalSockaddrLen, RemoteSockaddr, RemoteSockaddrLen);
 
-/* TODO: alert Tcl to this new connection. */
-	// IocpAlertToTclNewAccept(buf, BytesTransfered, LocalSockaddr, LocalSockaddrLen, RemoteSockaddr, RemoteSockaddrLen);
-__asm nop;
+	bufPtr->used = BytesTransfered;
 
+	/* (takes buffer ownership) */
+	TSLLPushBack(newInfoPtr->llPendingRecv, bufPtr, &bufPtr->node);
+
+	/*
+	 * Let IocpCheckProc() know this new channel has a ready read
+	 * that needs servicing.
+	 */
+	TSLLPushBack(newInfoPtr->tsdHome->readySockets, newInfoPtr, NULL);
+	/* Should the notifier be asleep, zap it awake. */
+	Tcl_ThreadAlert(newInfoPtr->tsdHome->threadId);
 
         /* Associate the new socket to our completion port. */
-        hrc = CreateIoCompletionPort((HANDLE)clientobj->socket, CompPort,
-                (ULONG_PTR)clientobj, 0);
+        hcp = CreateIoCompletionPort((HANDLE)newInfoPtr->socket, CompPort,
+                (ULONG_PTR)newInfoPtr, 0);
 
-        if (hrc == NULL) {
+        if (hcp == NULL) {
 //            fprintf(stderr, "CompletionThread: CreateIoCompletionPort failed: %d\n",
 //                    GetLastError());
             return;
         }
 
         /* Now post a receive on this new connection. */
-        recvobj = GetBufferObj(clientobj, 512);
+        newBufPtr = GetBufferObj(newInfoPtr, 512);
 
-        if (PostOverlappedRecv(clientobj, recvobj) != NO_ERROR) {
+        if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
             /* If for some reason the send call fails, clean up the connection. */
-            FreeBufferObj(recvobj);
+            FreeBufferObj(newBufPtr);
             error = SOCKET_ERROR;
         }
         
-        /* Post another new AcceptEx() to replace this one that just fired. */
-        PostOverlappedAccept(si, buf);
+        /*
+	 * Post another new AcceptEx() to replace this one that just fired.
+	 * Re-use the previous buffer.  This call could cause recurrsion..
+	 * Careful!  If PostOverlappedAccept() gets serviced by winsock
+	 * immediatly, rather than posted, we could end-up back here again.
+	 * That some heavy load :)
+	 */
+
+        PostOverlappedAccept(infoPtr, bufPtr);
 
 	if (error != NO_ERROR) {
-            if (clientobj->OutstandingOps == 0) {
-		winSock.closesocket(clientobj->socket);
-		clientobj->socket = INVALID_SOCKET;
+            if (newInfoPtr->OutstandingOps == 0) {
+		winSock.closesocket(newInfoPtr->socket);
+		newInfoPtr->socket = INVALID_SOCKET;
 //                FreeSocketObj(clientobj);
             } else {
-                clientobj->bClosing = TRUE;
+                newInfoPtr->bClosing = TRUE;
             }
             error = NO_ERROR;
 	}
-    } else if ((buf->operation == OP_READ) && (error == NO_ERROR)) {
+    } else if ((bufPtr->operation == OP_READ) && (error == NO_ERROR)) {
         if (BytesTransfered > 0) {
 	    /*
-	     * Receive completed successfully.  Post another.
+	     * Receive completed successfully.
 	     */
 
-/* TODO: alert Tcl about data ready. */
+	    /* (takes buffer ownership) */
+	    TSLLPushBack(infoPtr->llPendingRecv, bufPtr, &bufPtr->node);
 
+	    /*
+	     * Let IocpCheckProc() know this new channel has a ready read
+	     * that needs servicing.
+	     */
+	    TSLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
 
-            if (PostOverlappedRecv(si, buf) != NO_ERROR) {
+	    /* Should the notifier be asleep, zap it awake. */
+	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+
+	    /*
+	     * Create a new buffer object, but use a hard-coded size for
+	     * now until a method to control the receive buffer size
+	     * exists.
+	     *
+	     * TODO: make an fconfigure for this and store it in the
+	     * SocketInfo struct.
+	     */
+
+	    newBufPtr = GetBufferObj(infoPtr, 256);
+            if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
                 /* In the event the recv fails, clean up the connection */
-                FreeBufferObj(buf);
+                FreeBufferObj(newBufPtr);
                 error = SOCKET_ERROR;
             }
         } else {
 //            dbgprint("Got 0 byte receive\n");
 
             // Graceful close - the receive returned 0 bytes read
-            si->bClosing = TRUE;
+            infoPtr->bClosing = TRUE;
 
             // Free the receive buffer
-            FreeBufferObj(buf);
+            FreeBufferObj(bufPtr);
 
-            if (DoSends(si) != NO_ERROR) {
+//            if (DoSends(infoPtr) != NO_ERROR) {
 //                dbgprint("0: cleaning up in zero byte handler\n");
-                error = SOCKET_ERROR;
-            }
+//                error = SOCKET_ERROR;
+//            }
 
             // If this was the last outstanding operation on socket, clean it up
-            if ((si->OutstandingOps == 0) && (si->OutOfOrderSends == NULL)) {
+            if ((infoPtr->OutstandingOps == 0) && (infoPtr->OutOfOrderSends == NULL)) {
 //                dbgprint("1: cleaning up in zero byte handler\n");
                 bCleanupSocket = TRUE;
             }
         }
-    } else if (buf->operation == OP_WRITE) {
+    } else if (bufPtr->operation == OP_WRITE) {
         // Update the counters
 //        InterlockedExchangeAdd(&gBytesSent, BytesTransfered);
 //        InterlockedExchangeAdd(&gBytesSentLast, BytesTransfered);
 
-        FreeBufferObj(buf);
+        FreeBufferObj(bufPtr);
 
-        if (DoSends(si) != NO_ERROR) {
+//        if (DoSends(infoPtr) != NO_ERROR) {
 //            dbgprint("Cleaning up inside OP_WRITE handler\n");
-            error = SOCKET_ERROR;
-        }
+//            error = SOCKET_ERROR;
+//        }
     }
 
     if (error != NO_ERROR) {
-        si->bClosing = TRUE;
+        infoPtr->bClosing = TRUE;
     }
 
     //
     // Check to see if socket is closing
     //
-    if ((InterlockedDecrement(&si->OutstandingOps) == 0) &&
-        (si->bClosing) &&
-        (si->OutOfOrderSends == NULL)) {
+    if ((InterlockedDecrement(&infoPtr->OutstandingOps) == 0) &&
+        (infoPtr->bClosing) &&
+        (infoPtr->OutOfOrderSends == NULL)) {
 	bCleanupSocket = TRUE;
     } else {
-	if (DoSends(si) != NO_ERROR) {
-	    bCleanupSocket = TRUE;
-	}
+//	if (DoSends(infoPtr) != NO_ERROR) {
+//	    bCleanupSocket = TRUE;
+//	}
     }
 
-    LeaveCriticalSection(&si->critSec);
+    LeaveCriticalSection(&infoPtr->critSec);
 
     if (bCleanupSocket) {
-	winSock.closesocket(si->socket);
-	si->socket = INVALID_SOCKET;
-	FreeSocketInfo(si);
+	winSock.closesocket(infoPtr->socket);
+	infoPtr->socket = INVALID_SOCKET;
+	FreeSocketInfo(infoPtr);
     }
 
     return;

@@ -34,14 +34,15 @@
 
 
 
-extern LPLLIST	    LLCreate(LPCSTR szcName, INT iSz);
-extern BOOL	    LLDestroy(LPLLIST ll, DWORD dwState);
-extern LPLLNODE	    LLPushBack(LPLLIST ll, LPVOID lpItem,
-			       LPLLNODE *dnode, LPLLNODE pnode);
-extern LPLLNODE	    LLPushFront(LPLLIST ll, LPVOID lpItem,
-				LPLLNODE *dnode, LPLLNODE pnode);
-extern BOOL	    LLPop(LPLLNODE node, DWORD dwState);
-extern BOOL	    LLPopAll(LPLLIST ll, LPLLNODE snode, DWORD dwState);
-extern LPVOID	    LLPopBack(LPLLIST ll, DWORD dwState);
-extern LPVOID	    LLPopFront(LPLLIST ll, DWORD dwState);
-extern BOOL	    LLNodeDestroy(LPLLNODE node);
+extern LPLLIST	    TSLLCreate();
+extern BOOL	    TSLLDestroy(LPLLIST ll, DWORD dwState);
+extern LPLLNODE	    TSLLPushBack(LPLLIST ll, LPVOID lpItem,
+			       /*LPLLNODE *dnode,*/ LPLLNODE pnode);
+extern LPLLNODE	    TSLLPushFront(LPLLIST ll, LPVOID lpItem,
+				/*LPLLNODE *dnode,*/ LPLLNODE pnode);
+extern BOOL	    TSLLPop(LPLLNODE node, DWORD dwState);
+extern BOOL	    TSLLPopAll(LPLLIST ll, LPLLNODE snode, DWORD dwState);
+extern LPVOID	    TSLLPopBack(LPLLIST ll, DWORD dwState);
+extern LPVOID	    TSLLPopFront(LPLLIST ll, DWORD dwState);
+extern BOOL	    TSLLIsNotEmpty(LPLLIST ll);
+extern BOOL	    TSLLNodeDestroy(LPLLNODE node);

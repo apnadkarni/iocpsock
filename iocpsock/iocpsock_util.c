@@ -5,88 +5,69 @@
 /* Bitmask macros. */
 #define mask_a( mask, val ) if ( ( mask & val ) != val ) { mask |= val; }
 #define mask_d( mask, val ) if ( ( mask & val ) == val ) { mask ^= val; }
-#define mask_y( mask, val ) if ( ( mask & val ) == val )
-#define mask_n( mask, val ) if ( ( mask & val ) != val )
+#define mask_y( mask, val ) ( mask & val ) == val
+#define mask_n( mask, val ) ( mask & val ) != val
 
 
 /* Creates a linked list. */
 LPLLIST
-LLCreate(
-    LPCSTR szcName,
-    INT iSz)
+TSLLCreate ()
 {   
     LPLLIST ll;
     
     /* Alloc a linked list. */
-    ll = (LPLLIST) HeapAlloc(IocpSubSystem.heap, sizeof(LLIST),
-	    HEAP_ZERO_MEMORY);
+    ll = (LPLLIST) HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY,
+	    sizeof(LLIST));
     if (!ll) {
 	return NULL;
     }
     if (!InitializeCriticalSectionAndSpinCount(&ll->lock, 4000)) {
 	HeapFree(IocpSubSystem.heap, 0, ll);
 	return NULL;
-    } 
-    if (szcName) {
-	if (!iSz) {
-	    iSz = lstrlen(szcName);
-	}
-        ll->szName = (LPSTR) HeapAlloc(IocpSubSystem.heap, iSz + 1,
-		HEAP_ZERO_MEMORY);
-        if (!ll->szName) {
-	    HeapFree(IocpSubSystem.heap, 0, ll);
-	    return NULL;
-	} 
-        lstrcpy(ll->szName, szcName);
-	ll->iNameSz = iSz;
     }
+    ll->lCount = 0;
     return ll;
 }
 
 //Destroyes a linked list.
 BOOL 
-LLDestroy(
+TSLLDestroy(
     LPLLIST ll,
     DWORD dwState)
 {   
-    //Destroy the ll.
-    EnterCriticalSection(&ll->lock);
+    //Destroy the linked list.
+    if (mask_n(dwState, LL_NOLOCK)) {
+	EnterCriticalSection(&ll->lock);
+    }
     if (ll->lCount) {
-	if ( ll->szName )
-        {
-//	cout << "\nLinked List Memory Leak " << ll->szName << ": " 
-//                 << ll->lCount << " items\n"; Sleep( 15000 );
-	} else {
-//	cout << "\nLinked List Memory Leak: " << ll->lCount << " items\n"; Sleep( 15000 );
-	}
+//	cout << "\nLinked List Memory Leak: " << ll->lCount << " items\n";
     }
-    if (ll->szName) {
-	HeapFree(IocpSubSystem.heap, 0, ll->szName);
+    if (mask_n(dwState, LL_NOLOCK)) {
+	LeaveCriticalSection(&ll->lock);
     }
-    LeaveCriticalSection(&ll->lock);
     DeleteCriticalSection(&ll->lock);
     return HeapFree(IocpSubSystem.heap, 0, ll);
 }
 
 //Adds an item to the end of the list.
 LPLLNODE 
-LLPushBack(
+TSLLPushBack(
     LPLLIST ll,
     LPVOID lpItem,
-    LPLLNODE *dnode,
+//    LPLLNODE *dnode,
     LPLLNODE pnode)
 {
-    BOOL alloc;
+//    BOOL alloc;
     LPLLNODE tmp;
 
     EnterCriticalSection(&ll->lock);
-    alloc = FALSE;
+//    alloc = FALSE;
     if (!pnode) {
-	pnode = (LPLLNODE) HeapAlloc(IocpSubSystem.heap, sizeof(LLNODE), HEAP_ZERO_MEMORY);
-	alloc = TRUE;
+	pnode = (LPLLNODE) HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, sizeof(LLNODE));
+//	alloc = TRUE;
     }
     if (!pnode) {
-	LeaveCriticalSection( &ll->lock );
+	LeaveCriticalSection(&ll->lock);
 	return NULL;
     }
     pnode->lpItem = lpItem;
@@ -101,17 +82,17 @@ LLPushBack(
     }
     ll->lCount++;
     pnode->ll = ll;
-    pnode->lppNode = dnode; 
+//    pnode->lppNode = dnode; 
     LeaveCriticalSection(&ll->lock);
     return pnode;
 }
 
 //Adds an item to the front of the list.
 LPLLNODE 
-LLPushFront(
+TSLLPushFront(
     LPLLIST ll,
     LPVOID lpItem,
-    LPLLNODE *dnode, 
+//    LPLLNODE *dnode, 
     LPLLNODE pnode)
 {
     BOOL alloc;
@@ -120,7 +101,7 @@ LLPushFront(
     EnterCriticalSection(&ll->lock);
     alloc = FALSE;
     if (!pnode) {
-	pnode = (LPLLNODE) HeapAlloc(IocpSubSystem.heap, sizeof(LLNODE), HEAP_ZERO_MEMORY);
+	pnode = (LPLLNODE) HeapAlloc(IocpSubSystem.heap, HEAP_ZERO_MEMORY, sizeof(LLNODE));
 	alloc = TRUE;
     }
     if (!pnode) {
@@ -139,14 +120,14 @@ LLPushFront(
     }
     ll->lCount++;
     pnode->ll = ll;
-    pnode->lppNode = dnode; 
+//    pnode->lppNode = dnode; 
     LeaveCriticalSection(&ll->lock);
     return pnode;
 }
 
 //Removes all items from the list.
 BOOL 
-LLPopAll(
+TSLLPopAll(
     LPLLIST ll,
     LPLLNODE snode,
     DWORD dwState)
@@ -156,11 +137,11 @@ LLPopAll(
     if (snode && snode->ll) {
 	ll = snode->ll;
     }
-    mask_n(dwState, LL_NOLOCK) {
+    if (mask_n(dwState, LL_NOLOCK)) {
 	EnterCriticalSection(&ll->lock);
     }
     if (!ll->front && ! ll->back || ll->lCount <= 0) {
-	mask_n(dwState, LL_NOLOCK) {
+	if (mask_n(dwState, LL_NOLOCK)) {
 	    LeaveCriticalSection(&ll->lock);
 	}
 	return FALSE;
@@ -172,10 +153,10 @@ LLPopAll(
     while(tmp1) {
 	tmp2 = tmp1->next;
 	//Delete the node and decrement the counter.
-        mask_n(dwState, LL_NODESTROY) {
-	    if (tmp1->lppNode) {
-		*tmp1->lppNode = NULL;
-	    }
+        if (mask_n(dwState, LL_NODESTROY)) {
+//	    if (tmp1->lppNode) {
+//		*tmp1->lppNode = NULL;
+//	    }
             HeapFree(IocpSubSystem.heap, 0, tmp1);
 	} else {
 	    tmp1->ll = NULL;
@@ -186,7 +167,7 @@ LLPopAll(
 	tmp1 = tmp2;
     }
 
-    mask_n(dwState, LL_NOLOCK) {
+    if (mask_n(dwState, LL_NOLOCK)) {
 	LeaveCriticalSection( &ll->lock );
     }
     
@@ -195,7 +176,7 @@ LLPopAll(
 
 //Removes an item from the list.
 BOOL 
-LLPop(
+TSLLPop(
     LPLLNODE node,
     DWORD dwState)
 {
@@ -207,11 +188,11 @@ LLPop(
 	return FALSE;
     }
     ll = node->ll;
-    mask_n(dwState, LL_NOLOCK) {
+    if (mask_n(dwState, LL_NOLOCK)) {
 	EnterCriticalSection(&ll->lock);
     }
     if (!ll->front && !ll->back || ll->lCount <= 0) {
-	mask_n(dwState, LL_NOLOCK) {
+	if (mask_n(dwState, LL_NOLOCK)) {
 	    LeaveCriticalSection(&ll->lock);
 	}
 	return FALSE;
@@ -238,8 +219,8 @@ LLPop(
     }
 
     /* Delete the node and decrement the counter. */
-    mask_n(dwState, LL_NODESTROY) {
-	LLNodeDestroy( node );
+    if (mask_n(dwState, LL_NODESTROY)) {
+	TSLLNodeDestroy( node );
     } else {
 	node->ll = NULL;
 	node->next = NULL; 
@@ -251,7 +232,7 @@ LLPop(
 	ll->back = NULL;
     }
 
-    mask_n(dwState, LL_NOLOCK) {
+    if (mask_n(dwState, LL_NOLOCK)) {
 	LeaveCriticalSection(&ll->lock);
     }
     return TRUE;
@@ -259,20 +240,20 @@ LLPop(
 
 //Destroys a node.
 BOOL
-LLNodeDestroy(
+TSLLNodeDestroy(
     LPLLNODE node)
 {
-    LPLLNODE *lppNode = node->lppNode;
+//    LPLLNODE *lppNode = node->lppNode;
     BOOL ret = HeapFree(IocpSubSystem.heap, 0, node);
-    if (lppNode) {
-	*lppNode = NULL;
-    }
+//    if (lppNode) {
+//	*lppNode = NULL;
+//    }
     return ret;
 }
 
 //Removes the item at the back of the list.
 LPVOID
-LLPopBack(
+TSLLPopBack(
     LPLLIST ll,
     DWORD dwState)
 {
@@ -286,14 +267,14 @@ LLPopBack(
     }
     tmp = ll->back;
     vp = tmp->lpItem;
-    LLPop(tmp, LL_NOLOCK | dwState);
+    TSLLPop(tmp, LL_NOLOCK | dwState);
     LeaveCriticalSection(&ll->lock);
     return vp;
 }
 
 //Removes the item at the front of the list.
 LPVOID
-LLPopFront(
+TSLLPopFront(
     LPLLIST ll,
     DWORD dwState)
 {
@@ -301,13 +282,23 @@ LLPopFront(
     LPVOID vp;
 
     EnterCriticalSection(&ll->lock);
+    if (!ll->lCount) {
+	LeaveCriticalSection(&ll->lock);
+	return NULL;
+    }
     if (!ll->front && !ll->back) {
 	LeaveCriticalSection(&ll->lock);
 	return NULL;
     }
     tmp = ll->front;
     vp = tmp->lpItem;
-    LLPop(tmp, LL_NOLOCK | dwState);
+    TSLLPop(tmp, LL_NOLOCK | dwState);
     LeaveCriticalSection(&ll->lock);
     return vp;
+}
+
+BOOL
+TSLLIsNotEmpty(LPLLIST ll)
+{
+    return (ll->lCount != 0 ? TRUE : FALSE);
 }
