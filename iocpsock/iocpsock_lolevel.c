@@ -847,6 +847,7 @@ IocpInputProc (
 	}
 	if (bufPtr->WSAerr != NO_ERROR) {
 	    // TODO: what SHOULD go here?
+	    infoPtr->lastError = bufPtr->WSAerr;
 	    IocpWinConvertWSAError(bufPtr->WSAerr);
 	    *errorCodePtr = Tcl_GetErrno();
 	} else {
@@ -975,7 +976,7 @@ IocpGetOptionProc (
             ((len > 1) && (optionName[1] == 'p') &&
                     (strncmp(optionName, "-peername", len) == 0))) {
         if (infoPtr->remoteAddr == NULL) {
-	    infoPtr->remoteAddr = (LPSOCKADDR) IocpAlloc(infoPtr->proto->addrLen);
+	    infoPtr->remoteAddr = IocpAlloc(infoPtr->proto->addrLen);
 	    if (winSock.getpeername(sock, infoPtr->remoteAddr, &size) == SOCKET_ERROR) {
 		/*
 		 * getpeername failed - but if we were asked for all the options
@@ -1026,7 +1027,7 @@ IocpGetOptionProc (
             ((len > 1) && (optionName[1] == 's') &&
                     (strncmp(optionName, "-sockname", len) == 0))) {
         if (infoPtr->localAddr == NULL) {
-	    infoPtr->localAddr = (LPSOCKADDR) IocpAlloc(infoPtr->proto->addrLen);
+	    infoPtr->localAddr = IocpAlloc(infoPtr->proto->addrLen);
 	    if (winSock.getsockname(sock, infoPtr->localAddr, &size) == SOCKET_ERROR) {
 		if (interp) {
 		    Tcl_AppendResult(interp, "can't get sockname: ",
@@ -1154,7 +1155,7 @@ IocpAlertToTclNewAccept (
 {
     IocpAcceptInfo *acptInfo;
 
-    acptInfo = (IocpAcceptInfo *) IocpAlloc(sizeof(IocpAcceptInfo));
+    acptInfo = IocpAlloc(sizeof(IocpAcceptInfo));
     if (acptInfo == NULL) {
 	OutputDebugString("IocpAlertToTclNewAccept: HeapAlloc failed: ");
 	OutputDebugString(GetSysMsg(GetLastError()));
@@ -1189,7 +1190,7 @@ NewSocketInfo (SOCKET socket)
 {
     SocketInfo *infoPtr;
 
-    infoPtr = (SocketInfo *) IocpAlloc(sizeof(SocketInfo));
+    infoPtr = IocpAlloc(sizeof(SocketInfo));
     infoPtr->socket = socket;
     infoPtr->readyAccepts = NULL;  
     infoPtr->acceptProc = NULL;
@@ -1230,20 +1231,20 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
     BufferInfo *bufPtr;
 
     // Allocate the object
-    bufPtr = (BufferInfo *) IocpAlloc(sizeof(BufferInfo));
+    bufPtr = IocpAlloc(sizeof(BufferInfo));
     if (bufPtr == NULL) {
 	return NULL;
     }
     // Allocate the buffer
-    bufPtr->buf = (BYTE *) IocpAlloc(sizeof(BYTE)*buflen);
+    bufPtr->buf = IocpAlloc(sizeof(BYTE)*buflen);
     if (bufPtr->buf == NULL) {
 	IocpFree(bufPtr);
 	return NULL;
     }
     bufPtr->buflen = buflen;
     bufPtr->addr = NULL;
-    bufPtr->addrlen = infoPtr->proto->addrLen;
     bufPtr->WSAerr = NO_ERROR;
+    bufPtr->parent = infoPtr;
     return bufPtr;
 }
 
@@ -1259,7 +1260,7 @@ NewAcceptSockInfo (SOCKET s, SocketInfo *infoPtr)
 {
     SocketInfo *newInfoPtr;
 
-    newInfoPtr = (SocketInfo *) IocpAlloc(sizeof(SocketInfo));
+    newInfoPtr = IocpAlloc(sizeof(SocketInfo));
     if (newInfoPtr == NULL) {
 	return NULL;
     }
@@ -1360,7 +1361,7 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 		&bufPtr->ol, NULL);
     } else {
 	rc = winSock.WSARecvFrom(infoPtr->socket, &wbuf, 1, &bytes, &flags,
-		bufPtr->addr, &bufPtr->addrlen,
+		bufPtr->addr, &infoPtr->proto->addrLen,
 		&bufPtr->ol, NULL);
     }
 
@@ -1405,7 +1406,7 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 		&bufPtr->ol, NULL);
     } else {
 	rc = winSock.WSASendTo(infoPtr->socket, &wbuf, 1, &bytes, 0,
-                bufPtr->addr, bufPtr->addrlen,
+                bufPtr->addr, infoPtr->proto->addrLen,
 		&bufPtr->ol, NULL);
     }
 
@@ -1587,7 +1588,7 @@ HandleIo (
     }
 
     bufPtr->used = bytes;
-    bufPtr->WSAerr = WSAerr;
+    if (bufPtr->WSAerr == NO_ERROR) bufPtr->WSAerr = WSAerr;
 
     EnterCriticalSection(&infoPtr->critSec);
     if (bufPtr->operation == OP_ACCEPT) {
@@ -1613,11 +1614,9 @@ HandleIo (
 
         /* Get a new SocketInfo for the new client connection. */
         newInfoPtr = NewAcceptSockInfo(bufPtr->socket, infoPtr);
-	newInfoPtr->localAddr = (LPSOCKADDR)
-		IocpAlloc(newInfoPtr->proto->addrLen);
+	newInfoPtr->localAddr = IocpAlloc(newInfoPtr->proto->addrLen);
 	memcpy(newInfoPtr->localAddr, local, localLen);
-	newInfoPtr->remoteAddr = (LPSOCKADDR)
-		IocpAlloc(newInfoPtr->proto->addrLen);
+	newInfoPtr->remoteAddr = IocpAlloc(newInfoPtr->proto->addrLen);
 	memcpy(newInfoPtr->remoteAddr, remote, remoteLen);
 
 	/* Alert Tcl to this new connection. */
@@ -1708,19 +1707,38 @@ HandleIo (
         FreeBufferObj(bufPtr);
 
     } else if (bufPtr->operation == OP_CONNECT) {
-        FreeBufferObj(bufPtr);
 
-	// TODO: Is this correct?
-	winSock.setsockopt(infoPtr->socket, SOL_SOCKET,
-		SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
+	infoPtr->llPendingRecv = IocpLLCreate(); //Our pending recv list.
+	infoPtr->llPendingSend = IocpLLCreate(); //Our pending send list.
 
-        /* Now post a receive on this new connection. */
-        newBufPtr = GetBufferObj(infoPtr, 256);
-        if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
-            /* If for some reason the send call fails, clean up the connection. */
-            FreeBufferObj(newBufPtr);
-            //WSAerr = SOCKET_ERROR;
-        }
+	if (bufPtr->WSAerr != NO_ERROR) {
+
+	    /* (takes buffer ownership) */
+	    IocpLLPushBack(infoPtr->llPendingRecv, bufPtr, &bufPtr->node);
+
+	    /*
+	     * Let IocpCheckProc() know this new channel has a ready read
+	     * that needs servicing.
+	     */
+	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+
+	    /* Should the notifier be asleep, zap it awake. */
+	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
+	} else {
+	    FreeBufferObj(bufPtr);
+
+	    // TODO: Is this correct?
+	    winSock.setsockopt(infoPtr->socket, SOL_SOCKET,
+		    SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
+
+	    /* Now post a receive on this new connection. */
+	    newBufPtr = GetBufferObj(infoPtr, 256);
+	    if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
+		/* If for some reason the send call fails, clean up the connection. */
+		FreeBufferObj(newBufPtr);
+		//WSAerr = SOCKET_ERROR;
+	    }
+	}
     }
 
     LeaveCriticalSection(&infoPtr->critSec);
@@ -1775,7 +1793,7 @@ IocpLLCreate ()
     LPLLIST ll;
     
     /* Alloc a linked list. */
-    ll = (LPLLIST) IocpAlloc(sizeof(LLIST));
+    ll = IocpAlloc(sizeof(LLIST));
     if (!ll) {
 	return NULL;
     }
@@ -1848,7 +1866,7 @@ IocpLLPushBack(
 
     EnterCriticalSection(&ll->lock);
     if (!pnode) {
-	pnode = (LPLLNODE) IocpAlloc(sizeof(LLNODE));
+	pnode = IocpAlloc(sizeof(LLNODE));
     }
     if (!pnode) {
 	LeaveCriticalSection(&ll->lock);
@@ -1896,7 +1914,7 @@ IocpLLPushFront(
 
     EnterCriticalSection(&ll->lock);
     if (!pnode) {
-	pnode = (LPLLNODE) IocpAlloc(sizeof(LLNODE));
+	pnode = IocpAlloc(sizeof(LLNODE));
     }
     if (!pnode) {
 	LeaveCriticalSection(&ll->lock);
@@ -2324,6 +2342,38 @@ IocpWinConvertWSAError(
 }
 
 
+/* =================================================================== */
+/* ========================= Bad hack jobs! ========================== */
+
+
+typedef struct {
+    SOCKET s;
+    const struct sockaddr* name;
+    int namelen;
+    PVOID lpSendBuffer;
+    LPOVERLAPPED lpOverlapped;
+
+} ConnectJob;
+
+DWORD WINAPI
+ConnectThread (LPVOID lpParam)
+{
+    int code;
+    ConnectJob *job = lpParam;
+    BufferInfo *bufPtr;
+
+    bufPtr = CONTAINING_RECORD(job->lpOverlapped, BufferInfo, ol);
+    code = winSock.connect(job->s, job->name, job->namelen);
+    if (code == SOCKET_ERROR) {
+	bufPtr->WSAerr = winSock.WSAGetLastError();
+    }
+    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
+	    (ULONG_PTR) bufPtr->parent, job->lpOverlapped);
+    IocpFree(job->name);
+    IocpFree(job);
+    return 0;
+}
+
 BOOL PASCAL
 OurConnectEx (
     SOCKET s,
@@ -2334,6 +2384,10 @@ OurConnectEx (
     LPDWORD lpdwBytesSent,
     LPOVERLAPPED lpOverlapped)
 {
+    ConnectJob *job;
+    HANDLE thread;
+    DWORD dummy;
+
     // 1) Create a thread and have the thread do the work.
     //    Return thread start status.
     // 2) thread will do a blocking connect() and possible send()
@@ -2344,6 +2398,22 @@ OurConnectEx (
     //    one we ALWAYS use (insider knowledge of ourselves).
     // 4) exit thread.
 
-    winSock.WSASetLastError(WSAEOPNOTSUPP);
+    job = IocpAlloc(sizeof(ConnectJob));
+    job->s = s;
+    job->name = IocpAlloc(namelen);
+    memcpy(job->name, name, namelen);
+    job->namelen = namelen;
+    job->lpSendBuffer = lpSendBuffer;
+    job->lpOverlapped = lpOverlapped;
+
+    thread = CreateThread(NULL, 256, ConnectThread, job, 0, &dummy);
+
+    if (thread) {
+	/* remove local reference so the thread cleans up after it exits. */
+	CloseHandle(thread);
+	winSock.WSASetLastError(WSA_IO_PENDING);
+    } else {
+	winSock.WSASetLastError(GetLastError());
+    }
     return FALSE;
 }

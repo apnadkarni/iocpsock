@@ -318,7 +318,7 @@ CreateTcp4Socket(
 
 	WSAerr = winSock.WSAGetLastError();
 	if (code == FALSE) {
-	    if (WSAerr != ERROR_IO_PENDING) {
+	    if (WSAerr != WSA_IO_PENDING) {
 		FreeBufferObj(bufPtr);
 		goto error;
 	    }

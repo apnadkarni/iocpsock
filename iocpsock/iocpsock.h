@@ -183,12 +183,16 @@ typedef struct _List {
     CRITICAL_SECTION lock;	/* accessor lock */
 } LLIST, *LPLLIST;
 
+
+struct SocketInfo;
+
 /*
  * This is our per I/O buffer. It contains a WSAOVERLAPPED structure as well
  * as other necessary information for handling an IO operation on a socket.
  */
 typedef struct _BufferInfo {
     WSAOVERLAPPED ol;
+    struct SocketInfo *parent;
     SOCKET socket;	    // Used for AcceptEx client socket
     DWORD WSAerr;	    // Any error that occured for this operation.
     BYTE *buf;		    // Buffer for recv/send/AcceptEx
@@ -199,8 +203,7 @@ typedef struct _BufferInfo {
 #   define OP_WRITE	2   /* WSASend()/WSASendTo() */
 #   define OP_CONNECT	3   /* ConnectEx */
     int operation;	    // Type of operation issued
-    LPSOCKADDR addr;	    // addr storage space.
-    int addrlen;	    // length of the protocol specific address
+    LPSOCKADDR addr;	    // addr storage space for WSARecvFrom/WSASendTo.
     ULONG IoOrder;	    // Order in which this I/O was posted
     LLNODE node;	    /* linked list node */
 } BufferInfo;
