@@ -2867,6 +2867,7 @@ OurDisonnectEx (
 {
     BufferInfo *bufPtr;
     bufPtr = CONTAINING_RECORD(lpOverlapped, BufferInfo, ol);
+    CancelIo((HANDLE)hSocket);
     PostQueuedCompletionStatus(IocpSubSystem.port, 0,
 	    (ULONG_PTR) bufPtr->parent, lpOverlapped);
     return TRUE;
