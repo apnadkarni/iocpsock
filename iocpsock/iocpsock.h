@@ -302,8 +302,8 @@ typedef struct SocketInfo {
     DWORD flags;		    /* info about this socket. */
 
     /* we need 32-bit alignment for these: */
-    volatile LONG ready;	    /* indicates a ready event.  Access
-				     * must be protected with the
+    volatile LONG markedReady;	    /* indicates we are on the readySockets list.
+				     * Access must be protected within the
 				     * tsdPtr->readySockets->lock critical
 				     * section. */
     volatile LONG outstandingOps;   /* Count of all overlapped operations. */

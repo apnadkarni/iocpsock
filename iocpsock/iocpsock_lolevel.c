@@ -734,7 +734,7 @@ IocpEventCheckProc (
 	 * efficiency to avoid unneccesary events being queued into the 
 	 * readySockets list.
 	 */
-	InterlockedExchange(&infoPtr->ready, 0);
+	InterlockedExchange(&infoPtr->markedReady, 0);
 	LeaveCriticalSection(&tsdPtr->readySockets->lock);
 
 	/*
@@ -877,7 +877,7 @@ error:
 	 * efficiency to avoid unneccesary events being queued into the 
 	 * readySockets list.
 	 */
-	if (!InterlockedExchange(&infoPtr->ready, 1)) {
+	if (!InterlockedExchange(&infoPtr->markedReady, 1)) {
 	    /* No entry on the ready list.  Insert one. */
 	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
 		    NULL, IOCP_LL_NOLOCK);
@@ -928,7 +928,7 @@ IocpCloseProc (
     if (initialized) {
 
 	/* Flip the bit so no new stuff can ever come in again. */
-	InterlockedExchange(&infoPtr->ready, 1);
+	InterlockedExchange(&infoPtr->markedReady, 1);
 
 	/* artificially increment the count. */
 	InterlockedIncrement(&infoPtr->outstandingOps);
@@ -1300,7 +1300,7 @@ IocpGetOptionProc (
 	    return TCL_OK;
 	} else if (strncmp(optionName, "-ready", len) == 0) {
 	    EnterCriticalSection(&infoPtr->tsdHome->readySockets->lock);
-	    TclFormatInt(buf, infoPtr->ready);
+	    TclFormatInt(buf, infoPtr->markedReady);
 	    LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
 	    Tcl_DStringAppendElement(dsPtr, buf);
 	    return TCL_OK;
@@ -1598,7 +1598,7 @@ NewSocketInfo (SOCKET socket)
     infoPtr->channel = NULL;
     infoPtr->socket = socket;
     infoPtr->flags = 0;		    /* assume initial blocking state */
-    infoPtr->ready = 0;
+    infoPtr->markedReady = 0;
     infoPtr->outstandingOps = 0;	/* Total operations pending */
     infoPtr->outstandingSends = 0;
     infoPtr->outstandingSendCap = IOCP_SEND_CAP;
@@ -1729,7 +1729,7 @@ IocpZapTclNotifier (SocketInfo *infoPtr)
      */
     if (infoPtr->tsdHome) {
 	EnterCriticalSection(&infoPtr->tsdHome->readySockets->lock);
-	if (!InterlockedExchange(&infoPtr->ready, 1)) {
+	if (!InterlockedExchange(&infoPtr->markedReady, 1)) {
 	    /* No entry on the ready list.  Insert one. */
 	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
 		    NULL, IOCP_LL_NOLOCK);
