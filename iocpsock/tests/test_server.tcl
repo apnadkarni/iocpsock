@@ -15,7 +15,7 @@ proc GotRead {s} {
 	return
     }
     if {![catch {read $s}]} {
-	catch {puts -nonewline $s "hi there"}
+	catch {puts $s "hi there"}
     }
     if {[eof $s]} {
 	#puts "closing $s"

@@ -53,7 +53,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /dll /machine:I386
-# ADD LINK32 /nologo /dll /machine:I386 /libpath:"\tcl_workspace\tcl_84_branch\win\Release" /opt:nowin98 /opt:icf,6
+# ADD LINK32 /nologo /dll /machine:I386 /out:"Release/iocpsock20.dll" /libpath:"\tcl_workspace\tcl_84_branch\win\Release" /opt:nowin98 /opt:icf,6
 # SUBTRACT LINK32 /pdb:none
 
 !ELSEIF  "$(CFG)" == "iocpsock - Win32 Debug"
@@ -70,7 +70,7 @@ LINK32=link.exe
 # PROP Ignore_Export_Lib 0
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /MTd /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_WINDOWS" /D "_MBCS" /D "_USRDLL" /D "IOCPSOCK_EXPORTS" /YX /FD /GZ /c
-# ADD CPP /nologo /MTd /W3 /Gm /GX /ZI /Od /I "\tcl_workspace\tcl_84_branch\generic" /D "WIN32" /D "_DEBUG" /D "TCL_THREADS" /D "USE_TCL_STUBS" /FR /YX /FD /GZ /c
+# ADD CPP /nologo /MDd /W3 /Gm /GX /ZI /Od /I "\tcl_workspace\tcl_84_branch\generic" /D "WIN32" /D "_DEBUG" /D "TCL_THREADS" /D "USE_TCL_STUBS" /FR /YX /FD /GZ /c
 # ADD BASE MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD MTL /nologo /D "_DEBUG" /mktyplib203 /win32
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
@@ -80,7 +80,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /dll /debug /machine:I386 /pdbtype:sept
-# ADD LINK32 /nologo /dll /debug /machine:I386 /pdbtype:sept /libpath:"\tcl_workspace\tcl_84_branch\win\Release"
+# ADD LINK32 /nologo /dll /debug /machine:I386 /out:"Debug/iocpsock20g.dll" /pdbtype:sept /libpath:"\tcl_workspace\tcl_84_branch\win\Release"
 
 !ENDIF 
 
