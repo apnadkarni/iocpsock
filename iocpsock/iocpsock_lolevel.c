@@ -95,7 +95,7 @@ static BOOL PASCAL	OurConnectEx(SOCKET s,
 			    PVOID lpSendBuffer, DWORD dwSendDataLength,
 			    LPDWORD lpdwBytesSent,
 			    LPOVERLAPPED lpOverlapped);
-static BOOL PASCAL	OurDisonnectEx(SOCKET hSocket,
+static BOOL PASCAL	OurDisconnectEx(SOCKET hSocket,
 			    LPOVERLAPPED lpOverlapped, DWORD dwFlags,
 			    DWORD reserved);
 
@@ -2118,8 +2118,8 @@ PostOverlappedDisconnect (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	    bufPtr->WSAerr = WSAerr;
 
 	    /*
-	     * Eventhough we know about the error now, post this to the port
-	     * manually, anyways.
+	     * Eventhough we know about the error now, post this to the
+	     * port manually, anyways.
 	     */
 
 	    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
@@ -2694,7 +2694,7 @@ IocpInitProtocolData (SOCKET sock, WS2ProtocolData *pdata)
 		&bytes, NULL, NULL);
 	if (pdata->DisconnectEx == NULL) {
 	    /* Use our lame Win2K/NT4 emulation for this. */
-	    pdata->DisconnectEx = OurDisonnectEx;
+	    pdata->DisconnectEx = OurDisconnectEx;
 	}
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&TransmitFileGuid, sizeof(GUID),
@@ -3077,7 +3077,7 @@ OurConnectEx (
 }
 
 BOOL PASCAL
-OurDisonnectEx (
+OurDisconnectEx (
     SOCKET hSocket,
     LPOVERLAPPED lpOverlapped,
     DWORD dwFlags,
