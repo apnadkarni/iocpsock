@@ -268,13 +268,12 @@ CreateTcp4Socket(
 	}
 
         // Keep track of the pending AcceptEx operations
-        infoPtr->PendingAccepts = (BufferInfo **) IocpAlloc(sizeof(BufferInfo *) * 20);
+        infoPtr->llPendingAccepts = IocpLLCreate();
 
 	/* pre-queue 20 accepts. */
         for(i=0; i < 20 ;i++) {
 	    BufferInfo *acceptobj;
 	    acceptobj = GetBufferObj(infoPtr, 4096);
-            infoPtr->PendingAccepts[i] = acceptobj;
             PostOverlappedAccept(infoPtr, acceptobj);
         }
 

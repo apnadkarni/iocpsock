@@ -244,6 +244,7 @@ typedef struct SocketInfo {
     /* For listening sockets: */
     LPLLIST readyAccepts;	    /* Ready accepts() in queue (used for
 				     * listening sockets only) */
+    LPLLIST llPendingAccepts;	    /* List of pending accepts() */
     Tcl_TcpAcceptProc *acceptProc;  /* Proc to call on accept. */
     ClientData acceptProcData;	    /* The data for the accept proc. */
 
@@ -261,11 +262,8 @@ typedef struct SocketInfo {
     short maxOutstandingSends;
 
     volatile LONG OutstandingOps;	    
-    ULONG LastSendIssued; // Last sequence number sent
+//    ULONG LastSendIssued; // Last sequence number sent
 //    ULONG IoCountIssued;
-//    BufferInfo *OutOfOrderSends;// List of send buffers that completed out of order
-    BufferInfo **PendingAccepts;    // Pending AcceptEx buffers 
-				    //   (used for listening sockets only)
     LPLLIST llPendingRecv; //Our pending recv list.
 
 } SocketInfo;
@@ -336,8 +334,8 @@ extern __inline BOOL	IocpFree (LPVOID block);
 /* Thread safe linked-list management. */
 
 /* state bitmask. */
-#define IOCP_LL_NOLOCK		0x80000000
-#define IOCP_LL_NODESTROY	0x40000000
+#define IOCP_LL_NOLOCK		(1<<0)
+#define IOCP_LL_NODESTROY	(1<<1)
 
 extern LPLLIST		IocpLLCreate();
 extern BOOL		IocpLLDestroy(LPLLIST ll, DWORD dwState);
@@ -357,5 +355,3 @@ extern BOOL		IocpLLNodeDestroy(LPLLNODE node);
 extern BOOL PASCAL	OurConnectEx(SOCKET s, const struct sockaddr* name,
 			    int namelen, PVOID lpSendBuffer, DWORD dwSendDataLength,
 			    LPDWORD lpdwBytesSent, LPOVERLAPPED lpOverlapped);
-extern BOOL PASCAL	OurDisconnectEx(SOCKET s, LPOVERLAPPED lpOverlapped,
-			    DWORD dwFlags, DWORD reserved);

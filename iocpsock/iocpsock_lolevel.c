@@ -1402,6 +1402,8 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
      */
     InterlockedIncrement(&infoPtr->OutstandingOps);
 
+    IocpLLPushBack(infoPtr->llPendingAccepts, bufPtr, &bufPtr->node);
+
     /*
      * Use the special function for overlapped accept() that is provided
      * by the LSP of this socket type.
@@ -1677,6 +1679,11 @@ HandleIo (
 	memcpy(newInfoPtr->localAddr, local, localLen);
 	newInfoPtr->remoteAddr = IocpAlloc(newInfoPtr->proto->addrLen);
 	memcpy(newInfoPtr->remoteAddr, remote, remoteLen);
+
+	/*
+	 * First, remove this from the pending list of the listening socket.
+	 */
+	IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
 
 	/* Alert Tcl to this new connection. */
 	IocpAlertToTclNewAccept(infoPtr, newInfoPtr, local, localLen,
