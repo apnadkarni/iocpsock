@@ -127,29 +127,20 @@ Iocp_OpenTcpServer(
      * Create a new client socket and wrap it in a channel.
      */
 
-    infoPtr = CreateTcpSocket(interp, port, host, 1, NULL, 0, 0, overlappedCount);
+    infoPtr = CreateTcpSocket(interp, port, host, 1 /*server*/, NULL, 0, 0, overlappedCount);
     if (infoPtr == NULL) {
 	return NULL;
     }
 
     infoPtr->acceptProc = acceptProc;
     infoPtr->acceptProcData = acceptProcData;
-
-    wsprintfA(channelName, "iocp%p", infoPtr);
-
+    wsprintf(channelName, "iocp%lu", infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, 0);
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-eofchar", "")
 	    == TCL_ERROR) {
         Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
         return (Tcl_Channel) NULL;
-    }
-
-    // Had to add this!
-    if (Tcl_SetChannelOption(NULL, infoPtr->channel, "-blocking", "0")
-	    == TCL_ERROR) {
-	Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
-	return (Tcl_Channel) NULL;
     }
 
     return infoPtr->channel;
@@ -201,13 +192,16 @@ CreateTcpSocket(
 	}
     }
 
-    if ((myaddr != NULL || myport != NULL) &&
-	    ! CreateSocketAddress(myaddr, myport, addr,
-	    &mysockaddr)) {
-	goto error2;
-    } else if (!server && !CreateSocketAddress("0.0.0.0", "0", addr,
-	    &mysockaddr)) {
-	goto error2;
+    if (myaddr != NULL || myport != NULL) {
+	if (!CreateSocketAddress(myaddr, myport, addr, &mysockaddr)) {
+	    goto error2;
+	}
+    } else if (!server) {
+	/* Win2K hack.  Ask for port 1, then set to 0 so getaddrinfo() doesn't bomb. */
+	if (!CreateSocketAddress(NULL, "1", addr, &mysockaddr)) {
+	    goto error2;
+	}
+	((LPSOCKADDR_IN)mysockaddr->ai_addr)->sin_port = 0;
     }
 
 
@@ -245,6 +239,7 @@ CreateTcpSocket(
 		sizeof(pdata->ConnectEx),
 		&bytes, NULL, NULL);
 	if (pdata->ConnectEx == NULL) {
+	    /* Use our lame Win2K/NT4 emulation for this. */
 	    pdata->ConnectEx = OurConnectEx;
 	}
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
@@ -253,6 +248,7 @@ CreateTcpSocket(
 		sizeof(pdata->DisconnectEx),
 		&bytes, NULL, NULL);
 	if (pdata->DisconnectEx == NULL) {
+	    /* There is no Win2K/NT4 emulation for this. */
 	    pdata->DisconnectEx = NULL;
 	}
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
