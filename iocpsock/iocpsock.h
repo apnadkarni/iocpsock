@@ -267,7 +267,6 @@ typedef struct SocketInfo {
     BufferInfo **PendingAccepts;    // Pending AcceptEx buffers 
 				    //   (used for listening sockets only)
     LPLLIST llPendingRecv; //Our pending recv list.
-    LPLLIST llPendingSend; //Our pending send list.
 
 } SocketInfo;
 

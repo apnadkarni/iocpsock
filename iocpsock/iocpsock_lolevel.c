@@ -777,65 +777,6 @@ IocpRemoveAllPendingEvents (Tcl_Event *ev, ClientData cData)
 }
 
 /* =================================================================== */
-/* ============== Protocol neutral SOCKADDR procedures =============== */
-
-
-/*
- *-----------------------------------------------------------------------
- *
- * CreateSocketAddress --
- *
- *	This function initializes a ADDRINFO structure for a host and
- *	port.
- *
- * Results:
- *	1 if the host was valid, 0 if the host could not be converted to
- *	an IP address.
- *
- * Side effects:
- *	Fills in the *ADDRINFO structure.
- *
- *-----------------------------------------------------------------------
- */
-
-int
-CreateSocketAddress (
-     const char *addr,
-     const char *port,
-     WS2ProtocolData *pdata,
-     LPADDRINFO *paddrinfo)
-{
-    ADDRINFO hints;
-    LPADDRINFO phints;
-    int result;
-
-    if (pdata != NULL) {
-	ZeroMemory(&hints, sizeof(hints));
-	hints.ai_flags  = ((addr) ? 0 : AI_PASSIVE);
-	hints.ai_family = pdata->af;
-	hints.ai_socktype = pdata->type;
-	hints.ai_protocol = pdata->protocol;
-	phints = &hints;
-    } else {
-	phints = NULL;
-    }
-
-    result = getaddrinfo(addr, port, phints, paddrinfo);
-
-    if (result != 0) {
-	winSock.WSASetLastError(result);
-	return 0;
-    }
-    return 1;
-}
-
-void
-FreeSocketAddress (LPADDRINFO addrinfo)
-{
-    freeaddrinfo(addrinfo);
-}
-
-/* =================================================================== */
 /* ==================== Tcl_Driver*Proc procedures =================== */
 
 static int
@@ -955,7 +896,7 @@ IocpOutputProc (
 	return -1;
     }
 
-    if (infoPtr->llPendingSend == NULL) {
+    if (infoPtr->llPendingRecv == NULL) {
 	/* Not connected.  How did we get here? */
 	*errorCodePtr = EAGAIN;
 	return -1;
@@ -1362,12 +1303,6 @@ FreeSocketInfo (SocketInfo *infoPtr)
 	}
 	IocpLLDestroy(infoPtr->llPendingRecv, 0);
     }
-    if (infoPtr->llPendingSend) {
-	while ((bufPtr = IocpLLPopFront(infoPtr->llPendingSend, IOCP_LL_NODESTROY)) != NULL) {
-	    FreeBufferObj(bufPtr);
-	}
-	IocpLLDestroy(infoPtr->llPendingSend, 0);
-    }
     IocpFree(infoPtr);
 }
 
@@ -1425,7 +1360,6 @@ NewAcceptSockInfo (SOCKET s, SocketInfo *infoPtr)
 
     InitializeCriticalSection(&newInfoPtr->critSec);
     newInfoPtr->llPendingRecv = IocpLLCreate(); //Our pending recv list.
-    newInfoPtr->llPendingSend = IocpLLCreate(); //Our pending send list.
 
     return newInfoPtr;
 }
@@ -1602,63 +1536,6 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
     return NO_ERROR;
 }
 
-/*
-void
-InsertPendingSend(SocketInfo *infoPtr, BufferInfo *send)
-{
-    BufferInfo *ptr, *prev = NULL;
-
-
-    EnterCriticalSection(&infoPtr->critSec);
-    send->next = NULL;
-
-    // This loop finds the place to put the send within the list.
-    //    The send list is in the same order as the receives were
-    //    posted.
-    ptr = infoPtr->OutOfOrderSends;
-    while (ptr) {
-	if (send->IoOrder < ptr->IoOrder) {
-	    break;
-	}
-	prev = ptr;
-	ptr = ptr->next;
-    }
-    if (prev == NULL) {
-	// Inserting at head
-	infoPtr->OutOfOrderSends = send;
-	send->next = ptr;
-    } else {
-	// Insertion somewhere in the middle
-	prev->next = send;
-	send->next = ptr;
-    }
-
-    LeaveCriticalSection(&infoPtr->critSec);
-}
-
-static int
-DoSends(SocketInfo *infoPtr)
-{
-    BufferInfo *bufPtr;
-    int ret = NO_ERROR;
-
-    ret = NO_ERROR;
-    EnterCriticalSection(&infoPtr->critSec);
-
-    bufPtr = infoPtr->OutOfOrderSends;
-    while ((bufPtr) && (bufPtr->IoOrder == infoPtr->LastSendIssued)) {
-        if (PostOverlappedSend(infoPtr, bufPtr) != NO_ERROR) {
-            FreeBufferObj(bufPtr);
-            ret = SOCKET_ERROR;
-            break;
-        }
-        infoPtr->OutOfOrderSends = bufPtr = bufPtr->next;
-    }
-
-    LeaveCriticalSection(&infoPtr->critSec);
-    return ret;
-}
-*/
 
 /* =================================================================== */
 /* ================== Lo-level Completion handler ==================== */
@@ -1917,7 +1794,6 @@ HandleIo (
     } else if (bufPtr->operation == OP_CONNECT) {
 
 	infoPtr->llPendingRecv = IocpLLCreate(); //Our pending recv list.
-	infoPtr->llPendingSend = IocpLLCreate(); //Our pending send list.
 
 	if (bufPtr->WSAerr != NO_ERROR) {
 
@@ -2154,7 +2030,7 @@ IocpLLPushFront(
  *	TRUE if something was popped or FALSE if nothing was poppable.
  *
  * Side effects:
- *	Frees the node(s) with IOCP_LL_NODESTROY in the state arg.
+ *	Won't free the node(s) with IOCP_LL_NODESTROY in the state arg.
  *
  *----------------------------------------------------------------------
  */
@@ -2248,7 +2124,7 @@ IocpLLPopAllCompare(
  *	TRUE if something was popped or FALSE if nothing was poppable.
  *
  * Side effects:
- *	Frees the node with IOCP_LL_NODESTROY in the state arg.
+ *	Won't free the node with IOCP_LL_NODESTROY in the state arg.
  *
  *----------------------------------------------------------------------
  */
@@ -2349,7 +2225,7 @@ IocpLLNodeDestroy (LPLLNODE node)
  *	The item stored in the node at the front or NULL for none.
  *
  * Side effects:
- *	Frees the node with IOCP_LL_NODESTROY in the state arg.
+ *	Won't free the node with IOCP_LL_NODESTROY in the state arg.
  *
  *----------------------------------------------------------------------
  */
@@ -2385,7 +2261,7 @@ IocpLLPopBack(
  *	The item stored in the node at the front or NULL for none.
  *
  * Side effects:
- *	Frees the node with IOCP_LL_NODESTROY in the state arg.
+ *	Won't free the node with IOCP_LL_NODESTROY in the state arg.
  *
  *----------------------------------------------------------------------
  */
@@ -2438,6 +2314,66 @@ IocpLLIsNotEmpty (LPLLIST ll)
     b = (ll->lCount != 0);
     LeaveCriticalSection(&ll->lock);
     return b;
+}
+
+
+/* =================================================================== */
+/* ============== Protocol neutral SOCKADDR procedures =============== */
+
+
+/*
+ *-----------------------------------------------------------------------
+ *
+ * CreateSocketAddress --
+ *
+ *	This function initializes a ADDRINFO structure for a host and
+ *	port.
+ *
+ * Results:
+ *	1 if the host was valid, 0 if the host could not be converted to
+ *	an IP address.
+ *
+ * Side effects:
+ *	Fills in the *ADDRINFO structure.
+ *
+ *-----------------------------------------------------------------------
+ */
+
+int
+CreateSocketAddress (
+     const char *addr,
+     const char *port,
+     WS2ProtocolData *pdata,
+     LPADDRINFO *paddrinfo)
+{
+    ADDRINFO hints;
+    LPADDRINFO phints;
+    int result;
+
+    if (pdata != NULL) {
+	ZeroMemory(&hints, sizeof(hints));
+	hints.ai_flags  = ((addr) ? 0 : AI_PASSIVE);
+	hints.ai_family = pdata->af;
+	hints.ai_socktype = pdata->type;
+	hints.ai_protocol = pdata->protocol;
+	phints = &hints;
+    } else {
+	phints = NULL;
+    }
+
+    result = getaddrinfo(addr, port, phints, paddrinfo);
+
+    if (result != 0) {
+	winSock.WSASetLastError(result);
+	return 0;
+    }
+    return 1;
+}
+
+void
+FreeSocketAddress (LPADDRINFO addrinfo)
+{
+    freeaddrinfo(addrinfo);
 }
 
 /* =================================================================== */
