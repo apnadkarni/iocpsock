@@ -299,25 +299,32 @@ extern CompletionPortInfo IocpSubSystem;
 
 TCL_DECLARE_MUTEX(initLock)
 
-extern int		CreateSocketAddress (const char *addr,
-				const char *port, WS2ProtocolData *pdata,
-				LPADDRINFO *result);
-extern void		FreeSocketAddress(LPADDRINFO addrinfo);
-extern Tcl_Channel	Iocp_OpenTcpClient (Tcl_Interp *interp,
-				CONST char *port, CONST char *host,
-				CONST char *myaddr, CONST char *myport,
-				int async);
-extern Tcl_Channel	Iocp_OpenTcpServer (Tcl_Interp *interp,
-				CONST char *port, CONST char *host,
-				Tcl_TcpAcceptProc *acceptProc,
-				ClientData acceptProcData);
-extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
-				BufferInfo *acceptobj);
+extern int	    CreateSocketAddress (const char *addr,
+			    const char *port, WS2ProtocolData *pdata,
+			    LPADDRINFO *result);
+extern void	    FreeSocketAddress(LPADDRINFO addrinfo);
+extern Tcl_Channel  Iocp_OpenTcpClient (Tcl_Interp *interp,
+			    CONST char *port, CONST char *host,
+			    CONST char *myaddr, CONST char *myport,
+			    int async);
+extern Tcl_Channel  Iocp_OpenTcpServer (Tcl_Interp *interp,
+			    CONST char *port, CONST char *host,
+			    Tcl_TcpAcceptProc *acceptProc,
+			    ClientData acceptProcData);
+extern DWORD	    PostOverlappedAccept (SocketInfo *infoPtr,
+			    BufferInfo *acceptobj);
+extern void	    HandleIo(SocketInfo *infoPtr, BufferInfo *bufPtr,
+			    HANDLE compPort, DWORD bytes, DWORD error,
+			    DWORD flags);
+extern void	    IocpWinConvertWSAError(DWORD errCode);
+extern void	    FreeBufferObj(BufferInfo *obj);
+
 extern BufferInfo *	GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen);
-extern SocketInfo *	NewSocketInfo(SOCKET socket);
-extern int		HasSockets(Tcl_Interp *interp);
-extern char *		GetSysMsg(DWORD id);
-extern Tcl_Obj *	GetSysMsgObj(DWORD id);
+extern SocketInfo *	NewSocketInfo (SOCKET socket);
+extern void		FreeSocketInfo (SocketInfo *infoPtr);
+extern int		HasSockets (Tcl_Interp *interp);
+extern char *		GetSysMsg (DWORD id);
+extern Tcl_Obj *	GetSysMsgObj (DWORD id);
 extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
 extern __inline LPVOID	IocpAlloc (SIZE_T size);
 extern __inline BOOL	IocpFree (LPVOID block);
@@ -341,3 +348,8 @@ extern LPVOID		IocpLLPopBack(LPLLIST ll, DWORD dwState);
 extern LPVOID		IocpLLPopFront(LPLLIST ll, DWORD dwState);
 extern BOOL		IocpLLIsNotEmpty(LPLLIST ll);
 extern BOOL		IocpLLNodeDestroy(LPLLNODE node);
+
+/* special hack job! */
+extern BOOL PASCAL	OurConnectEx(SOCKET s, const struct sockaddr* name,
+			    int namelen, PVOID lpSendBuffer, DWORD dwSendDataLength,
+			    LPDWORD lpdwBytesSent, LPOVERLAPPED lpOverlapped);

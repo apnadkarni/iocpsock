@@ -26,20 +26,13 @@ static WS2ProtocolData tcp6ProtoData = {
 };
 
 static SocketInfo *	CreateTcp4Socket(Tcl_Interp *interp,
-				    CONST char *port, CONST char *host,
-				    int server, CONST char *myaddr,
-				    CONST char *myport, int async);
+				CONST char *port, CONST char *host,
+				int server, CONST char *myaddr,
+				CONST char *myport, int async);
 static SocketInfo *	CreateTcp6Socket(Tcl_Interp *interp,
-				    CONST char *port, CONST char *host,
-				    int server, CONST char *myaddr,
-				    int myport, int async);
-//static int		  CreateSocketAddress(
-//				    LPSOCKADDR_IN sockaddrPtr,
-//				    CONST char *host, u_short port);
-//static int		CreateSocketAddress(CONST char *addr,
-//			    CONST char *port, WS2ProtocolData *pdata,
-//			    ADDRINFO **result);
-
+				CONST char *port, CONST char *host,
+				int server, CONST char *myaddr,
+				int myport, int async);
 
 /*
  *----------------------------------------------------------------------
@@ -68,7 +61,39 @@ Iocp_OpenTcpClient(
     int async)			/* If nonzero, should connect
 				 * client socket asynchronously. */
 {
-    return NULL;
+    SocketInfo *infoPtr;
+    char channelName[16 + TCL_INTEGER_SPACE];
+
+    /*
+     * Create a new client socket and wrap it in a channel.
+     */
+
+    infoPtr = CreateTcp4Socket(interp, port, host, 0, myaddr, myport, async);
+    if (infoPtr == NULL) {
+	return NULL;
+    }
+
+    wsprintfA(channelName, "iocp%d", infoPtr->socket);
+
+    infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
+	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
+    if (Tcl_SetChannelOption(interp, infoPtr->channel, "-translation",
+	    "auto crlf") == TCL_ERROR) {
+        Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
+        return (Tcl_Channel) NULL;
+    }
+    if (Tcl_SetChannelOption(NULL, infoPtr->channel, "-eofchar", "")
+	    == TCL_ERROR) {
+        Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
+        return (Tcl_Channel) NULL;
+    }
+    // Had to add this!
+    if (Tcl_SetChannelOption(NULL, infoPtr->channel, "-blocking", "0")
+	    == TCL_ERROR) {
+	Tcl_Close((Tcl_Interp *) NULL, infoPtr->channel);
+	return (Tcl_Channel) NULL;
+    }
+    return infoPtr->channel;
 }
 
 /*
@@ -152,7 +177,9 @@ CreateTcp4Socket(
     LPADDRINFO mysockaddr;	/* Socket address for client */
     SOCKET sock = INVALID_SOCKET;
     SocketInfo *infoPtr;	/* The returned value. */
-    DWORD bytes;
+    BufferInfo *bufPtr;		/* The returned value. */
+    DWORD bytes, WSAerr;
+    BOOL code;
     int i;
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
@@ -176,8 +203,10 @@ CreateTcp4Socket(
     if (tcp4ProtoData.AcceptEx == NULL) {
 	/* Get the LSP specific functions. */
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
-		&gAcceptExGuid, sizeof(GUID), &tcp4ProtoData.AcceptEx,
-		sizeof(tcp4ProtoData.AcceptEx), &bytes, NULL, NULL);
+		&gAcceptExGuid, sizeof(GUID),
+		&tcp4ProtoData.AcceptEx,
+		sizeof(tcp4ProtoData.AcceptEx),
+		&bytes, NULL, NULL);
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
                &gGetAcceptExSockaddrsGuid, sizeof(GUID),
                &tcp4ProtoData.GetAcceptExSockaddrs,
@@ -188,6 +217,9 @@ CreateTcp4Socket(
                &tcp4ProtoData.ConnectEx,
 	       sizeof(tcp4ProtoData.ConnectEx),
                &bytes, NULL, NULL);
+	if (tcp4ProtoData.ConnectEx == NULL) {
+	    tcp4ProtoData.ConnectEx = OurConnectEx;
+	}
         winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
                &gDisconnectExGuid, sizeof(GUID),
                &tcp4ProtoData.DisconnectEx,
@@ -264,68 +296,47 @@ CreateTcp4Socket(
         /*
          * Try to bind to a local port, if specified.
          */
-        
+
 	if (myaddr != NULL || myport != 0) { 
-	    if (winSock.bind(sock, (SOCKADDR *) &mysockaddr,
-		    sizeof(SOCKADDR_IN)) == SOCKET_ERROR) {
+	    if (winSock.bind(sock, mysockaddr->ai_addr,
+		    mysockaddr->ai_addrlen) == SOCKET_ERROR) {
 		goto error;
 	    }
+	    FreeSocketAddress(mysockaddr);
 	}            
-    
+
 	/*
-	 * Set the socket into nonblocking mode if the connect should be
-	 * done in the background.
+	 * Attempt to connect to the remote.
 	 */
-    
-//	if (async) {
-	    if (winSock.ioctlsocket(sock, FIONBIO, &flag) == SOCKET_ERROR) {
+
+	bufPtr = GetBufferObj(infoPtr, 0);
+	bufPtr->operation = OP_CONNECT;
+
+	code = tcp4ProtoData.ConnectEx(sock, hostaddr->ai_addr,
+		hostaddr->ai_addrlen, bufPtr->buf, bufPtr->buflen,
+		&bytes, &bufPtr->ol);
+
+	WSAerr = winSock.WSAGetLastError();
+	if (code == FALSE) {
+	    if (WSAerr != ERROR_IO_PENDING) {
+		FreeBufferObj(bufPtr);
 		goto error;
 	    }
-//	}
-
-	/*
-	 * Attempt to connect to the remote socket.
-	 */
-
-	if (winSock.connect(sock, (SOCKADDR *) &hostaddr,
-		sizeof(SOCKADDR_IN)) == SOCKET_ERROR) {
-	    if (winSock.WSAGetLastError() != WSAEWOULDBLOCK) {
-		goto error;
-	    }
-
-	    /*
-	     * The connection is progressing in the background.
-	     */
-
-	    asyncConnect = 1;
-        }
-
-	/*
-	 * Add this socket to the global list of sockets.
-	 */
-
-	infoPtr = NewSocketInfo(sock);
-
-	/*
-	 * Set up the select mask for read/write events.  If the connect
-	 * attempt has not completed, include connect events.
-	 */
-
-//	infoPtr->selectEvents = FD_READ | FD_WRITE | FD_CLOSE;
-	if (asyncConnect) {
-//	    infoPtr->flags |= SOCKET_ASYNC_CONNECT;
-//	    infoPtr->selectEvents |= FD_CONNECT;
+	} else {
+	    /* Operation completed now instead of being queued. */
+	    HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes,
+		    WSAerr, 0);
 	}
+	FreeSocketAddress(hostaddr);
     }
 
     return infoPtr;
 
 error:
-    //TclWinConvertWSAError(winSock.WSAGetLastError());
+    IocpWinConvertWSAError(winSock.WSAGetLastError());
     if (interp != NULL) {
-	Tcl_AppendResult(interp, "couldn't open socket: ", NULL);
-	Tcl_AppendObjToObj(Tcl_GetObjResult(interp),
-		GetSysMsgObj(winSock.WSAGetLastError()));
+	Tcl_AppendResult(interp, "couldn't open socket: ",
+		Tcl_PosixError(interp), NULL);
     }
     if (sock != INVALID_SOCKET) {
 	winSock.closesocket(sock);

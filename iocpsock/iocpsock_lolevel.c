@@ -44,10 +44,9 @@ static void			InitSockets();
 static DWORD			InitializeIocpSubSystem();
 static Tcl_ExitProc		IocpExitHandler;
 static Tcl_ExitProc		IocpThreadExitHandler;
-static Tcl_EventProc		IocpEventProc;
-
 static Tcl_EventSetupProc	IocpEventSetupProc;
 static Tcl_EventCheckProc	IocpEventCheckProc;
+static Tcl_EventProc		IocpEventProc;
 
 static Tcl_DriverCloseProc	IocpCloseProc;
 static Tcl_DriverInputProc	IocpInputProc;
@@ -63,8 +62,6 @@ static void	    IocpAlertToTclNewAccept(SocketInfo *infoPtr,
 			    int localLen, SOCKADDR_STORAGE *remote,
 			    int remoteLen);
 static void	    IocpAcceptOne (SocketInfo *infoPtr);
-static void	    FreeBufferObj(BufferInfo *obj);
-static void	    FreeSocketInfo(SocketInfo *infoPtr);
 static DWORD	    PostOverlappedRecv(SocketInfo *infoPtr,
 			    BufferInfo *recvobj);
 static DWORD	    PostOverlappedSend(SocketInfo *infoPtr,
@@ -72,11 +69,7 @@ static DWORD	    PostOverlappedSend(SocketInfo *infoPtr,
 //static void	    InsertPendingSend(SocketInfo *infoPtr,
 //			    BufferInfo *send);
 //static int	    DoSends(SocketInfo *infoPtr);
-static void	    HandleIo(SocketInfo *infoPtr, BufferInfo *bufPtr,
-			    HANDLE compPort, DWORD bytes, DWORD error,
-			    DWORD flags);
 static DWORD WINAPI CompletionThread(LPVOID lpParam);
-static void	    IocpWinConvertWSAError(DWORD errCode);
 
 
 /*
@@ -766,7 +759,7 @@ IocpAcceptOne (SocketInfo *infoPtr)
  */
 
 int
-CreateSocketAddress(
+CreateSocketAddress (
      const char *addr,
      const char *port,
      WS2ProtocolData *pdata,
@@ -1367,7 +1360,7 @@ PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 		&bufPtr->ol, NULL);
     } else {
 	rc = winSock.WSARecvFrom(infoPtr->socket, &wbuf, 1, &bytes, &flags,
-		(SOCKADDR *)&bufPtr->addr, &bufPtr->addrlen,
+		bufPtr->addr, &bufPtr->addrlen,
 		&bufPtr->ol, NULL);
     }
 
@@ -1412,7 +1405,7 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 		&bufPtr->ol, NULL);
     } else {
 	rc = winSock.WSASendTo(infoPtr->socket, &wbuf, 1, &bytes, 0,
-                (SOCKADDR *)&bufPtr->addr, bufPtr->addrlen,
+                bufPtr->addr, bufPtr->addrlen,
 		&bufPtr->ol, NULL);
     }
 
@@ -1525,15 +1518,16 @@ CompletionThread (LPVOID lpParam)
     CompletionPortInfo *cpinfo = (CompletionPortInfo *)lpParam;
     SocketInfo *infoPtr;
     BufferInfo *bufPtr;
-    OVERLAPPED *lpOverlapped = NULL;
+    OVERLAPPED *ol;
     DWORD bytes, flags, WSAerr;
     BOOL ok;
 
     for (;;) {
 	WSAerr = NO_ERROR;
+	flags = 0;
 
 	ok = GetQueuedCompletionStatus(cpinfo->port, &bytes,
-		(PULONG_PTR)&infoPtr, &lpOverlapped, INFINITE);
+		(PULONG_PTR)&infoPtr, &ol, INFINITE);
 
 	if (ok && !infoPtr) {
 	    /* A NULL key indicates closure time for this thread. */
@@ -1548,17 +1542,17 @@ CompletionThread (LPVOID lpParam)
 	 * to be modified.
 	 */
 
-	bufPtr = CONTAINING_RECORD(lpOverlapped, BufferInfo, ol);
+	bufPtr = CONTAINING_RECORD(ol, BufferInfo, ol);
 
 	if (!ok) {
 	    /*
-	     * If GetQueuedCompletionStatus() returned a failure on the
-	     * operation, call WSAGetOverlappedResult() to translate the
-	     * error into a Winsock error code.
+	     * If GetQueuedCompletionStatus() returned a failure on
+	     * the operation, call WSAGetOverlappedResult() to
+	     * translate the error into a Winsock error code.
 	     */
 
 	    ok = winSock.WSAGetOverlappedResult(infoPtr->socket,
-		    lpOverlapped, &bytes, FALSE, &flags);
+		    ol, &bytes, FALSE, &flags);
 
 	    if (!ok) {
 		WSAerr = winSock.WSAGetLastError();
@@ -1580,8 +1574,8 @@ HandleIo (
     DWORD WSAerr,
     DWORD flags)
 {
-    SocketInfo *newInfoPtr;     // New client object for accepted connections
-    BufferInfo *newBufPtr;       // Used to post new receives on accepted connections
+    SocketInfo *newInfoPtr;     // New client object for accepted connections.
+    BufferInfo *newBufPtr;       // Used to post new receives on newly accepted or connected connections.
     BOOL bCleanupSocket = FALSE;
 
     if (WSAerr == ERROR_OPERATION_ABORTED) {
@@ -1650,7 +1644,7 @@ HandleIo (
         if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
             /* If for some reason the send call fails, clean up the connection. */
             FreeBufferObj(newBufPtr);
-            WSAerr = SOCKET_ERROR;
+            //WSAerr = SOCKET_ERROR;
         }
         
         /*
@@ -1709,8 +1703,24 @@ HandleIo (
 	    }
         }
     } else if (bufPtr->operation == OP_WRITE) {
+
+	// TODO: what to do with errors?
         FreeBufferObj(bufPtr);
+
     } else if (bufPtr->operation == OP_CONNECT) {
+        FreeBufferObj(bufPtr);
+
+	// TODO: Is this correct?
+	winSock.setsockopt(infoPtr->socket, SOL_SOCKET,
+		SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
+
+        /* Now post a receive on this new connection. */
+        newBufPtr = GetBufferObj(infoPtr, 256);
+        if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
+            /* If for some reason the send call fails, clean up the connection. */
+            FreeBufferObj(newBufPtr);
+            //WSAerr = SOCKET_ERROR;
+        }
     }
 
     LeaveCriticalSection(&infoPtr->critSec);
@@ -1743,7 +1753,22 @@ IocpFree (LPVOID block)
 #define mask_n( mask, val ) ( mask & val ) != val
 
 
-/* Creates a linked list. */
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLCreate --
+ *
+ *	Creates a linked list.
+ *
+ * Results:
+ *	pointer to the new one or NULL for error.
+ *
+ * Side effects:
+ *	None known.
+ *
+ *----------------------------------------------------------------------
+ */
+
 LPLLIST
 IocpLLCreate ()
 {   
@@ -1762,9 +1787,24 @@ IocpLLCreate ()
     return ll;
 }
 
-//Destroyes a linked list.
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLDestroy --
+ *
+ *	Destroyes a linked list.
+ *
+ * Results:
+ *	Same as HeapFree.
+ *
+ * Side effects:
+ *	Nodes aren't destroyed.
+ *
+ *----------------------------------------------------------------------
+ */
+
 BOOL 
-IocpLLDestroy(
+IocpLLDestroy (
     LPLLIST ll,
     DWORD dwState)
 {   
@@ -1782,7 +1822,22 @@ IocpLLDestroy(
     return IocpFree(ll);
 }
 
-//Adds an item to the end of the list.
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLPushFront --
+ *
+ *	Adds an item to the end of the list.
+ *
+ * Results:
+ *	The node.
+ *
+ * Side effects:
+ *	Will create a new node, if not given one.
+ *
+ *----------------------------------------------------------------------
+ */
+
 LPLLNODE 
 IocpLLPushBack(
     LPLLIST ll,
@@ -2253,7 +2308,7 @@ static int wsaErrorTable3[] = {
  *----------------------------------------------------------------------
  */
 
-static void
+void
 IocpWinConvertWSAError(
     DWORD errCode)	/* Win32 WSA error code. */		
 {
@@ -2266,4 +2321,29 @@ IocpWinConvertWSAError(
     } else {
 	Tcl_SetErrno(EINVAL);
     }
+}
+
+
+BOOL PASCAL
+OurConnectEx (
+    SOCKET s,
+    const struct sockaddr* name,
+    int namelen,
+    PVOID lpSendBuffer,
+    DWORD dwSendDataLength,
+    LPDWORD lpdwBytesSent,
+    LPOVERLAPPED lpOverlapped)
+{
+    // 1) Create a thread and have the thread do the work.
+    //    Return thread start status.
+    // 2) thread will do a blocking connect() and possible send()
+    //    should lpSendBuffer not be NULL and dwSendDataLength greater
+    //    than zero.
+    // 3) Notify the completion port with PostQueuedCompletionStatus().
+    //    We don't exactly know the port associated to us, so assume the
+    //    one we ALWAYS use (insider knowledge of ourselves).
+    // 4) exit thread.
+
+    winSock.WSASetLastError(WSAEOPNOTSUPP);
+    return FALSE;
 }
