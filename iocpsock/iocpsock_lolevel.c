@@ -1287,7 +1287,8 @@ NewSocketInfo (SOCKET socket)
     infoPtr->maxOutstandingSends = 2;
 
     infoPtr->OutstandingOps = 0;
-    InitializeCriticalSection(&infoPtr->critSec);
+    infoPtr->node.ll = NULL;
+    InitializeCriticalSectionAndSpinCount(&infoPtr->critSec, 4000);
     return infoPtr;
 }
 
@@ -1304,6 +1305,9 @@ FreeSocketInfo (SocketInfo *infoPtr)
      */
     IocpLLPopAllCompare(infoPtr->tsdHome->readySockets, infoPtr, 0);
 
+    /* Remove ourselves from the global listening list, if we are on it. */
+    IocpLLPop(&infoPtr->node, IOCP_LL_NODESTROY);
+
     if (infoPtr->socket != INVALID_SOCKET) {
 	winSock.closesocket(infoPtr->socket);
     }
@@ -1313,8 +1317,8 @@ FreeSocketInfo (SocketInfo *infoPtr)
 
     if (infoPtr->llPendingAccepts) {
 	/*
-	 * We can let the list go.  All buffers are removed by the
-	 * completion thread.
+	 * We can let the list go.  All buffers are (had been) removed by
+	 * the completion thread.
 	 */
 	IocpLLDestroy(infoPtr->llPendingAccepts);
     }
@@ -1355,8 +1359,6 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
     bufPtr->WSAerr = NO_ERROR;
     bufPtr->parent = infoPtr;
     bufPtr->node.ll = NULL;
-    bufPtr->node.next = NULL; 
-    bufPtr->node.prev = NULL;
     return bufPtr;
 }
 
@@ -1364,9 +1366,7 @@ void
 FreeBufferObj (BufferInfo *bufPtr)
 {
     /* Pop itself off any linked-list it may be on. */
-    if (bufPtr->node.ll != NULL) {
-	IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
-    }
+    IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
     /* If we have a socket for AcceptEx(), close it. */
     if (bufPtr->socket != INVALID_SOCKET) {
 	winSock.closesocket(bufPtr->socket);
