@@ -1,4 +1,4 @@
-iocpsock.dll -- ver 0.5 (Feb 17 14:46:54 2003)
+iocpsock.dll -- ver 0.5 (Feb 18 13:01:50 2003)
 
 http://sf.net/project/showfiles.php?group_id=73356
 http://sf.net/projects/iocpsock
