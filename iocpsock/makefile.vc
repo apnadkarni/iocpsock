@@ -212,6 +212,7 @@ IOCPOBJS = \
 	$(TMP_DIR)\dllmain.obj \
 	$(TMP_DIR)\iocpsock_hilevel.obj \
 	$(TMP_DIR)\iocpsock_lolevel.obj \
+	$(TMP_DIR)\linkedlist.obj \
 	$(TMP_DIR)\ws2apltalk.obj \
 	$(TMP_DIR)\ws2atm.obj \
 	$(TMP_DIR)\ws2decnet.obj \

@@ -107,19 +107,24 @@ LPLLNODE
 IocpLLPushBack(
     LPLLIST ll,
     LPVOID lpItem,
-    LPLLNODE pnode)
+    LPLLNODE pnode,
+    DWORD dwState)
 {
     LPLLNODE tmp;
 
     if (!ll) {
 	return NULL;
     }
-    EnterCriticalSection(&ll->lock);
+    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
+	EnterCriticalSection(&ll->lock);
+    }
     if (!pnode) {
 	pnode = IocpAlloc(sizeof(LLNODE));
     }
     if (!pnode) {
-	LeaveCriticalSection(&ll->lock);
+	if (mask_n(dwState, IOCP_LL_NOLOCK)) {
+	    LeaveCriticalSection(&ll->lock);
+	}
 	return NULL;
     }
     pnode->lpItem = lpItem;
@@ -135,7 +140,9 @@ IocpLLPushBack(
     ll->lCount++;
     pnode->ll = ll;
     SetEvent(ll->haveData);
-    LeaveCriticalSection(&ll->lock);
+    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
+	LeaveCriticalSection(&ll->lock);
+    }
     return pnode;
 }
 
@@ -159,19 +166,24 @@ LPLLNODE
 IocpLLPushFront(
     LPLLIST ll,
     LPVOID lpItem,
-    LPLLNODE pnode)
+    LPLLNODE pnode,
+    DWORD dwState)
 {
     LPLLNODE tmp;
 
     if (!ll) {
 	return NULL;
     }
-    EnterCriticalSection(&ll->lock);
+    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
+	EnterCriticalSection(&ll->lock);
+    }
     if (!pnode) {
 	pnode = IocpAlloc(sizeof(LLNODE));
     }
     if (!pnode) {
-	LeaveCriticalSection(&ll->lock);
+	if (mask_n(dwState, IOCP_LL_NOLOCK)) {
+	    LeaveCriticalSection(&ll->lock);
+	}
 	return NULL;
     }
     pnode->lpItem = lpItem;
@@ -187,7 +199,9 @@ IocpLLPushFront(
     ll->lCount++;
     pnode->ll = ll;
     SetEvent(ll->haveData);
-    LeaveCriticalSection(&ll->lock);
+    if (mask_n(dwState, IOCP_LL_NOLOCK)) {
+	LeaveCriticalSection(&ll->lock);
+    }
     return pnode;
 }
 

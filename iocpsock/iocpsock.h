@@ -305,8 +305,11 @@ typedef struct SocketInfo {
     Tcl_Channel channel;	    /* Tcl channel for this socket. */
     SOCKET socket;		    /* Windows SOCKET handle. */
     DWORD flags;		    /* info about this socket. */
-    LONG ready;			    /* indicates a ready event. */
-    LONG watchMask;		    /* events we are interested in. */
+    LONG ready;			    /* indicates a ready event.  Access
+				     * must be protected with the
+				     * tsdPtr->readySockets->lock critical
+				     * section. */
+    int watchMask;		    /* events we are interested in. */
     WS2ProtocolData *proto;	    /* Network protocol info. */
     ThreadSpecificData *tsdHome;    /* TSD block for getting back to our
 				     * origin. */
@@ -323,7 +326,6 @@ typedef struct SocketInfo {
     volatile LONG OutstandingOps;
     HANDLE allDone;		    /* manual reset event */
     LPLLIST llPendingRecv;	    /* Our pending recv list. */
-    LLNODE node;
 
 } SocketInfo;
 
@@ -407,10 +409,10 @@ extern __inline BOOL	IocpNPPFree (LPVOID block);
 extern LPLLIST		IocpLLCreate ();
 extern BOOL		IocpLLDestroy (LPLLIST ll);
 extern LPLLNODE		IocpLLPushBack (LPLLIST ll, LPVOID lpItem,
-				LPLLNODE pnode);
+				LPLLNODE pnode, DWORD dwState);
 extern LPLLNODE		IocpLLPushFront (LPLLIST ll, LPVOID lpItem,
-				LPLLNODE pnode);
-extern BOOL		IocpLLPop (LPLLNODE node, DWORD dwState);
+				LPLLNODE pnode, DWORD dwState);
+extern BOOL		IocpLLPop (LPLLNODE pnode, DWORD dwState);
 extern BOOL		IocpLLPopAll (LPLLIST ll, LPLLNODE snode,
 				DWORD dwState);
 extern BOOL		IocpLLPopAllCompare (LPLLIST ll, LPVOID lpItem,
@@ -464,4 +466,3 @@ extern BOOL PASCAL	OurConnectEx(SOCKET s,
 
 #endif  /* #ifndef RC_INVOKED */
 #endif /* #ifndef INCL_iocpsock_h_ */
-

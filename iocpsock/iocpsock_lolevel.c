@@ -714,9 +714,20 @@ IocpEventCheckProc (
     evCount = IocpLLGetCount(tsdPtr->readySockets);
 
     while (evCount--) {
-	infoPtr = IocpLLPopFront(tsdPtr->readySockets, 0, 0);
+	EnterCriticalSection(&tsdPtr->readySockets->lock);
+	infoPtr = IocpLLPopFront(tsdPtr->readySockets, IOCP_LL_NOLOCK, 0);
+	/*
+	 * Flop the ready toggle.  This is used to improve event loop
+	 * efficiency to avoid unneccesary events being queued into the 
+	 * readySockets list.
+	 */
+	InterlockedExchange(&infoPtr->ready, 0);
+	LeaveCriticalSection(&tsdPtr->readySockets->lock);
+
 	/* Not ready. accept in the Tcl layer hasn't happened yet. */
-	if (infoPtr->channel == NULL) continue;
+	if (infoPtr->channel == NULL) {
+	    continue;
+	}
 	evPtr = (SocketEvent *) ckalloc(sizeof(SocketEvent));
 	evPtr->header.proc = IocpEventProc;
 	evPtr->infoPtr = infoPtr;
@@ -755,14 +766,6 @@ IocpEventProc (
     }
 
     /*
-     * Flop the ready toggle.  This is used to improve event loop
-     * efficiency to avoid unneccesary events being queued into the 
-     * readySockets list.
-     */
-    
-    InterlockedExchange(&infoPtr->ready, 0);
-
-    /*
      * If there is at least one entry on the infoPtr->llPendingRecv list,
      * and the watch mask is set to notify for readable, the channel is
      * readable.
@@ -791,12 +794,21 @@ IocpEventProc (
     return 1;
 }
 
+/*
+ *-----------------------------------------------------------------------
+ * IocpAcceptOne --
+ *
+ *  Accept one connection from the listening socket.  Repost to the
+ *  readySockets list if more are available.  By doing it this way,
+ *  incoming connections aren't greedy.
+ *
+ *-----------------------------------------------------------------------
+ */
 static void
 IocpAcceptOne (SocketInfo *infoPtr)
 {
     char channelName[16 + TCL_INTEGER_SPACE];
     IocpAcceptInfo *acptInfo;
-    int more;
 
     acptInfo = IocpLLPopFront(infoPtr->readyAccepts, IOCP_LL_NODESTROY, 0);
 
@@ -811,13 +823,11 @@ IocpAcceptOne (SocketInfo *infoPtr)
     if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-translation",
 	    "auto crlf") == TCL_ERROR) {
 	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
-	IocpFree(acptInfo);
 	goto error;
     }
     if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-eofchar", "")
 	    == TCL_ERROR) {
 	Tcl_Close((Tcl_Interp *) NULL, acptInfo->clientInfo->channel);
-	IocpFree(acptInfo);
 	goto error;
     }
 
@@ -836,26 +846,26 @@ IocpAcceptOne (SocketInfo *infoPtr)
 		winSock.ntohs(((SOCKADDR_IN *)&acptInfo->remote)->sin_port));
     }
 
-    IocpFree(acptInfo);
-
 error:
     /* TODO: return error info to the trace routine. */
 
-    /*
-     * Use the fact that more might be ready too, as the condition
-     * to make another event source.  Hold the lock on infoPtr->readyAccepts
-     * to make sure we don't miss letting IocpZapTclNotifier see it can queued
-     * into.
-     */
+    IocpFree(acptInfo);
 
-    EnterCriticalSection(&infoPtr->readyAccepts->lock);
-    more = (infoPtr->readyAccepts->lCount != 0);
-    if (more) {
-	IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
-    } else {
-	InterlockedExchange(&infoPtr->ready, 0);
+    /* Requeue another for the next checkProc iteration if one exists. */
+    EnterCriticalSection(&infoPtr->tsdHome->readySockets->lock);
+    if (IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
+	/*
+	 * Flop the ready toggle.  This is used to improve event loop
+	 * efficiency to avoid unneccesary events being queued into the 
+	 * readySockets list.
+	 */
+	if (!InterlockedExchange(&infoPtr->ready, 1)) {
+	    /* No entry on the ready list.  Insert one. */
+	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
+		    NULL, IOCP_LL_NOLOCK);
+	}
     }
-    LeaveCriticalSection(&infoPtr->readyAccepts->lock);
+    LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
     return;
 }
 
@@ -958,8 +968,7 @@ IocpInputProc (
     *errorCodePtr = 0;
 
     if (infoPtr->flags & IOCP_EOF) {
-	*errorCodePtr = ENOTCONN;
-	return -1;
+	return 0;
     }
 
     /*
@@ -988,7 +997,7 @@ IocpInputProc (
 		}
 		/* Too large or have EOF.  Push it back on for later. */
 		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
-			&bufPtr->node);
+			&bufPtr->node, 0);
 		break;
 	    }
 	    if (bufPtr->WSAerr != NO_ERROR) {
@@ -1035,14 +1044,12 @@ IocpOutputProc (
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     BufferInfo *bufPtr;
-    DWORD WSAerr;
 
     *errorCodePtr = 0;
 
 
     if (infoPtr->flags & IOCP_EOF) {
-	*errorCodePtr = ENOTCONN;
-	return -1;
+	return 0;
     }
 
     /*
@@ -1057,14 +1064,13 @@ IocpOutputProc (
 
     bufPtr = GetBufferObj(infoPtr, toWrite);
     memcpy(bufPtr->buf, buf, toWrite);
-    WSAerr = PostOverlappedSend(infoPtr, bufPtr);
+    PostOverlappedSend(infoPtr, bufPtr);
 
-    if (WSAerr != NO_ERROR) {
-	infoPtr->lastError = WSAerr;
-	infoPtr->flags |= IOCP_EOF;
-	IocpWinConvertWSAError(WSAerr);
-	goto error;
-    }
+    /*
+     * Let errors come back through the completion port or else we risk
+     * a time problem where readable data is ignored before the error
+     * actually happened.
+     */
 
     return toWrite;
 
@@ -1161,11 +1167,42 @@ IocpGetOptionProc (
 	    }
 	    return TCL_OK;
 #if 1   /* for debugging only */
-	} else if ((optionName[1] == 'o') &&
-	    (strncmp(optionName, "-ops", len) == 0)) {
+	} else if (strncmp(optionName, "-ops", len) == 0) {
 	    TclFormatInt(buf, infoPtr->OutstandingOps);
 	    Tcl_DStringAppendElement(dsPtr, buf);
 	    return TCL_OK;
+	} else if (strncmp(optionName, "-ready", len) == 0) {
+	    EnterCriticalSection(&infoPtr->tsdHome->readySockets->lock);
+	    TclFormatInt(buf, infoPtr->ready);
+	    LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
+	    Tcl_DStringAppendElement(dsPtr, buf);
+	    return TCL_OK;
+	} else if (strncmp(optionName, "-readable", len) == 0) {
+	    if (infoPtr->llPendingRecv != NULL) {
+		EnterCriticalSection(&infoPtr->llPendingRecv->lock);
+		TclFormatInt(buf, infoPtr->llPendingRecv->lCount);
+		LeaveCriticalSection(&infoPtr->llPendingRecv->lock);
+		Tcl_DStringAppendElement(dsPtr, buf);
+		return TCL_OK;
+	    } else {
+		if (interp) {
+		    Tcl_AppendResult(interp, "A listening socket is not readable, ever.", NULL);
+		}
+		return TCL_ERROR;
+	    }
+	} else if (strncmp(optionName, "-readyaccepts", len) == 0) {
+	    if (infoPtr->readyAccepts != NULL) {
+		EnterCriticalSection(&infoPtr->readyAccepts->lock);
+		TclFormatInt(buf, infoPtr->readyAccepts->lCount);
+		LeaveCriticalSection(&infoPtr->readyAccepts->lock);
+		Tcl_DStringAppendElement(dsPtr, buf);
+		return TCL_OK;
+	    } else {
+		if (interp) {
+		    Tcl_AppendResult(interp, "Not a listening socket.", NULL);
+		}
+		return TCL_ERROR;
+	    }
 #endif
 	}
     }
@@ -1316,16 +1353,16 @@ IocpWatchProc (
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
 
-    /*
-     * Update the watch events mask. Only if the socket is not a
-     * server socket. Fix for SF Tcl Bug #557878.
-     */
-
     if (!infoPtr->acceptProc) {
         infoPtr->watchMask = mask;
-	if ((mask & TCL_READABLE && IocpLLIsNotEmpty(infoPtr->llPendingRecv)) ||
-	    (mask & TCL_WRITABLE && infoPtr->llPendingRecv /* connected */)) {
-	    /* Can do stuff, mark it ready. */
+	if (!mask) {
+	    return;
+	}
+	if (mask & TCL_READABLE && IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
+	    /* instance is readable, validate the instance is on the ready list. */
+	    IocpZapTclNotifier(infoPtr);
+	} else if (mask & TCL_WRITABLE && infoPtr->llPendingRecv /* connected */) {
+	    /* instance is writable, validate the instance is on the ready list. */
 	    IocpZapTclNotifier(infoPtr);
 	}
     }
@@ -1401,7 +1438,6 @@ NewSocketInfo (SOCKET socket)
     infoPtr->lastError = NO_ERROR;
     infoPtr->OutstandingOps = 0;
     infoPtr->allDone = CreateEvent(NULL, TRUE, FALSE, NULL); /* manual reset */
-    infoPtr->node.ll = NULL;
     return infoPtr;
 }
 
@@ -1417,9 +1453,6 @@ FreeSocketInfo (SocketInfo *infoPtr)
      * into Tcl's event loop.
      */
     IocpLLPopAllCompare(infoPtr->tsdHome->readySockets, infoPtr, 0);
-
-    /* Remove ourselves from the global listening list, if we are on it. */
-    IocpLLPop(&infoPtr->node, IOCP_LL_NODESTROY);
 
     /* Just in case... */
     if (infoPtr->socket != INVALID_SOCKET) {
@@ -1511,23 +1544,19 @@ NewAcceptSockInfo (SOCKET socket, SocketInfo *infoPtr)
 static void
 IocpZapTclNotifier (SocketInfo *infoPtr)
 {
-    DWORD dwWait;
-    LONG wasAlreadyPosted = InterlockedExchange(&infoPtr->ready, 1);
-
     /*
      * If we are in the middle of a thread transfer on the channel,
      * infoPtr->tsdHome will be NULL.
      */
     if (infoPtr->tsdHome) {
-	if (!wasAlreadyPosted) {
-	    /* No entry on ready list.  Insert one. */
-	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+	EnterCriticalSection(&infoPtr->tsdHome->readySockets->lock);
+	if (!InterlockedExchange(&infoPtr->ready, 1)) {
+	    /* No entry on the ready list.  Insert one. */
+	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
+		    NULL, IOCP_LL_NOLOCK);
 	}
-	dwWait = WaitForSingleObject(infoPtr->tsdHome->needAwake, 0);
-	/* if the notifier is waiting, zap it awake. */
-	if (dwWait == WAIT_OBJECT_0) {
-	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
-	}
+	LeaveCriticalSection(&infoPtr->tsdHome->readySockets->lock);
+	Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
     }
 }
 
@@ -1555,7 +1584,8 @@ IocpAlertToTclNewAccept (
     /*
      * Queue this accept's data into the listening channel's info block.
      */
-    IocpLLPushBack(infoPtr->readyAccepts, acptInfo, &acptInfo->node);
+
+    IocpLLPushBack(infoPtr->readyAccepts, acptInfo, &acptInfo->node, 0);
 
     /*
      * Let IocpCheckProc() know this channel has an accept ready
@@ -1569,7 +1599,7 @@ IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
     /* (takes buffer ownership) */
     IocpLLPushBack(infoPtr->llPendingRecv, bufPtr,
-	    &bufPtr->node);
+	    &bufPtr->node, 0);
 
     /*
      * Let IocpCheckProc() know this new channel has a ready
