@@ -22,8 +22,8 @@ test socket2-1.1 {Tcl_WrongNumArgs message} -constraints {
 } -returnCodes {
     1
 } -result {wrong # args: should be either:
-socket2 ?-protocol type? ?-myaddr addr? ?-myport myport? ?-async? host port
-socket2 -server command ?-protocol type? ?-myaddr addr? port
+socket2 ?-protocol type? ?-qos flowspecs? ?-myaddr addr? ?-myport myport? ?-async? host port
+socket2 -server command ?-protocol type? ?-qos flowspecs? ?-myaddr addr? port
 socket2 -lookup host ?-protocol type? ?-command command?}
 
 ### The -ovrlpd option has now gone away.  Ensure it returns an error.
