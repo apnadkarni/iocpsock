@@ -10,10 +10,10 @@
  */
 
 #include "iocpsock.h"
-#include <crtdbg.h>
 
-
-#define IOCP_OUT_OF_ORDER_NOT_WORKING 1
+// Use just one completion thread for now.
+// TODO: fixme!
+#define IOCP_OUT_OF_ORDER_NOT_WORKING	1
 
 /*
  * The following declare the winsock loading error codes.
@@ -1168,7 +1168,8 @@ IocpGetOptionProc (
     }
 
     if (len > 0) {
-        return Tcl_BadChannelOption(interp, optionName, "peername sockname keepalive nagle");
+        return Tcl_BadChannelOption(interp, optionName,
+		"peername sockname keepalive nagle");
     }
 
     return TCL_OK;
@@ -1258,9 +1259,11 @@ IocpAlertToTclNewAccept (
 	return;
     }
 
-    memcpy(&acptInfo->local, newClient->localAddr, newClient->proto->addrLen);
+    memcpy(&acptInfo->local, newClient->localAddr,
+	    newClient->proto->addrLen);
     acptInfo->localLen = newClient->proto->addrLen;
-    memcpy(&acptInfo->remote, newClient->remoteAddr, newClient->proto->addrLen);
+    memcpy(&acptInfo->remote, newClient->remoteAddr,
+	    newClient->proto->addrLen);
     acptInfo->remoteLen = newClient->proto->addrLen;
     acptInfo->clientInfo = newClient;
 
@@ -1341,13 +1344,15 @@ FreeSocketInfo (SocketInfo *infoPtr)
 	IocpLLDestroy(infoPtr->llPendingAccepts);
     }
     if (infoPtr->readyAccepts) {
-	while ((bufPtr = IocpLLPopFront(infoPtr->readyAccepts, IOCP_LL_NODESTROY, 0)) != NULL) {
+	while ((bufPtr = IocpLLPopFront(infoPtr->readyAccepts,
+		IOCP_LL_NODESTROY, 0)) != NULL) {
 	    FreeBufferObj(bufPtr);
 	}
 	IocpLLDestroy(infoPtr->readyAccepts);
     }
     if (infoPtr->llPendingRecv) {
-	while ((bufPtr = IocpLLPopFront(infoPtr->llPendingRecv, IOCP_LL_NODESTROY, 0)) != NULL) {
+	while ((bufPtr = IocpLLPopFront(infoPtr->llPendingRecv,
+		IOCP_LL_NODESTROY, 0)) != NULL) {
 	    FreeBufferObj(bufPtr);
 	}
 	IocpLLDestroy(infoPtr->llPendingRecv);
@@ -1406,11 +1411,6 @@ NewAcceptSockInfo (SOCKET s, SocketInfo *infoPtr)
     /* Initialize the members. */
     newInfoPtr->proto = infoPtr->proto;
     newInfoPtr->tsdHome = infoPtr->tsdHome;
-
-    // For TCP we initialize the IO count to one since the AcceptEx is posted
-    //    to receive data
-//    sockobj->IoCountIssued = ((si->proto->protocol == IPPROTO_TCP) ? 1 : 0);
-
     newInfoPtr->llPendingRecv = IocpLLCreate();
 
     return newInfoPtr;
@@ -1446,7 +1446,8 @@ PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
     /*
      * Realloc for the extra needed addr storage space.
      */
-    bufPtr->buf = IocpReAlloc(bufPtr->buf, bufPtr->buflen + (addr_storage * 2));
+    bufPtr->buf = IocpReAlloc(bufPtr->buf, bufPtr->buflen +
+	    (addr_storage * 2));
     bufPtr->buflen += (addr_storage * 2);
 
     /*
@@ -1709,12 +1710,14 @@ HandleIo (
 
     EnterCriticalSection(&infoPtr->critSec);
 
-    if (WSAerr == WSA_OPERATION_ABORTED || infoPtr->flags & IOCP_CLOSING) {
+    if (WSAerr == WSA_OPERATION_ABORTED
+	    || infoPtr->flags & IOCP_CLOSING) {
 	/* Reclaim overlapped buffer objects. */
         FreeBufferObj(bufPtr);
     }
 
-    if (InterlockedDecrement(&infoPtr->OutstandingOps) <= 0 && infoPtr->flags & IOCP_CLOSING) {
+    if (InterlockedDecrement(&infoPtr->OutstandingOps) <= 0
+	    && infoPtr->flags & IOCP_CLOSING) {
 	LeaveCriticalSection(&infoPtr->critSec);
 	/* Free the SocketInfo struct.  This is the last operation. */
 	FreeSocketInfo(infoPtr);
@@ -1723,7 +1726,8 @@ HandleIo (
 
     LeaveCriticalSection(&infoPtr->critSec);
 
-    if (WSAerr == WSA_OPERATION_ABORTED || infoPtr->flags & IOCP_CLOSING) {
+    if (WSAerr == WSA_OPERATION_ABORTED
+	    || infoPtr->flags & IOCP_CLOSING) {
 	return;
     }
 
@@ -1743,8 +1747,8 @@ HandleIo (
 	    addr_storage = infoPtr->proto->addrLen + 16;
 
 	    /*
-	     * Get the address information from the decoder routine specific
-	     * to this socket's LSP.
+	     * Get the address information from the decoder routine
+	     * specific to this socket's LSP.
 	     */
 
 	    infoPtr->proto->GetAcceptExSockaddrs(bufPtr->buf,
@@ -1757,21 +1761,22 @@ HandleIo (
 		    SO_UPDATE_ACCEPT_CONTEXT, (char *)&infoPtr->socket,
 		    sizeof(SOCKET));
 
-	    /* 
+	    /*
 	     * Get a new SocketInfo for the new client connection.
 	     */
 
 	    newInfoPtr = NewAcceptSockInfo(bufPtr->socket, infoPtr);
 
 	    /*
-	     * Set the socket to invalid in the buffer so it won't be closed
-	     * when the buffer is reclaimed.
+	     * Set the socket to invalid in the buffer so it won't be
+	     * closed when the buffer is reclaimed.
 	     */
 
 	    bufPtr->socket = INVALID_SOCKET;
 
 	    /*
-	     * Save the remote and local SOCKADDRs to its SocketInfo struct.
+	     * Save the remote and local SOCKADDRs to its SocketInfo
+	     * struct.
 	     */
 
 	    newInfoPtr->localAddr = IocpAlloc(localLen);
@@ -1788,13 +1793,15 @@ HandleIo (
 
 	    if (bytes > 0) {
 		/* (takes buffer ownership) */
-		IocpLLPushBack(newInfoPtr->llPendingRecv, bufPtr, &bufPtr->node);
+		IocpLLPushBack(newInfoPtr->llPendingRecv, bufPtr,
+			&bufPtr->node);
 
 		/*
-		 * Let IocpCheckProc() know this new channel has a ready read
-		 * that needs servicing.
+		 * Let IocpCheckProc() know this new channel has a ready
+		 * read that needs servicing.
 		 */
-		IocpLLPushBack(newInfoPtr->tsdHome->readySockets, newInfoPtr, NULL);
+		IocpLLPushBack(newInfoPtr->tsdHome->readySockets,
+			newInfoPtr, NULL);
 
 		/* Should the notifier be asleep, zap it awake. */
 		Tcl_ThreadAlert(newInfoPtr->tsdHome->threadId);
@@ -1806,7 +1813,8 @@ HandleIo (
 	    /* post IOCP_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_RECV_COUNT ;i++) {
 		newBufPtr = GetBufferObj(newInfoPtr, IOCP_RECV_BUFSIZE);
-		if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
+		if (PostOverlappedRecv(newInfoPtr, newBufPtr)
+			!= NO_ERROR) {
 		    /* Oh no, the WSARecv failed. */
 		    FreeBufferObj(newBufPtr);
 		    break;
@@ -1817,12 +1825,8 @@ HandleIo (
 	}
     
 	/*
-	 * Post another new AcceptEx() to replace this one that just fired.
-	 *
-	 * This call could cause recurrsion..  Careful!
-	 * If PostOverlappedAccept() gets serviced by winsock immediatly,
-	 * rather than posted, we could end-up back here again.
-	 * That's some heavy load.
+	 * Post another new AcceptEx() to replace this one that just
+	 * fired.
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, IOCP_ACCEPT_BUFSIZE);
@@ -1891,13 +1895,15 @@ HandleIo (
 	if (bufPtr->WSAerr != NO_ERROR) {
 
 	    /* (takes buffer ownership) */
-	    IocpLLPushBack(infoPtr->llPendingRecv, bufPtr, &bufPtr->node);
+	    IocpLLPushBack(infoPtr->llPendingRecv, bufPtr,
+		    &bufPtr->node);
 
 	    /*
 	     * Let IocpCheckProc() know this new channel has a ready read
 	     * that needs servicing.
 	     */
-	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
+		    NULL);
 
 	    /* Should the notifier be asleep, zap it awake. */
 	    Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
@@ -2505,7 +2511,7 @@ IocpLLIsNotEmpty (LPLLIST ll)
 {
     BOOL b;
     if (!ll) {
-	return 0;
+	return FALSE;
     }
     EnterCriticalSection(&ll->lock);
     b = (ll->lCount != 0);
