@@ -2261,17 +2261,9 @@ again:
 #else
     }
     __except (error = GetExceptionCode(), EXCEPTION_EXECUTE_HANDLER) {
-	char msg[50];
-	DWORD dummy;
-	HANDLE where;
-	wsprintf(msg, "Big ERROR!  Completion thread died with exception code: %#x\n"
+	Tcl_Panic("Big ERROR!  IOCP Completion thread died with exception code: %#x\n"
 		"You MUST restart the application.  "
 		"All socket communication has halted.\n", error);
-	OutputDebugString(msg);
-	where = GetStdHandle(STD_ERROR_HANDLE);
-	if (where && where != INVALID_HANDLE_VALUE) {
-	    WriteFile(where, msg, strlen(msg), &dummy, NULL);
-	}
     }
 
     return error;

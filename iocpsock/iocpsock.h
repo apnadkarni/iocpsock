@@ -57,31 +57,6 @@
 #include <svcguid.h>
 #include <nspapi.h>
 
-#if defined(_DEBUG) && defined(SHOWDBG)
-#   define DbgPrint(msg) \
-	    { \
-		DWORD dummy; \
-		HANDLE StdErr = GetStdHandle(STD_ERROR_HANDLE); \
-		if (StdErr && StdErr != INVALID_HANDLE_VALUE) { \
-		    WriteFile(StdErr, msg, strlen(msg), &dummy, NULL); \
-		} \
-	    } \
-	    OutputDebugString(msg);
-#elif defined(SHOWDBG)
-#   define DbgPrint(msg) \
-	    { \
-		DWORD dummy; \
-		HANDLE StdErr = GetStdHandle(STD_ERROR_HANDLE); \
-		if (StdErr && StdErr != INVALID_HANDLE_VALUE) { \
-		    WriteFile(StdErr, msg, strlen(msg), &dummy, NULL); \
-		} \
-	    }
-#else
-#   define DbgPrint(msg)
-#endif
-
-
-
 typedef struct {
     HMODULE	hModule;	/* Handle to the WinSock DLL. */
     WORD	wVersionLoaded;	/* Winsock API interface loaded. */
