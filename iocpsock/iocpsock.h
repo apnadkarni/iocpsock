@@ -294,6 +294,8 @@ typedef struct CompletionPortInfo {
     HANDLE threads[MAX_COMPLETION_THREAD_COUNT];
 			    /* The array of threads for handling the
 			     * completion routines. */
+    HANDLE watchDogThread;  /* Used for cleaning up halfway accepted sockets */
+
 } CompletionPortInfo;
 
 extern CompletionPortInfo IocpSubSystem;

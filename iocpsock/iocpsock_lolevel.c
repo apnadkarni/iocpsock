@@ -72,6 +72,8 @@ static DWORD	    PostOverlappedSend(SocketInfo *infoPtr,
 //			    BufferInfo *send);
 //static int	    DoSends(SocketInfo *infoPtr);
 static DWORD WINAPI CompletionThread(LPVOID lpParam);
+static DWORD WINAPI WatchDogThread (LPVOID lpParam);
+
 static Tcl_EventDeleteProc IocpRemovePendingEvents;
 static Tcl_EventDeleteProc IocpRemoveAllPendingEvents;
 
@@ -1565,7 +1567,7 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
  *----------------------------------------------------------------------
  */
 
-DWORD WINAPI
+static DWORD WINAPI
 CompletionThread (LPVOID lpParam)
 {
     CompletionPortInfo *cpinfo = (CompletionPortInfo *)lpParam;
@@ -1618,7 +1620,7 @@ CompletionThread (LPVOID lpParam)
     return 0;
 }
 
-void
+static void
 HandleIo (
     SocketInfo *infoPtr,
     BufferInfo *bufPtr,
@@ -1681,7 +1683,8 @@ HandleIo (
 	memcpy(newInfoPtr->remoteAddr, remote, remoteLen);
 
 	/*
-	 * First, remove this from the pending list of the listening socket.
+	 * First, remove this from the pending list of the listening
+	 * socket.  It isn't pending anymore.
 	 */
 	IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
 
@@ -1832,6 +1835,55 @@ HandleIo (
     }
     LeaveCriticalSection(&infoPtr->critSec);
     return;
+}
+
+static DWORD WINAPI
+WatchDogThread (LPVOID lpParam)
+{
+    HANDLE hStop = (HANDLE) lpParam;
+    DWORD dwWait;
+    SocketInfo *infoPtr;
+    BufferInfo *bufPtr;
+
+    for (;;) {
+	/* 20 second timeout. */
+        dwWait = WaitForSingleObject(hStop, 20000);
+
+        if (dwWait == WAIT_OBJECT_0) {
+	    /* The wait succeded, therefore we close. */
+            return 0;
+
+        } else if (dwWait == WAIT_TIMEOUT) {
+	    int optval, optlen, code;
+
+	    /* get the first entry on the listening list. */
+//            infoPtr = ????;
+            while (infoPtr) {
+		bufPtr = infoPtr->llPendingAccepts->front->lpItem;
+                while (bufPtr) {
+                    optlen = sizeof(optval);
+                    code = winSock.getsockopt(bufPtr->socket, SOL_SOCKET,
+			    SO_CONNECT_TIME, (char *)&optval, &optlen);
+                    if (code == SOCKET_ERROR) {
+//                        fprintf(stderr, "getsockopt: SO_CONNECT_TIME failed: %d\n",
+//                                WSAGetLastError());
+                        return -1;
+                    }
+                    /*
+		     * If the socket has been connected for more than 5 minutes,
+		     * close it. If closed, the AcceptEx call will fail in the
+		     * completion thread.
+		     */
+		    if (optval != 0xFFFFFFFF && optval > 300) {
+			winSock.closesocket(bufPtr->socket);
+		    }
+		    bufPtr = bufPtr->node.next->lpItem;
+		}
+//		infoPtr = ????->next;
+            }
+	}
+    }
+    return 0;
 }
 
 /* =================================================================== */
@@ -2604,15 +2656,3 @@ OurConnectEx (
     }
     return FALSE;
 }
-
-BOOL PASCAL
-OurDisconnectEx (
-    SOCKET s,
-    LPOVERLAPPED lpOverlapped,
-    DWORD dwFlags,
-    DWORD reserved)
-{
-    winSock.WSASetLastError(WSAEOPNOTSUPP);
-    return FALSE;
-}
-
