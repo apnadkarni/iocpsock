@@ -1924,7 +1924,6 @@ WatchDogThreadProc (LPVOID lpParam)
 	    /* Get the first entry on the listening list. */
             infoPtr = (IocpSubSystem.listeningSockets->front ? IocpSubSystem.listeningSockets->front->lpItem : NULL);
             while (infoPtr) {
-		EnterCriticalSection(&infoPtr->llPendingAccepts->lock);
 		bufPtr = (infoPtr->llPendingAccepts->front ? infoPtr->llPendingAccepts->front->lpItem : NULL);
                 while (bufPtr) {
                     optlen = sizeof(optval);
@@ -1941,13 +1940,14 @@ WatchDogThreadProc (LPVOID lpParam)
 		     * completion thread and get replaced with a new one.
 		     */
 		    if (optval != 0xFFFFFFFF && optval > 120) {
+			EnterCriticalSection(&infoPtr->llPendingAccepts->lock);
 			winSock.closesocket(bufPtr->socket);
 			bufPtr->socket = INVALID_SOCKET;
+			LeaveCriticalSection(&infoPtr->llPendingAccepts->lock);
 		    }
 		    bufPtr = (bufPtr->node.next ? bufPtr->node.next->lpItem : NULL);
 		}
 		nextInfoPtr = (infoPtr->node.next ? infoPtr->node.next->lpItem : NULL);
-		LeaveCriticalSection(&infoPtr->llPendingAccepts->lock);
 		infoPtr = nextInfoPtr;
             }
 	}
