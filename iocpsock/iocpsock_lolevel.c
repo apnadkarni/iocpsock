@@ -828,7 +828,7 @@ static void
 IocpAcceptOne (SocketInfo *infoPtr)
 {
     char channelName[16 + TCL_INTEGER_SPACE];
-    IocpAcceptInfo *acptInfo;
+    AcceptInfo *acptInfo;
 
     acptInfo = IocpLLPopFront(infoPtr->readyAccepts, IOCP_LL_NODESTROY, 0);
 
@@ -1717,7 +1717,7 @@ FreeSocketInfo (SocketInfo *infoPtr)
     }
 
     if (infoPtr->readyAccepts) {
-	IocpAcceptInfo *acptInfo;
+	AcceptInfo *acptInfo;
 	while ((acptInfo = IocpLLPopFront(infoPtr->readyAccepts,
 		IOCP_LL_NODESTROY, 0)) != NULL) {
 	    /* Recursion, but can't be a server socket.. So this is safe. */
@@ -1829,9 +1829,9 @@ IocpAlertToTclNewAccept (
     SocketInfo *infoPtr,
     SocketInfo *newClient)
 {
-    IocpAcceptInfo *acptInfo;
+    AcceptInfo *acptInfo;
 
-    acptInfo = IocpAlloc(sizeof(IocpAcceptInfo));
+    acptInfo = IocpAlloc(sizeof(AcceptInfo));
     if (acptInfo == NULL) {
 	return;
     }

@@ -339,14 +339,14 @@ typedef struct SocketInfo {
 
 #pragma pack (pop)
 
-typedef struct IocpAcceptInfo {
+typedef struct AcceptInfo {
     SOCKADDR_STORAGE local;
     int localLen;
     SOCKADDR_STORAGE remote;
     int remoteLen;
     SocketInfo *clientInfo;
     LLNODE node;
-} IocpAcceptInfo;
+} AcceptInfo;
 
 extern Tcl_ChannelType IocpChannelType;
 
