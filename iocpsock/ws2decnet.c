@@ -7,5 +7,7 @@ static WS2ProtocolData dnetProtoData = {
     DNPROTO_NSP,
     sizeof(SOCKADDRDN),
     NULL,
+    NULL,
+    NULL,
     NULL
 };

@@ -8,6 +8,8 @@ static WS2ProtocolData ipxProtoData = {
     NSPROTO_IPX,
     sizeof(SOCKADDR_IPX),
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 

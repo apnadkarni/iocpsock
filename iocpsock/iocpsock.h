@@ -147,20 +147,23 @@ extern int initialized;
 typedef struct {
     int af;		    /* Address family. */
     int	type;		    /* Address type. */
-    int	protocol;	    /* protocol type specific to the address
-			     * family. */
+    int	protocol;	    /* protocol type. */
     size_t addrLen;	    /* length of protocol specific SOCKADDR */
-    LPFN_ACCEPTEX AcceptEx; /* LSP specific function for AcceptEx(). */
-    LPFN_GETACCEPTEXSOCKADDRS GetAcceptExSockaddrs;
-			    /* LSP specific function for
-			     * GetAcceptExSockaddrs(). */
+    LPFN_ACCEPTEX		AcceptEx;
+    LPFN_GETACCEPTEXSOCKADDRS	GetAcceptExSockaddrs;
+    LPFN_CONNECTEX		ConnectEx;
+    LPFN_DISCONNECTEX		DisconnectEx;
+
 } WS2ProtocolData;
 
-extern GUID gAcceptExGuid;  /* GUID used for the WSAIoctl call to get
-			     * AcceptEx() from the LSP. */
-extern GUID gGetAcceptExSockaddrsGuid;
-			    /* GUID used for the WSAIoctl call to get
-			     * GetAcceptExSockaddrs() from the LSP. */
+/*
+ * GUIDs used for the WSAIoctl call to get the function address from the
+ * LSP.
+ */
+extern GUID gAcceptExGuid;		/* AcceptEx() */
+extern GUID gGetAcceptExSockaddrsGuid;	/* GetAcceptExSockaddrs() */
+extern GUID gConnectExGuid;		/* ConnectEx() */
+extern GUID gDisconnectExGuid;		/* DisconnectEx() */
 
 /* Linked-List node object. */
 struct _ListNode;

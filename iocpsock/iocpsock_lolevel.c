@@ -31,6 +31,8 @@ int initialized = 0;
 CompletionPortInfo IocpSubSystem;
 GUID gAcceptExGuid = WSAID_ACCEPTEX;
 GUID gGetAcceptExSockaddrsGuid = WSAID_GETACCEPTEXSOCKADDRS;
+GUID gConnectExGuid = WSAID_CONNECTEX;
+GUID gDisconnectExGuid = WSAID_DISCONNECTEX;
 Tcl_ThreadDataKey dataKey;
 
 /* file scope globals. */
@@ -85,7 +87,7 @@ static void	    IocpWinConvertWSAError(DWORD errCode);
  */
 
 Tcl_ChannelType IocpChannelType = {
-    "tcp_iocp",		    /* Type name. */
+    "iocp",		    /* Type name. */
     TCL_CHANNEL_VERSION_2,  /* v2 channel */
     IocpCloseProc,	    /* Close proc. */
     IocpInputProc,	    /* Input proc. */
@@ -107,6 +109,13 @@ typedef struct SocketEvent {
 				 * all events. */
     SocketInfo *infoPtr;
 } SocketEvent;
+
+
+
+
+/* =================================================================== */
+/* ============= Initailization and shutdown procedures ============== */
+
 
 
 static void
@@ -478,7 +487,7 @@ InitializeIocpSubSystem ()
     }
 
     /* Create the private memory heap. */
-    IocpSubSystem.heap = HeapCreate(0, 0, 0);
+    IocpSubSystem.heap = HeapCreate(0, IOCP_HEAP_START_SIZE, 0);
     if (IocpSubSystem.heap == NULL) {
 	error = GetLastError();
 	CloseHandle(IocpSubSystem.port);
@@ -567,6 +576,11 @@ IocpThreadExitHandler (ClientData clientData)
 //    IocpLLDestroy(tsdPtr->readySockets, 0);
 }
 
+
+/* =================================================================== */
+/* ==================== Tcl_Event*Proc procedures ==================== */
+
+
 /*
  *-----------------------------------------------------------------------
  * IocpEventSetupProc --
@@ -647,7 +661,7 @@ IocpEventCheckProc (
  *-----------------------------------------------------------------------
  */
 static int
-IocpEventProc(
+IocpEventProc (
     Tcl_Event *evPtr,		/* Event to service. */
     int flags)			/* Flags that indicate what events to
 				 * handle, such as TCL_FILE_EVENTS. */
@@ -728,6 +742,11 @@ IocpAcceptOne (SocketInfo *infoPtr)
     IocpFree(acptInfo);
 }
 
+
+/* =================================================================== */
+/* ============== Protocol neutral SOCKADDR procedures =============== */
+
+
 /*
  *-----------------------------------------------------------------------
  *
@@ -778,16 +797,19 @@ CreateSocketAddress(
 }
 
 void
-FreeSocketAddress(LPADDRINFO addrinfo)
+FreeSocketAddress (LPADDRINFO addrinfo)
 {
     freeaddrinfo(addrinfo);
 }
 
+/* =================================================================== */
+/* ==================== Tcl_Driver*Proc procedures =================== */
+
 
 static int
-IocpCloseProc(instanceData, interp)
-    ClientData instanceData;	/* The socket to close. */
-    Tcl_Interp *interp;		/* Unused. */
+IocpCloseProc (
+    ClientData instanceData,	/* The socket to close. */
+    Tcl_Interp *interp)		/* Unused. */
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     int errorCode = 0;
@@ -808,11 +830,11 @@ IocpCloseProc(instanceData, interp)
 }
 
 static int
-IocpInputProc(instanceData, buf, toRead, errorCodePtr)
-    ClientData instanceData;	/* The socket state. */
-    char *buf;			/* Where to store data. */
-    int toRead;			/* Maximum number of bytes to read. */
-    int *errorCodePtr;		/* Where to store error codes. */
+IocpInputProc (
+    ClientData instanceData,	/* The socket state. */
+    char *buf,			/* Where to store data. */
+    int toRead,			/* Maximum number of bytes to read. */
+    int *errorCodePtr)		/* Where to store error codes. */
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     char *bufPos = buf;
@@ -846,11 +868,11 @@ IocpInputProc(instanceData, buf, toRead, errorCodePtr)
 }
 
 static int
-IocpOutputProc(instanceData, buf, toWrite, errorCodePtr)
-    ClientData instanceData;	/* The socket state. */
-    CONST char *buf;		/* Where to get data. */
-    int toWrite;		/* Maximum number of bytes to write. */
-    int *errorCodePtr;		/* Where to store error codes. */
+IocpOutputProc (
+    ClientData instanceData,	/* The socket state. */
+    CONST char *buf,		/* Where to get data. */
+    int toWrite,		/* Maximum number of bytes to write. */
+    int *errorCodePtr)		/* Where to store error codes. */
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     BufferInfo *bufPtr;
@@ -923,14 +945,14 @@ IocpSetOptionProc (
 }
 
 static int
-IocpGetOptionProc(instanceData, interp, optionName, dsPtr)
-    ClientData instanceData;	/* Socket state. */
-    Tcl_Interp *interp;         /* For error reporting - can be NULL */
-    CONST char *optionName;	/* Name of the option to
+IocpGetOptionProc (
+    ClientData instanceData,	/* Socket state. */
+    Tcl_Interp *interp,		/* For error reporting - can be NULL */
+    CONST char *optionName,	/* Name of the option to
 				 * retrieve the value for, or
 				 * NULL to get all options and
 				 * their values. */
-    Tcl_DString *dsPtr;		/* Where to store the computed
+    Tcl_DString *dsPtr)		/* Where to store the computed
 				 * value; initialized by caller. */
 {
     SocketInfo *infoPtr;
@@ -1093,18 +1115,18 @@ IocpGetOptionProc(instanceData, interp, optionName, dsPtr)
 }
 
 static void
-IocpWatchProc(instanceData, mask)
-    ClientData instanceData;	/* The socket state. */
-    int mask;			/* Events of interest; an OR-ed
+IocpWatchProc (
+    ClientData instanceData,	/* The socket state. */
+    int mask)			/* Events of interest; an OR-ed
 				 * combination of TCL_READABLE,
 				 * TCL_WRITABLE and TCL_EXCEPTION. */
 {
 }
 
 static int
-IocpBlockProc(instanceData, mode)
-    ClientData instanceData;	/* The socket state. */
-    int mode;			/* TCL_MODE_BLOCKING or
+IocpBlockProc (
+    ClientData instanceData,	/* The socket state. */
+    int mode)			/* TCL_MODE_BLOCKING or
                                  * TCL_MODE_NONBLOCKING. */
 {
     // TODO: add blocking emulation to IOCP (makes me sick).
@@ -1112,16 +1134,19 @@ IocpBlockProc(instanceData, mode)
 }
 
 static int
-IocpGetHandleProc(instanceData, direction, handlePtr)
-    ClientData instanceData;	/* The socket state. */
-    int direction;		/* TCL_READABLE or TCL_WRITABLE */
-    ClientData *handlePtr;	/* Where to store the handle.  */
+IocpGetHandleProc (
+    ClientData instanceData,	/* The socket state. */
+    int direction,		/* TCL_READABLE or TCL_WRITABLE */
+    ClientData *handlePtr)	/* Where to store the handle.  */
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
 
     *handlePtr = (ClientData) infoPtr->socket;
     return TCL_OK;
 }
+
+/* =================================================================== */
+/* ============== Lo-level buffer and state manipulation ============= */
 
 
 /* takes buffer ownership */
@@ -1167,8 +1192,7 @@ IocpAlertToTclNewAccept (
 
 
 SocketInfo *
-NewSocketInfo(socket)
-    SOCKET socket;
+NewSocketInfo (SOCKET socket)
 {
     SocketInfo *infoPtr;
 
@@ -1181,8 +1205,8 @@ NewSocketInfo(socket)
     infoPtr->lastError = NO_ERROR;
     infoPtr->bClosing = FALSE;
     infoPtr->OutstandingOps = 0;
-    infoPtr->IoCountIssued = 0;
-    infoPtr->OutOfOrderSends = NULL;
+//    infoPtr->IoCountIssued = 0;
+//    infoPtr->OutOfOrderSends = NULL;
     InitializeCriticalSection(&infoPtr->critSec);
 
 //    WaitForSingleObject(tsdPtr->socketListLock, INFINITE);
@@ -1194,7 +1218,7 @@ NewSocketInfo(socket)
 }
 
 void
-FreeSocketInfo(SocketInfo *infoPtr)
+FreeSocketInfo (SocketInfo *infoPtr)
 {
     DeleteCriticalSection(&infoPtr->critSec);
 
@@ -1208,7 +1232,7 @@ FreeSocketInfo(SocketInfo *infoPtr)
 }
 
 BufferInfo *
-GetBufferObj(SocketInfo *infoPtr, SIZE_T buflen)
+GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
 {
     BufferInfo *bufPtr;
 
@@ -1231,20 +1255,19 @@ GetBufferObj(SocketInfo *infoPtr, SIZE_T buflen)
 }
 
 void
-FreeBufferObj(BufferInfo *bufPtr)
+FreeBufferObj (BufferInfo *bufPtr)
 {
     IocpFree(bufPtr->buf);
     IocpFree(bufPtr);
 }
 
 SocketInfo *
-NewAcceptSockInfo(SOCKET s, SocketInfo *infoPtr)
+NewAcceptSockInfo (SOCKET s, SocketInfo *infoPtr)
 {
     SocketInfo *newInfoPtr;
 
     newInfoPtr = (SocketInfo *) IocpAlloc(sizeof(SocketInfo));
-    if (newInfoPtr == NULL)
-    {
+    if (newInfoPtr == NULL) {
 	return NULL;
     }
 
@@ -1266,7 +1289,7 @@ NewAcceptSockInfo(SOCKET s, SocketInfo *infoPtr)
 
 
 DWORD
-PostOverlappedAccept(SocketInfo *infoPtr, BufferInfo *bufPtr)
+PostOverlappedAccept (SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
     DWORD bytes, WSAerr;
     int rc;
@@ -1320,7 +1343,7 @@ PostOverlappedAccept(SocketInfo *infoPtr, BufferInfo *bufPtr)
 }
 
 DWORD
-PostOverlappedRecv(SocketInfo *infoPtr, BufferInfo *bufPtr)
+PostOverlappedRecv (SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
     WSABUF wbuf;
     DWORD bytes, flags, WSAerr;
@@ -1368,7 +1391,7 @@ PostOverlappedRecv(SocketInfo *infoPtr, BufferInfo *bufPtr)
 }
 
 DWORD
-PostOverlappedSend(SocketInfo *infoPtr, BufferInfo *bufPtr)
+PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 {
     WSABUF wbuf;
     DWORD bytes, WSAerr;
@@ -1470,6 +1493,10 @@ DoSends(SocketInfo *infoPtr)
 }
 */
 
+/* =================================================================== */
+/* ================== Lo-level Completion handler ==================== */
+
+
 /*
  *----------------------------------------------------------------------
  * CompletionThread --
@@ -1500,7 +1527,7 @@ CompletionThread (LPVOID lpParam)
     BufferInfo *bufPtr;
     OVERLAPPED *lpOverlapped = NULL;
     DWORD bytes, flags, WSAerr;
-    BOOL  ok;
+    BOOL ok;
 
     for (;;) {
 	WSAerr = NO_ERROR;
@@ -1575,8 +1602,8 @@ HandleIo (
         int localLen, remoteLen;
 
         /*
-	 * Get the address information that is specific to this LSP's
-	 * decoder.
+	 * Get the address information from the decoder routine specific
+	 * to this socket's LSP.
 	 */
         infoPtr->proto->GetAcceptExSockaddrs(bufPtr->buf,
 		bufPtr->buflen - ((sizeof(SOCKADDR_STORAGE) + 16) * 2),
@@ -1592,9 +1619,11 @@ HandleIo (
 
         /* Get a new SocketInfo for the new client connection. */
         newInfoPtr = NewAcceptSockInfo(bufPtr->socket, infoPtr);
-	newInfoPtr->localAddr = (LPSOCKADDR) IocpAlloc(newInfoPtr->proto->addrLen);
+	newInfoPtr->localAddr = (LPSOCKADDR)
+		IocpAlloc(newInfoPtr->proto->addrLen);
 	memcpy(newInfoPtr->localAddr, local, localLen);
-	newInfoPtr->remoteAddr = (LPSOCKADDR) IocpAlloc(newInfoPtr->proto->addrLen);
+	newInfoPtr->remoteAddr = (LPSOCKADDR)
+		IocpAlloc(newInfoPtr->proto->addrLen);
 	memcpy(newInfoPtr->remoteAddr, remote, remoteLen);
 
 	/* Alert Tcl to this new connection. */
@@ -1616,12 +1645,6 @@ HandleIo (
         hcp = CreateIoCompletionPort((HANDLE)newInfoPtr->socket, CompPort,
                 (ULONG_PTR)newInfoPtr, 0);
 
-        if (hcp == NULL) {
-//            fprintf(stderr, "CompletionThread: CreateIoCompletionPort failed: %d\n",
-//                    GetLastError());
-            return;
-        }
-
         /* Now post a receive on this new connection. */
         newBufPtr = GetBufferObj(newInfoPtr, 256);
         if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
@@ -1633,9 +1656,9 @@ HandleIo (
         /*
 	 * Post another new AcceptEx() to replace this one that just fired.
 	 *
-	 * This call could cause recurrsion..
-	 * Careful!  If PostOverlappedAccept() gets serviced by winsock
-	 * immediatly, rather than posted, we could end-up back here again.
+	 * This call could cause recurrsion..  Careful!
+	 * If PostOverlappedAccept() gets serviced by winsock immediatly,
+	 * rather than posted, we could end-up back here again.
 	 * That some heavy load :)
 	 */
 
@@ -1667,10 +1690,22 @@ HandleIo (
 	     */
 
 	    newBufPtr = GetBufferObj(infoPtr, 256);
-	    if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
-		/* In the event the recv fails, clean up the connection */
-		FreeBufferObj(newBufPtr);
-		WSAerr = SOCKET_ERROR;
+	    if ((WSAerr = PostOverlappedRecv(infoPtr, newBufPtr)) != NO_ERROR) {
+
+		/* Oh no, the recv failed. */
+		newBufPtr->WSAerr = WSAerr;
+
+		/* (takes buffer ownership) */
+		IocpLLPushBack(infoPtr->llPendingRecv, newBufPtr, &newBufPtr->node);
+
+		/*
+		 * Let IocpCheckProc() know this new channel has a ready read
+		 * that needs servicing.
+		 */
+		IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
+
+		/* Should the notifier be asleep, zap it awake. */
+		Tcl_ThreadAlert(infoPtr->tsdHome->threadId);
 	    }
         }
     } else if (bufPtr->operation == OP_WRITE) {
@@ -1683,6 +1718,7 @@ HandleIo (
     return;
 }
 
+/* =================================================================== */
 /* ====================== Private memory heap ======================== */
 
 __inline LPVOID
@@ -1697,6 +1733,7 @@ IocpFree (LPVOID block)
     return HeapFree(IocpSubSystem.heap, 0, block);
 }
 
+/* =================================================================== */
 /* ========================= Linked-List ============================= */
 
 /* Bitmask macros. */
@@ -1742,7 +1779,7 @@ IocpLLDestroy(
 	LeaveCriticalSection(&ll->lock);
     }
     DeleteCriticalSection(&ll->lock);
-    return HeapFree(IocpSubSystem.heap, 0, ll);
+    return IocpFree(ll);
 }
 
 //Adds an item to the end of the list.
@@ -1763,7 +1800,7 @@ IocpLLPushBack(
 	return NULL;
     }
     pnode->lpItem = lpItem;
-    if (!ll->front && ! ll->back ) {
+    if (!ll->front && !ll->back ) {
 	ll->front = pnode;
 	ll->back = pnode;
     } else {
@@ -1778,21 +1815,33 @@ IocpLLPushBack(
     return pnode;
 }
 
-//Adds an item to the front of the list.
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLPushFront --
+ *
+ *	Adds an item to the front of the list.
+ *
+ * Results:
+ *	The node.
+ *
+ * Side effects:
+ *	Will create a new node, if not given one.
+ *
+ *----------------------------------------------------------------------
+ */
+
 LPLLNODE 
 IocpLLPushFront(
     LPLLIST ll,
     LPVOID lpItem,
     LPLLNODE pnode)
 {
-    BOOL alloc;
     LPLLNODE tmp;
 
     EnterCriticalSection(&ll->lock);
-    alloc = FALSE;
     if (!pnode) {
 	pnode = (LPLLNODE) IocpAlloc(sizeof(LLNODE));
-	alloc = TRUE;
     }
     if (!pnode) {
 	LeaveCriticalSection(&ll->lock);
@@ -1814,7 +1863,22 @@ IocpLLPushFront(
     return pnode;
 }
 
-//Removes all items from the list.
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLPopAll --
+ *
+ *	Removes all items from the list.
+ *
+ * Results:
+ *	TRUE if something was popped or FALSE if nothing was poppable.
+ *
+ * Side effects:
+ *	Frees the node(s) with IOCP_LL_NODESTROY in the state arg.
+ *
+ *----------------------------------------------------------------------
+ */
+
 BOOL 
 IocpLLPopAll(
     LPLLIST ll,
@@ -1860,7 +1924,22 @@ IocpLLPopAll(
     return TRUE;
 }
 
-//Removes an item from the list.
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLPop --
+ *
+ *	Removes an item from the list.
+ *
+ * Results:
+ *	TRUE if something was popped or FALSE if nothing was poppable.
+ *
+ * Side effects:
+ *	Frees the node with IOCP_LL_NODESTROY in the state arg.
+ *
+ *----------------------------------------------------------------------
+ */
+
 BOOL 
 IocpLLPop(
     LPLLNODE node,
@@ -1924,15 +2003,44 @@ IocpLLPop(
     return TRUE;
 }
 
-//Destroys a node.
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLNodeDestroy --
+ *
+ *	Destroys a node.
+ *
+ * Results:
+ *	Same as HeapFree.
+ *
+ * Side effects:
+ *	memory returns to the system.
+ *
+ *----------------------------------------------------------------------
+ */
+
 BOOL
-IocpLLNodeDestroy(
-    LPLLNODE node)
+IocpLLNodeDestroy (LPLLNODE node)
 {
     return IocpFree(node);
 }
 
-//Removes the item at the back of the list.
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLPopBack --
+ *
+ *	Removes the item at the back of the list.
+ *
+ * Results:
+ *	The item stored in the node at the front or NULL for none.
+ *
+ * Side effects:
+ *	Frees the node with IOCP_LL_NODESTROY in the state arg.
+ *
+ *----------------------------------------------------------------------
+ */
+
 LPVOID
 IocpLLPopBack(
     LPLLIST ll,
@@ -1953,7 +2061,22 @@ IocpLLPopBack(
     return vp;
 }
 
-//Removes the item at the front of the list.
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLPopFront --
+ *
+ *	Removes the item at the front of the list.
+ *
+ * Results:
+ *	The item stored in the node at the front or NULL for none.
+ *
+ * Side effects:
+ *	Frees the node with IOCP_LL_NODESTROY in the state arg.
+ *
+ *----------------------------------------------------------------------
+ */
+
 LPVOID
 IocpLLPopFront(
     LPLLIST ll,
@@ -1978,12 +2101,29 @@ IocpLLPopFront(
     return vp;
 }
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLIsNotEmpty --
+ *
+ *	self explanatory.
+ *
+ * Results:
+ *	Boolean for If the linked-list has entries.
+ *
+ * Side effects:
+ *	Doesn't lock, might return an incorrect answer.
+ *
+ *----------------------------------------------------------------------
+ */
+
 BOOL
-IocpLLIsNotEmpty(LPLLIST ll)
+IocpLLIsNotEmpty (LPLLIST ll)
 {
     return (ll->lCount != 0 ? TRUE : FALSE);
 }
 
+/* =================================================================== */
 /* ========================= Error mappings ========================== */
 
 /*

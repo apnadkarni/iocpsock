@@ -7,5 +7,7 @@ static WS2ProtocolData atmProtoData = {
     ATMPROTO_AAL5,
     sizeof(SOCKADDR_ATM),
     NULL,
+    NULL,
+    NULL,
     NULL
 };

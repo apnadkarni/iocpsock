@@ -9,6 +9,8 @@ static WS2ProtocolData tcp4ProtoData = {
     IPPROTO_TCP,
     sizeof(SOCKADDR_IN),
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -17,6 +19,8 @@ static WS2ProtocolData tcp6ProtoData = {
     SOCK_STREAM,
     IPPROTO_TCP,
     sizeof(SOCKADDR_IN6),
+    NULL,
+    NULL,
     NULL,
     NULL
 };
@@ -178,6 +182,16 @@ CreateTcp4Socket(
                &gGetAcceptExSockaddrsGuid, sizeof(GUID),
                &tcp4ProtoData.GetAcceptExSockaddrs,
 	       sizeof(tcp4ProtoData.GetAcceptExSockaddrs),
+               &bytes, NULL, NULL);
+        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+               &gConnectExGuid, sizeof(GUID),
+               &tcp4ProtoData.ConnectEx,
+	       sizeof(tcp4ProtoData.ConnectEx),
+               &bytes, NULL, NULL);
+        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+               &gDisconnectExGuid, sizeof(GUID),
+               &tcp4ProtoData.DisconnectEx,
+	       sizeof(tcp4ProtoData.DisconnectEx),
                &bytes, NULL, NULL);
     }
 

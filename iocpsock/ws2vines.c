@@ -7,5 +7,7 @@ static WS2ProtocolData vinesProtoData = {
     0,
     sizeof(SOCKADDR_VNS),
     NULL,
+    NULL,
+    NULL,
     NULL
 };

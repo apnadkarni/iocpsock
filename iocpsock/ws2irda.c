@@ -7,5 +7,7 @@ static WS2ProtocolData irdaProtoData = {
     IPPROTO_IP,
     sizeof(SOCKADDR_IRDA),
     NULL,
+    NULL,
+    NULL,
     NULL
 };
