@@ -12,6 +12,14 @@ if {[lsearch [namespace children] ::tcltest] == -1} {
 }
 
 ::tcltest::loadTestedCommands
+::tcltest::testConstraint xp \
+	[expr {$::tcl_platform(os) == "Windows NT" && $::tcl_platform(osVersion) > 5.0}]
+
+test socket2-1.1 {error message} {nt} {
+    socket2
+} {wrong # args: should be either:
+socket2 ?-protocol name? ?-myaddr addr? ?-myport myport? ?-async? host port
+socket2 -server command ?-ovlpd count? ?-protocol name? ?-myaddr addr? port}
 
 
 # cleanup
