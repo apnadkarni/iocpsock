@@ -1,17 +1,22 @@
 iocpsock.dll -- ver 0.3 (Thu Feb 13 03:08:48 2003)
 
-This is a new sockets channel driver for windows.  The aim is to get
-it ready for inclusion in the core.  It's main difference from the
+http://sf.net/project/showfiles.php?group_id=73356
+http://sf.net/projects/iocpsock
+
+This is a new sockets channel driver for windows NT.  The aim is to
+get it ready for inclusion in the core.  It's main difference from the
 existing core tcp driver is the I/O model in use.  This uses
-overlapped I/O with completion ports over the existing Win3.1 style
+overlapped I/O with completion ports over the existing Win3.1 model
 of WSAAsyncSelect.  I haven't yet tested the all-out speed, but expect
 a performance improvement of at least 4 times given the pipes and CPU
 available.
 
-More development is needed.  Looks stable.  sockets are always created
-in non-blocking mode.  There is no blocking mode yet.  This will get
-fixed, eventually.  It provides one command called [socket2] and behaves
-just like the stock one.
+It works great with tclhttpd, but it's limits haven't been tested yet.
+
+More development is needed.  Looks stable (much more than earlier).
+Sockets are always created in non-blocking mode.  There is no blocking
+mode yet.  This will get fixed, eventually.  It provides one command
+called [socket2] and behaves just like the stock one.
 
 * FAQ:
 
@@ -24,7 +29,7 @@ just like the stock one.
   A: Posting a WSARecv (or AcceptEx) call before the event (and data)
      arrives allowing the operation to happen wholly in kernel-mode so
      that not only do we get notification, but we get the data of the
-     operation too.
+     operation too.  Instead of "what's ready?", it's "what's been done"
 
   Q: Gimme some links.  I want read up on this.
   A: http://www.cswl.com/whiteppr/tech/rtime.html
@@ -36,18 +41,20 @@ just like the stock one.
   - Better tracking and clean-up of resources.  Memory use is tight.
   - All 'access violations' fixed.
   - Puts a load announcement to stderr (helps the author not make
-	debugging mistakes).
+    debugging mistakes).
   - Added a watchdog thread for cleaning-up mid-state connected peers.
-	Part of the AcceptEx() optimization is that only when data is
-	received on a newly accepted socket does the accept actually
-	fire to the completion port and thus up to tcl.  If a
-	connection is made and no data is sent for 2 minutes, this
-	thread will close the connection to prevent a loss in
-	resources.  This AcceptEx behavior is optimized for protocols
-	who's connecting client starts the conversation -- HTTP would
-	be an example.
+    Part of the AcceptEx() optimization is that only when data is
+    received on a newly accepted socket does the accept actually fire
+    to the completion port and thus up to tcl.  If a connection is made
+    and no data is sent for 2 minutes, this thread will close the
+    connection to prevent a loss in resources.  This AcceptEx behavior
+    is optimized for protocols who's connecting client starts the
+    conversation -- HTTP would be an example.
 
-http://sf.net/projects/iocpsock
+* TODO:
+  - Manage out-of-order receives so that additional completion threads can
+    be used -- one per CPU is said to be most efficient.
+  - Make the linkedlist routines waitable so blocking can be emulated.
 
 --
 David Gravereaux <davygrvy@pobox.com>
