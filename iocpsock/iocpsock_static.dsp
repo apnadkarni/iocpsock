@@ -60,11 +60,11 @@ LIB32=link.exe -lib
 # PROP BASE Target_Dir ""
 # PROP Use_MFC 0
 # PROP Use_Debug_Libraries 1
-# PROP Output_Dir "Debug_Static"
-# PROP Intermediate_Dir "Debug_Static"
+# PROP Output_Dir ".\Debug_Static"
+# PROP Intermediate_Dir ".\Debug_Static"
 # PROP Target_Dir ""
 # ADD BASE CPP /nologo /W3 /Gm /GX /ZI /Od /D "WIN32" /D "_DEBUG" /D "_MBCS" /D "_LIB" /YX /FD /GZ /c
-# ADD CPP /nologo /MTd /W3 /Gm /GX /ZI /Od /I "..\tcl\generic" /D "WIN32" /D "_DEBUG" /D "STATIC_BUILD" /YX /FD /GZ /c
+# ADD CPP /nologo /MTd /W3 /Gm /ZI /Od /I "..\tcl\generic" /D "WIN32" /D "_DEBUG" /D "STATIC_BUILD" /D "SHOWDBG" /YX"iocpsock.h" /FD /GZ /c
 # ADD BASE RSC /l 0x409 /d "_DEBUG"
 # ADD RSC /l 0x409 /i "..\tcl\generic" /d "DEBUG"
 BSC32=bscmake.exe
@@ -104,10 +104,6 @@ SOURCE=.\iocpsock_lolevel.c
 # Begin Source File
 
 SOURCE=.\linkedlist.c
-# End Source File
-# Begin Source File
-
-SOURCE=.\resource.h
 # End Source File
 # Begin Source File
 
