@@ -1072,8 +1072,7 @@ IocpInputProc (
 		 * Notice that we don't place the socket on the ready
 		 * list.  UpdateInterest() at the end of DoReadChars()
 		 * in generic/tclIO.c will do this for us by forcing
-		 * a verify through our watchProc.  If you don't beleive
-		 * me, use a step-debugger and see for yourself.
+		 * a verify through our watchProc.
 		 */
 		break;
 	    }
@@ -1098,8 +1097,8 @@ IocpInputProc (
 	if (infoPtr->outstandingRecvCap == 1
 		&& !(infoPtr->flags & IOCP_EOF)) {
 	    BufferInfo *newBufPtr = GetBufferObj(infoPtr, toRead);
-	    /* if an error occurs, and does not  return an error code
-	     * here, it will come through the completion port. */
+	    /* if an error occurs, it does not return an error code
+	     * from here, it will come through the completion port. */
 	    if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != NO_ERROR) {
 		FreeBufferObj(newBufPtr);
 	    }
@@ -1153,7 +1152,6 @@ IocpOutputProc (
 	*errorCodePtr = EWOULDBLOCK;
 	return -1;
     }
-
 
     /*
      * Let errors come back through the completion port or else we risk
@@ -1280,7 +1278,7 @@ IocpSetOptionProc (
 
 // TODO: pass this also to a protocol specific option routine.
 
-    if (!infoPtr->acceptProc) {
+    if (infoPtr->acceptProc) {
 	return Tcl_BadChannelOption(interp, optionName,
 		"keepalive nagle backlog sendcap recvburst");
     } else {
@@ -1505,7 +1503,7 @@ IocpGetOptionProc (
 	if (len > 0) return TCL_OK;
     }
 
-    if (!infoPtr->acceptProc) {
+    if (infoPtr->acceptProc) {
 	if (len == 0 || !strncmp(optionName, "-backlog", len)) {
 	    if (len == 0) {
 		Tcl_DStringAppendElement(dsPtr, "-backlog");
@@ -1549,7 +1547,7 @@ IocpGetOptionProc (
     }
 
     if (len > 0) {
-	if (!infoPtr->acceptProc) {
+	if (infoPtr->acceptProc) {
 	    return Tcl_BadChannelOption(interp, optionName,
 		"peername sockname keepalive nagle backlog sendcap recvburst");
 	} else {
