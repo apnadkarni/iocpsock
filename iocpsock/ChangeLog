@@ -1,4 +1,7 @@
 2003-04-30  davygrvy
+
+	=== TAGGED for version 1.0 ===
+
 	* bits.txt:
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
