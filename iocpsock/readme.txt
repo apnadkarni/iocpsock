@@ -10,7 +10,8 @@ available.
 
 More development is needed.  Looks stable.  sockets are always created
 in non-blocking mode.  There is no blocking mode yet.  This will get
-fixed, eventually.
+fixed, eventually.  It provides one command called [socket2] and behaves
+just like the stock one.
 
 * FAQ:
 
