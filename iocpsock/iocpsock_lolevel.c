@@ -761,7 +761,6 @@ IocpEventProc (
     if (infoPtr->watchMask & TCL_WRITABLE &&
 	    infoPtr->readyMask & TCL_WRITABLE) {
 	readyMask |= TCL_WRITABLE;
-	infoPtr->readyMask &= ~(TCL_WRITABLE);
     }
 
     if (readyMask) Tcl_NotifyChannel(infoPtr->channel, readyMask);
@@ -931,17 +930,9 @@ IocpInputProc (
     int bytesRead = 0;
     DWORD timeout;
     BufferInfo *bufPtr;
+    int stillReadable = 0;
 
     *errorCodePtr = 0;
-
-    if (!initialized) {
-	*errorCodePtr = EFAULT;
-	return -1;
-    }
-
-    if (infoPtr->flags & IOCP_EOF) {
-	return 0;
-    }
 
     /*
      * Check for a background error on the last operations.
@@ -953,12 +944,14 @@ IocpInputProc (
 	goto error;
     }
 
+    if (infoPtr->flags & IOCP_EOF) {
+	/* force the generic layer into EOF. */
+	return 0;
+    }
+
     /* TODO: This is here, but blocking is not supported yet
      * by the queue. */
     timeout = (infoPtr->flags & IOCP_BLOCKING ? INFINITE : 0);
-
-    /* pending events are being serviced, flop the bit. */
-    InterlockedExchange(&infoPtr->ready, 0);
 
     /*
      * Merge in as much as toRead will allow.
@@ -974,8 +967,8 @@ IocpInputProc (
 		/* Too large or have EOF.  Push it back on for later. */
 		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
 			&bufPtr->node);
-		/* stuff is left, flop is back on */
-		InterlockedExchange(&infoPtr->ready, 1);
+		/* stuff is left. */
+		stillReadable = 1;
 		IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
 			NULL);
 		break;
@@ -999,7 +992,12 @@ IocpInputProc (
     } else  {
 	/* If there's nothing to get, return EWOULDBLOCK. */
 	*errorCodePtr = EWOULDBLOCK;
-	return -1;
+	bytesRead = -1;
+    }
+
+    if (!stillReadable) {
+	/* All recv events were serviced, flop the bit. */
+	InterlockedExchange(&infoPtr->ready, 0);
     }
 
     return bytesRead;
@@ -1022,20 +1020,10 @@ IocpOutputProc (
 
     *errorCodePtr = 0;
 
-
-    if (!initialized) {
-	*errorCodePtr = EFAULT;
-	return -1;
-    }
-
     if (infoPtr->llPendingRecv == NULL) {
 	/* Not connected.  How did we get here? */
 	*errorCodePtr = EAGAIN;
 	return -1;
-    }
-
-    if (infoPtr->flags & IOCP_EOF) {
-	return 0;
     }
 
     /*
@@ -1046,6 +1034,11 @@ IocpOutputProc (
 	IocpWinConvertWSAError(infoPtr->lastError);
 	infoPtr->flags |= IOCP_EOF;
 	goto error;
+    }
+
+    if (infoPtr->flags & IOCP_EOF) {
+	/* force the generic layer into EOF. */
+	return 0;
     }
 
     bufPtr = GetBufferObj(infoPtr, toWrite);
@@ -1075,10 +1068,6 @@ IocpSetOptionProc (
     SOCKET sock;
     BOOL val = FALSE;
     int boolVar, rtn;
-
-    if (!initialized) {
-	return TCL_OK;
-    }
 
     infoPtr = (SocketInfo *) instanceData;
     sock = infoPtr->socket;
@@ -1140,10 +1129,6 @@ IocpGetOptionProc (
     char buf[TCL_INTEGER_SPACE];
 
     
-    if (!initialized) {
-	return TCL_OK;
-    }
-
     infoPtr = (SocketInfo *) instanceData;
     sock = (int) infoPtr->socket;
     if (optionName != (char *) NULL) {
@@ -1314,11 +1299,6 @@ IocpWatchProc (
 				 * TCL_WRITABLE and TCL_EXCEPTION. */
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
-    Tcl_Time blockTime = { 0, 0 };
-
-    if (!initialized) {
-	return;
-    }
 
     /*
      * Update the watch events mask. Only if the socket is not a
@@ -1327,13 +1307,10 @@ IocpWatchProc (
 
     if (!infoPtr->acceptProc) {    
         infoPtr->watchMask = mask;
-	if (mask & TCL_WRITABLE || (mask & TCL_READABLE &&
+	if ((mask & TCL_WRITABLE) || (mask & TCL_READABLE &&
 		IocpLLIsNotEmpty(infoPtr->llPendingRecv))) {
-	    /* Add a trip through the next event loop iteration to
-	     * verify. */
-	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr,
-		    NULL);
-	    Tcl_SetMaxBlockTime(&blockTime);
+	    /* Can do stuff, mark it ready. */
+	    IocpLLPushBack(infoPtr->tsdHome->readySockets, infoPtr, NULL);
 	}
     }
 }
@@ -1345,10 +1322,6 @@ IocpBlockProc (
                                  * TCL_MODE_NONBLOCKING. */
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
-
-    if (!initialized) {
-	return 0;
-    }
 
     if (mode == TCL_MODE_BLOCKING) {
 	infoPtr->flags |= IOCP_BLOCKING;
@@ -1365,10 +1338,6 @@ IocpGetHandleProc (
     ClientData *handlePtr)	/* Where to store the handle.  */
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
-
-    if (!initialized) {
-	return TCL_OK;
-    }
 
     *handlePtr = (ClientData) infoPtr->socket;
     return TCL_OK;
@@ -1809,7 +1778,7 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	}
     } else {
 	/*
-	 * The WSASend/To completed now, instead of getting posted.
+	 * The WSASend(To) completed now, instead of getting posted.
 	 * Zap an extra TCL_WRITABLE event to push the send buffers in
 	 * winsock until we get them posting and keep them full.  This
 	 * seems to be greedy if the peer is on localhost.
