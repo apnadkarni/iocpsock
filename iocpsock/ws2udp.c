@@ -287,9 +287,7 @@ error:
 	Tcl_AppendResult(interp, "couldn't open socket: ",
 		Tcl_PosixError(interp), NULL);
     }
-    if (sock != INVALID_SOCKET) {
-	winSock.closesocket(sock);
-    }
+    FreeSocketInfo(infoPtr);
     return NULL;
 }
 #else
