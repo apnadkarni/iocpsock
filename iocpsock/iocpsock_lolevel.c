@@ -58,15 +58,15 @@ static Tcl_DriverWatchProc	IocpWatchProc;
 static Tcl_DriverGetHandleProc	IocpGetHandleProc;
 static Tcl_DriverBlockModeProc	IocpBlockProc;
 
-static void	    IocpAlertToTclNewAccept(SocketInfo *infoPtr,
+static void	    IocpAlertToTclNewAccept (SocketInfo *infoPtr,
 			    SocketInfo *newClient);
 static void	    IocpAcceptOne (SocketInfo *infoPtr);
-static DWORD	    PostOverlappedRecv(SocketInfo *infoPtr,
+static DWORD	    PostOverlappedRecv (SocketInfo *infoPtr,
 			    BufferInfo *recvobj);
-static DWORD	    PostOverlappedSend(SocketInfo *infoPtr,
+static DWORD	    PostOverlappedSend (SocketInfo *infoPtr,
 			    BufferInfo *sendobj);
-static DWORD WINAPI CompletionThread(LPVOID lpParam);
-static DWORD WINAPI WatchDogThread (LPVOID lpParam);
+static DWORD WINAPI CompletionThreadProc (LPVOID lpParam);
+static DWORD WINAPI WatchDogThreadProc (LPVOID lpParam);
 
 /*
  * This structure describes the channel type structure for TCP socket
@@ -496,7 +496,7 @@ InitializeIocpSubSystem ()
     /* Start the completion threads -- one per cpu. */
     for(i = 0; i < numCPUs; i++) {
 	IocpSubSystem.threads[i] =
-		CreateThread(NULL, 0, CompletionThread,
+		CreateThread(NULL, 0, CompletionThreadProc,
 		&IocpSubSystem, 0, NULL);
 	if (IocpSubSystem.threads[i] == NULL) {
 	    error = TCL_WSE_CANTSTARTHANDLERTHREAD;
@@ -510,6 +510,9 @@ InitializeIocpSubSystem ()
     }
 
     IocpSubSystem.listeningSockets = IocpLLCreate();
+    IocpSubSystem.stop = CreateEvent(NULL, TRUE, FALSE, NULL);
+    IocpSubSystem.watchDogThread = CreateThread(NULL, 0,
+	    WatchDogThreadProc, IocpSubSystem.stop, 0, NULL);
 
     Tcl_CreateEventSource(IocpEventSetupProc, IocpEventCheckProc, NULL);
     Tcl_CreateExitHandler(IocpExitHandler, NULL);
@@ -547,6 +550,11 @@ IocpExitHandler (ClientData clientData)
 		}
 	    }
 	}
+
+	SetEvent(IocpSubSystem.stop);
+	WaitForSingleObject(IocpSubSystem.watchDogThread, INFINITE);
+	CloseHandle(IocpSubSystem.watchDogThread);
+	CloseHandle(IocpSubSystem.stop);
 
 	/* Close the completion port object. */
 	CloseHandle(IocpSubSystem.port);
@@ -1600,7 +1608,7 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
  */
 
 static DWORD WINAPI
-CompletionThread (LPVOID lpParam)
+CompletionThreadProc (LPVOID lpParam)
 {
     CompletionPortInfo *cpinfo = (CompletionPortInfo *)lpParam;
     SocketInfo *infoPtr;
@@ -1895,7 +1903,7 @@ HandleIo (
  * IOW, the peer must talk first.
  */
 static DWORD WINAPI
-WatchDogThread (LPVOID lpParam)
+WatchDogThreadProc (LPVOID lpParam)
 {
     HANDLE hStop = (HANDLE) lpParam;
     DWORD dwWait;
@@ -1906,24 +1914,24 @@ WatchDogThread (LPVOID lpParam)
 	/* 20 second timeout. */
         dwWait = WaitForSingleObject(hStop, 20000);
 
-        if (dwWait == WAIT_OBJECT_0) {
-	    /* The wait succeded, therefore we close. */
+        if (dwWait == WAIT_OBJECT_0 || dwWait == WAIT_FAILED) {
+	    /* The wait succeded (or errored), therefore we close. */
             break;
 
         } else if (dwWait == WAIT_TIMEOUT) {
 	    int optval, optlen, code;
 
-	    /* get the first entry on the listening list. */
-            infoPtr = IocpSubSystem.listeningSockets->front->lpItem;
+	    /* Get the first entry on the listening list. */
+            infoPtr = (IocpSubSystem.listeningSockets->front ? IocpSubSystem.listeningSockets->front->lpItem : NULL);
             while (infoPtr) {
 		EnterCriticalSection(&infoPtr->llPendingAccepts->lock);
-		bufPtr = infoPtr->llPendingAccepts->front->lpItem;
+		bufPtr = (infoPtr->llPendingAccepts->front ? infoPtr->llPendingAccepts->front->lpItem : NULL);
                 while (bufPtr) {
                     optlen = sizeof(optval);
                     code = winSock.getsockopt(bufPtr->socket, SOL_SOCKET,
 			    SO_CONNECT_TIME, (char *)&optval, &optlen);
                     if (code == SOCKET_ERROR) {
-			/* ignore the error, continue. */
+			/* Ignore the error, continue. */
 			bufPtr = bufPtr->node.next->lpItem;
                         continue;
                     }
@@ -1936,9 +1944,9 @@ WatchDogThread (LPVOID lpParam)
 			winSock.closesocket(bufPtr->socket);
 			bufPtr->socket = INVALID_SOCKET;
 		    }
-		    bufPtr = bufPtr->node.next->lpItem;
+		    bufPtr = (bufPtr->node.next ? bufPtr->node.next->lpItem : NULL);
 		}
-		nextInfoPtr = infoPtr->node.next->lpItem;
+		nextInfoPtr = (infoPtr->node.next ? infoPtr->node.next->lpItem : NULL);
 		LeaveCriticalSection(&infoPtr->llPendingAccepts->lock);
 		infoPtr = nextInfoPtr;
             }
