@@ -1,7 +1,28 @@
+2004-03-24  davygrvy
+	* iocpsock_lolevel.c:
+		Big bug in IocpInputProc() fixed.  Upon receiving the graceful
+		close indication, I had forgotten to free the buffer.
+
+2004-03-23  davygrvy
+	* iocpsock_lolevel.c:
+		Try a different order of things in IocpCloseProc
+
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+		renamed the IocpAcceptInfo struct to AcceptInfo.
+
+	* iocpsock_lolevel.c:
+		Fixed a big bug in FreeSocketInfo where popping the readyAccepts list
+		freed for a BufferInfo* rather than an AcceptInfo*.  Still searching for a
+		lost reference problem under a graceful close initiated by a peer...
+
 2004-03-19  davygrvy
 	* iocpsock_lolevel.c:
 		Changing -recvburst bynamically from flow-controlled to burst
 		mode doesn't seem to be acting correctly.
+
+	* tests/socket2.test:
+		socket2-3.1 added, but marked 'knownBug'.
 
 2004-03-17  davygrvy
 	* iocpsock_lolevel.c:
@@ -95,7 +116,7 @@
 		IocpInputProc to verify through IocpWatchProc that the channel's
 		ready state, therefore the TclZapNotifier call in IocpInputProc after the
 		IocpLLPushFront was removed.  This was a false impression given to
-		me by Klaus Suetterlin <robert@mpe.mpg.de> for which he was incorrect.
+		me by someone.
 
 	* iocpsock.h:
 	* iocpsock_lolevel.c:
