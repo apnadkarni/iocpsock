@@ -1270,11 +1270,9 @@ NewSocketInfo (SOCKET socket)
     infoPtr->writeError = NO_ERROR;
     infoPtr->outstandingSends = 0;
 // TODO: need this to be an fconfigure!
-    infoPtr->maxOutstandingSends = 0;
+    infoPtr->maxOutstandingSends = 1;
 
     infoPtr->OutstandingOps = 0;
-//    infoPtr->IoCountIssued = 0;
-//    infoPtr->OutOfOrderSends = NULL;
     InitializeCriticalSection(&infoPtr->critSec);
     return infoPtr;
 }
@@ -1296,7 +1294,14 @@ FreeSocketInfo (SocketInfo *infoPtr)
     if (infoPtr->localAddr) IocpFree(infoPtr->localAddr);
     if (infoPtr->remoteAddr) IocpFree(infoPtr->remoteAddr);
 
+    if (infoPtr->llPendingAccepts) {
+	/* we can let the list go.  all buffers are removed by the completion thread */
+	IocpLLDestroy(infoPtr->llPendingAccepts, 0);
+    }
     if (infoPtr->readyAccepts) {
+	while ((bufPtr = IocpLLPopFront(infoPtr->readyAccepts, IOCP_LL_NODESTROY)) != NULL) {
+	    FreeBufferObj(bufPtr);
+	}
 	IocpLLDestroy(infoPtr->readyAccepts, 0);
     }
     if (infoPtr->llPendingRecv) {
@@ -1324,6 +1329,7 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
 	IocpFree(bufPtr);
 	return NULL;
     }
+    bufPtr->socket = INVALID_SOCKET;
     bufPtr->buflen = buflen;
     bufPtr->addr = NULL;
     bufPtr->WSAerr = NO_ERROR;
@@ -1337,6 +1343,9 @@ GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
 void
 FreeBufferObj (BufferInfo *bufPtr)
 {
+    if (bufPtr->socket != INVALID_SOCKET) {
+	winSock.closesocket(bufPtr->socket);
+    }
     IocpFree(bufPtr->buf);
     IocpFree(bufPtr);
 }
@@ -1677,6 +1686,7 @@ HandleIo (
 
         /* Get a new SocketInfo for the new client connection. */
         newInfoPtr = NewAcceptSockInfo(bufPtr->socket, infoPtr);
+	bufPtr->socket = INVALID_SOCKET;
 	newInfoPtr->localAddr = IocpAlloc(newInfoPtr->proto->addrLen);
 	memcpy(newInfoPtr->localAddr, local, localLen);
 	newInfoPtr->remoteAddr = IocpAlloc(newInfoPtr->proto->addrLen);
@@ -1851,7 +1861,7 @@ WatchDogThread (LPVOID lpParam)
 
         if (dwWait == WAIT_OBJECT_0) {
 	    /* The wait succeded, therefore we close. */
-            return 0;
+            break;
 
         } else if (dwWait == WAIT_TIMEOUT) {
 	    int optval, optlen, code;
@@ -1859,15 +1869,16 @@ WatchDogThread (LPVOID lpParam)
 	    /* get the first entry on the listening list. */
 //            infoPtr = ????;
             while (infoPtr) {
+		EnterCriticalSection(&infoPtr->llPendingAccepts->lock);
 		bufPtr = infoPtr->llPendingAccepts->front->lpItem;
                 while (bufPtr) {
                     optlen = sizeof(optval);
                     code = winSock.getsockopt(bufPtr->socket, SOL_SOCKET,
 			    SO_CONNECT_TIME, (char *)&optval, &optlen);
                     if (code == SOCKET_ERROR) {
-//                        fprintf(stderr, "getsockopt: SO_CONNECT_TIME failed: %d\n",
-//                                WSAGetLastError());
-                        return -1;
+			/* ignore the error, continue. */
+			bufPtr = bufPtr->node.next->lpItem;
+                        continue;
                     }
                     /*
 		     * If the socket has been connected for more than 5 minutes,
@@ -1876,13 +1887,16 @@ WatchDogThread (LPVOID lpParam)
 		     */
 		    if (optval != 0xFFFFFFFF && optval > 300) {
 			winSock.closesocket(bufPtr->socket);
+			bufPtr->socket = INVALID_SOCKET;
 		    }
 		    bufPtr = bufPtr->node.next->lpItem;
 		}
+		LeaveCriticalSection(&infoPtr->llPendingAccepts->lock);
 //		infoPtr = ????->next;
             }
 	}
     }
+
     return 0;
 }
 
