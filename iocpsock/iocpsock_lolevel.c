@@ -762,15 +762,6 @@ IocpEventProc (
 	return 0;
     }
 
-    __try {
-	if (infoPtr->channel == NULL) {
-	    /* Fixes time-based problem of in-process activity. */
-	    return 1;
-	}
-    } __except(EXCEPTION_EXECUTE_HANDLER) {
-	return 1;
-    }
-
     /*
      * If an accept is ready, pop one only.
      */
@@ -868,7 +859,7 @@ error:
 
     IocpFree(acptInfo);
 
-    /* Requeue another for the next checkProc iteration if one exists. */
+    /* Requeue another for the next checkProc iteration if another readyAccepts exists. */
     EnterCriticalSection(&infoPtr->tsdHome->readySockets->lock);
     if (IocpLLIsNotEmpty(infoPtr->readyAccepts)) {
 	/*
@@ -926,9 +917,16 @@ IocpCloseProc (
      */
     if (initialized) {
 
+	/* Flip the bit so no new stuff can ever come in again. */
+	InterlockedExchange(&infoPtr->ready, 1);
+
 	/* artificially increment the count. */
 	InterlockedIncrement(&infoPtr->outstandingOps);
+
+	/* Setting this means all incoming operations will get trashed. */
 	infoPtr->flags |= IOCP_CLOSING;
+
+	/* Tcl now doesn't recognize us anymore, so don't let this dangle. */
 	infoPtr->channel = NULL;
 
 	if (!(infoPtr->flags & IOCP_ASYNC)) {
@@ -970,21 +968,19 @@ IocpCloseProc (
 
 	} else {
 
-	    /* The non-blocking close.  We don't return any errors to Tcl. */
+	    /* The non-blocking close.  We don't return any errors to Tcl
+	     * and allow the instance to auto-destory itself . */
 
 	    BufferInfo *bufPtr;
 
-	    /*
-	     * Remove all pending ready socket notices that have yet to be queued
-	     * into Tcl's event loop.
-	     */
+	    /* Remove all pending ready socket notices that have yet to be queued
+	     * into Tcl's event loop. */
 	    IocpLLPopAllCompare(infoPtr->tsdHome->readySockets, infoPtr, 0);
 
-	    /*
-	     * Remove all events queued in the event loop for this socket.
-	     */
+	    /* Remove all events queued in the event loop for this socket. */
 	    Tcl_DeleteEvents(IocpRemovePendingEvents, infoPtr);
 
+	    /* Decrement the artificial count. */
     	    if (InterlockedDecrement(&infoPtr->outstandingOps) > 0) {
 		if (infoPtr->proto->DisconnectEx != NULL
 			&& infoPtr->proto->type == SOCK_STREAM
@@ -995,11 +991,12 @@ IocpCloseProc (
 		    PostOverlappedDisconnect(infoPtr, bufPtr);
 
 		} else {
-		    /* TODO: dunno!? */
-		    Tcl_Panic("no such logic for this code path, yet");
+		    //Tcl_Panic("no such logic for this code path, yet");
+		    /* TODO: dunno!? Is this safe? */
+		    infoPtr->flags |= IOCP_CLOSABLE;
 		}
 	    } else {
-		/* all pending operations have ended. */
+		/* All pending operations have ended. */
 		FreeSocketInfo(infoPtr);
 	    }
 
@@ -1056,6 +1053,8 @@ IocpInputProc (
 		/* Too large or have EOF.  Push it back on for later. */
 		IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
 			&bufPtr->node, 0);
+		/* instance is still readable, validate the instance is on the ready list. */
+		IocpZapTclNotifier(infoPtr);
 		break;
 	    }
 	    if (bufPtr->WSAerr != NO_ERROR) {
@@ -1066,11 +1065,7 @@ IocpInputProc (
 	    } else {
 		if (bufPtr->used == 0) {
 		    infoPtr->flags |= IOCP_EOF;
-		    /*
-		     * Setting llPendingRecv to NULL indicates we are not connected.
-		     */
-		    IocpLLDestroy(infoPtr->llPendingRecv);
-		    infoPtr->llPendingRecv = NULL;
+		    return 0;
 		}
 		memcpy(bufPos, bufPtr->buf, bufPtr->used);
 		bytesRead += bufPtr->used;
@@ -2358,8 +2353,6 @@ HandleIo (
 		    FreeBufferObj(newBufPtr);
 		}
 	    }
-	} else {
-	    infoPtr->flags |= IOCP_CLOSING;
 	}
 
 	break;
@@ -2379,12 +2372,10 @@ HandleIo (
 
 	if (!(infoPtr->flags & IOCP_CLOSING)) {
 	    if (bufPtr->WSAerr != NO_ERROR && infoPtr->llPendingRecv) {
-#if 1
 		newBufPtr = GetBufferObj(infoPtr, 0);
 		newBufPtr->WSAerr = bufPtr->WSAerr;
 		/* Force EOF on the read side, too, for a write side error. */
 		IocpPushRecvAlertToTcl(infoPtr, newBufPtr);
-#endif
 	    } else if (infoPtr->watchMask & TCL_WRITABLE) {
 		/* can write more. */
 		IocpZapTclNotifier(infoPtr);
