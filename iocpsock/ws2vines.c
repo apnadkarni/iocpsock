@@ -10,5 +10,7 @@ static WS2ProtocolData vinesProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };

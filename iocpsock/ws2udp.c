@@ -9,6 +9,8 @@ static WS2ProtocolData udp4ProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -17,6 +19,8 @@ static WS2ProtocolData udp6ProtoData = {
     SOCK_DGRAM,
     IPPROTO_UDP,
     sizeof(SOCKADDR_IN6),
+    NULL,
+    NULL,
     NULL,
     NULL,
     NULL,

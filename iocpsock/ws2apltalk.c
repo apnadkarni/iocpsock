@@ -10,5 +10,7 @@ static WS2ProtocolData apltalkProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };

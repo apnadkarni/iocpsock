@@ -10,5 +10,7 @@ static WS2ProtocolData netbiosProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };

@@ -10,6 +10,8 @@ static WS2ProtocolData irdaProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 

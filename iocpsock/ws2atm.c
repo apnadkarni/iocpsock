@@ -10,5 +10,7 @@ static WS2ProtocolData atmProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };

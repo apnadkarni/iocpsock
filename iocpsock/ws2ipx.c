@@ -11,6 +11,8 @@ static WS2ProtocolData ipxProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -19,6 +21,8 @@ static WS2ProtocolData spxSequencedProtoData = {
     SOCK_SEQPACKET,
     NSPROTO_SPX,
     sizeof(SOCKADDR_IPX),
+    NULL,
+    NULL,
     NULL,
     NULL,
     NULL,
@@ -35,6 +39,8 @@ static WS2ProtocolData spxStreamProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -47,6 +53,8 @@ static WS2ProtocolData spx2SequencedProtoData = {
     NULL,
     NULL,
     NULL,
+    NULL,
+    NULL,
     NULL
 };
 
@@ -55,6 +63,8 @@ static WS2ProtocolData spx2StreamProtoData = {
     SOCK_STREAM,
     NSPROTO_SPXII,
     sizeof(SOCKADDR_IPX),
+    NULL,
+    NULL,
     NULL,
     NULL,
     NULL,
