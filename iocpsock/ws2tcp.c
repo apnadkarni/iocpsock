@@ -277,9 +277,13 @@ CreateTcp4Socket(
 
 	/* post IOCP_ACCEPT_COUNT accepts. */
         for(i=0; i < IOCP_ACCEPT_COUNT ;i++) {
-	    BufferInfo *acceptobj;
-	    acceptobj = GetBufferObj(infoPtr, IOCP_ACCEPT_BUFSIZE);
-            PostOverlappedAccept(infoPtr, acceptobj);
+	    BufferInfo *bufPtr;
+	    bufPtr = GetBufferObj(infoPtr, IOCP_ACCEPT_BUFSIZE);
+	    if (PostOverlappedAccept(infoPtr, bufPtr) != NO_ERROR) {
+		/* Oh no, the AcceptEx failed. */
+		FreeBufferObj(bufPtr);
+		goto error;
+	    }
         }
 
     } else {

@@ -1794,6 +1794,7 @@ HandleIo (
 		if (PostOverlappedRecv(newInfoPtr, newBufPtr) != NO_ERROR) {
 		    /* Oh no, the WSARecv failed. */
 		    FreeBufferObj(newBufPtr);
+		    break;
 		}
 	    }
 	} else {
@@ -1895,6 +1896,7 @@ HandleIo (
 		if (PostOverlappedRecv(infoPtr, newBufPtr) != NO_ERROR) {
 		    /* Oh no, the WSARecv failed. */
 		    FreeBufferObj(newBufPtr);
+		    break;
 		}
 	    }
 	}
