@@ -309,23 +309,32 @@ CreateTcp4Socket(
 	 * Attempt to connect to the remote.
 	 */
 
-	bufPtr = GetBufferObj(infoPtr, 0);
-	bufPtr->operation = OP_CONNECT;
+	if (async) {
+	    bufPtr = GetBufferObj(infoPtr, 0);
+	    bufPtr->operation = OP_CONNECT;
 
-	code = tcp4ProtoData.ConnectEx(sock, hostaddr->ai_addr,
-		hostaddr->ai_addrlen, bufPtr->buf, bufPtr->buflen,
-		&bytes, &bufPtr->ol);
+	    code = tcp4ProtoData.ConnectEx(sock, hostaddr->ai_addr,
+		    hostaddr->ai_addrlen, bufPtr->buf, bufPtr->buflen,
+		    &bytes, &bufPtr->ol);
 
-	WSAerr = winSock.WSAGetLastError();
-	if (code == FALSE) {
-	    if (WSAerr != WSA_IO_PENDING) {
-		FreeBufferObj(bufPtr);
-		goto error;
+	    WSAerr = winSock.WSAGetLastError();
+	    if (code == FALSE) {
+		if (WSAerr != WSA_IO_PENDING) {
+		    FreeBufferObj(bufPtr);
+		    FreeSocketAddress(hostaddr);
+		    goto error;
+		}
+	    } else {
+		/* Operation completed now instead of being queued. */
+		HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes,
+			WSAerr, 0);
 	    }
 	} else {
-	    /* Operation completed now instead of being queued. */
-	    HandleIo(infoPtr, bufPtr, IocpSubSystem.port, bytes,
-		    WSAerr, 0);
+	    code = winSock.connect(sock, hostaddr->ai_addr, hostaddr->ai_addrlen);
+	    if (code == SOCKET_ERROR) {
+		FreeSocketAddress(hostaddr);
+		goto error;
+	    }
 	}
 	FreeSocketAddress(hostaddr);
     }
