@@ -338,19 +338,20 @@ extern __inline BOOL	IocpFree (LPVOID block);
 #define IOCP_LL_NOLOCK		(1<<0)
 #define IOCP_LL_NODESTROY	(1<<1)
 
-extern LPLLIST		IocpLLCreate();
-extern BOOL		IocpLLDestroy(LPLLIST ll);
-extern LPLLNODE		IocpLLPushBack(LPLLIST ll, LPVOID lpItem,
+extern LPLLIST		IocpLLCreate ();
+extern BOOL		IocpLLDestroy (LPLLIST ll);
+extern LPLLNODE		IocpLLPushBack (LPLLIST ll, LPVOID lpItem,
 				LPLLNODE pnode);
-extern LPLLNODE		IocpLLPushFront(LPLLIST ll, LPVOID lpItem,
+extern LPLLNODE		IocpLLPushFront (LPLLIST ll, LPVOID lpItem,
 				LPLLNODE pnode);
-extern BOOL		IocpLLPop(LPLLNODE node, DWORD dwState);
-extern BOOL		IocpLLPopAll(LPLLIST ll, LPLLNODE snode, DWORD dwState);
-extern BOOL		IocpLLPopAllCompare(LPLLIST ll, LPVOID lpItem, DWORD dwState);
-extern LPVOID		IocpLLPopBack(LPLLIST ll, DWORD dwState, DWORD timeout);
-extern LPVOID		IocpLLPopFront(LPLLIST ll, DWORD dwState, DWORD timeout);
-extern BOOL		IocpLLIsNotEmpty(LPLLIST ll);
-extern BOOL		IocpLLNodeDestroy(LPLLNODE node);
+extern BOOL		IocpLLPop (LPLLNODE node, DWORD dwState);
+extern BOOL		IocpLLPopAll (LPLLIST ll, LPLLNODE snode, DWORD dwState);
+extern BOOL		IocpLLPopAllCompare (LPLLIST ll, LPVOID lpItem, DWORD dwState);
+extern LPVOID		IocpLLPopBack (LPLLIST ll, DWORD dwState, DWORD timeout);
+extern LPVOID		IocpLLPopFront (LPLLIST ll, DWORD dwState, DWORD timeout);
+extern BOOL		IocpLLIsNotEmpty (LPLLIST ll);
+extern BOOL		IocpLLNodeDestroy (LPLLNODE node);
+extern SIZE_T		IocpLLGetCount (LPLLIST ll);
 
 /* special hack jobs! */
 extern BOOL PASCAL	OurConnectEx(SOCKET s, const struct sockaddr* name,

@@ -643,9 +643,7 @@ IocpEventCheckProc (
      * of now.
      */
 
-    EnterCriticalSection(&tsdPtr->readySockets->lock);
-    evCount = tsdPtr->readySockets->lCount;
-    LeaveCriticalSection(&tsdPtr->readySockets->lock);
+    evCount = IocpLLGetCount(tsdPtr->readySockets);
 
     while (evCount--) {
 	infoPtr = IocpLLPopFront(tsdPtr->readySockets, 0, 0);
@@ -2458,6 +2456,35 @@ IocpLLIsNotEmpty (LPLLIST ll)
     b = (ll->lCount != 0);
     LeaveCriticalSection(&ll->lock);
     return b;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * IocpLLGetCount --
+ *
+ *	How many nodes are on the list?
+ *
+ * Results:
+ *	Count of entries.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+SIZE_T
+IocpLLGetCount (LPLLIST ll)
+{
+    SIZE_T c;
+    if (!ll) {
+	return 0;
+    }
+    EnterCriticalSection(&ll->lock);
+    c = ll->lCount;
+    LeaveCriticalSection(&ll->lock);
+    return c;
 }
 
 
