@@ -1148,7 +1148,7 @@ IocpOutputProc (
     bufPtr = GetBufferObj(infoPtr, toWrite);
     memcpy(bufPtr->buf, buf, toWrite);
     if (PostOverlappedSend(infoPtr, bufPtr) == WSAENOBUFS) {
-	/* Would have been over the sendcap value. */
+	/* Would have been over the sendcap restriction. */
 	*errorCodePtr = EWOULDBLOCK;
 	return -1;
     }
@@ -1835,9 +1835,12 @@ IocpPushRecvAlertToTcl(SocketInfo *infoPtr, BufferInfo *bufPtr)
 
     /*
      * Let IocpCheckProc() know this new channel has a ready
-     * event (a recv) that needs servicing.
+     * event (a recv) that needs servicing.  That is, if Tcl
+     * interested in knowing about it.
      */
-    IocpZapTclNotifier(infoPtr);
+    if (infoPtr->watchMask & TCL_READABLE) {
+	IocpZapTclNotifier(infoPtr);
+    }
 }
 
 DWORD
@@ -2436,16 +2439,15 @@ HandleIo (
 	    break;
 	}
 
-	if (!(infoPtr->flags & IOCP_CLOSING)) {
-	    if (bufPtr->WSAerr != NO_ERROR && infoPtr->llPendingRecv) {
-		newBufPtr = GetBufferObj(infoPtr, 0);
-		newBufPtr->WSAerr = bufPtr->WSAerr;
-		/* Force EOF on the read side, too, for a write side error. */
-		IocpPushRecvAlertToTcl(infoPtr, newBufPtr);
-	    } else if (infoPtr->watchMask & TCL_WRITABLE) {
-		/* can write more. */
-		IocpZapTclNotifier(infoPtr);
-	    }
+	if (bufPtr->WSAerr != NO_ERROR && infoPtr->llPendingRecv) {
+	    newBufPtr = GetBufferObj(infoPtr, 0);
+	    newBufPtr->WSAerr = bufPtr->WSAerr;
+	    /* Force EOF on the read side, too, for a write side error. */
+	    IocpPushRecvAlertToTcl(infoPtr, newBufPtr);
+	} else if (infoPtr->watchMask & TCL_WRITABLE &&
+		infoPtr->outstandingSends < infoPtr->outstandingSendCap) {
+	    /* can write more. */
+	    IocpZapTclNotifier(infoPtr);
 	}
 	FreeBufferObj(bufPtr);
 	break;
