@@ -801,16 +801,24 @@ IocpCloseProc (
 {
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
-    int errorCode = 0;
-    HANDLE socket;
+    int errorCode = 0, WSAerr;
 
     // The core wants to close channels after the exit handler!
     // Our heap is gone!
     if (initialized) {
 	EnterCriticalSection(&infoPtr->critSec);
-	socket = (HANDLE)infoPtr->socket;
 	infoPtr->flags |= IOCP_CLOSING;
 	infoPtr->channel = NULL;
+
+	if (infoPtr->proto->type == SOCK_STREAM) {
+	    WSAerr = winSock.WSASendDisconnect(infoPtr->socket, NULL);
+	    if (WSAerr) {
+		IocpWinConvertWSAError(WSAerr);
+		errorCode = Tcl_GetErrno();
+	    }
+	}
+
+	CancelIo((HANDLE)infoPtr->socket);
 
 	/*
 	 * Remove all events queued in the event loop for this socket.
@@ -821,10 +829,8 @@ IocpCloseProc (
 
 	/*
 	 * Upon letting go of our lock, infoPtr can dissapear out from
-	 * under us.
+	 * under us!
 	 */
-
-	CancelIo(socket);
     }
 
     return errorCode;
