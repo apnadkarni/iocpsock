@@ -1,4 +1,4 @@
-iocpsock.dll -- ver 0.4 (Sat Feb 15 17:51:23 2003)
+iocpsock.dll -- ver 0.5 (xxxx)
 
 http://sf.net/project/showfiles.php?group_id=73356
 http://sf.net/projects/iocpsock
@@ -41,6 +41,9 @@ called [socket2] and behaves just like the stock one.
   A: Yes.  Win2K and WinXP.  It might work on NT4, though.  It can't
      work any of the Win9x flavors because completion ports are an OS
      feature of NT.
+
+* CHANGES from 0.4:
+  - now takes ipv6 addresses and creates ipv6 sockets when asked.
 
 * CHANGES from 0.3:
   - Properly works under threads.  Tcl_DeleteEventSource called in
