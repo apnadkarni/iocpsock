@@ -20,6 +20,7 @@
 #   endif
 #   pragma comment (lib, "user32.lib")
 #   pragma comment (lib, "kernel32.lib")
+#   pragma comment (lib, "ws2_32.lib")
 #endif
 
 
@@ -96,6 +97,6 @@ Iocpsock_Init (Tcl_Interp *interp)
     Tcl_MutexUnlock(&initLock);
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
-    Tcl_PkgProvide(interp, "Iocpsock", "1.0");
+    Tcl_PkgProvide(interp, "Iocpsock", IOCPSOCK_VERSION);
     return TCL_OK;
 }
