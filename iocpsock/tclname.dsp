@@ -84,5 +84,13 @@ LINK32=link.exe
 
 SOURCE=.\tclname.c
 # End Source File
+# Begin Source File
+
+SOURCE=.\tclWinError.c
+# End Source File
+# Begin Source File
+
+SOURCE=.\tclWinError.h
+# End Source File
 # End Target
 # End Project
