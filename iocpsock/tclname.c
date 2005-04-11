@@ -152,14 +152,12 @@ ParseNameProtocol (Tcl_Obj *line)
 	/* get command */
 	if (Tcl_GetIndexFromObj(NULL, objv[0], cmdStings, "", TCL_EXACT,
 		&command) != TCL_OK) {
-	    Tcl_SetErrno(EINVAL);
 	    SendPosixErrorData(501, "no such command", EINVAL);
 	    return;
 	}
 	/* get namespace */
 	if (Tcl_GetIndexFromObj(NULL, objv[1], nsStings, "", TCL_EXACT,
 		&nameSpace) != TCL_OK) {
-	    Tcl_SetErrno(EINVAL);
 	    SendPosixErrorData(502, "no such namespace", EINVAL);
 	    return;
 	}
@@ -206,6 +204,7 @@ SendPosixErrorData (int protocolCode, CONST char *msg, int errorCode)
 {
     Tcl_Obj *output = Tcl_NewObj();
 
+    Tcl_SetErrno(errorCode);
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(protocolCode));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(msg, -1));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj("POSIX", -1));
