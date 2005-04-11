@@ -2,13 +2,17 @@
 #include <errno.h>
 
 #ifdef __WIN32__
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include "tclWinError.h"
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment (lib, "ws2_32.lib")
-#pragma comment (lib, "tcl85g.lib")
+#   define WIN32_LEAN_AND_MEAN
+#   include <windows.h>
+#   include "tclWinError.h"
+#   include <winsock2.h>
+#   include <ws2tcpip.h>
+#   pragma comment (lib, "ws2_32.lib")
+#   ifdef _DEBUG
+#	pragma comment (lib, "tcl85g.lib")
+#   else
+#	pragma comment (lib, "tcl85.lib")
+#   endif
 #endif
 
 
@@ -118,7 +122,7 @@ StdinReadable (ClientData clientData, int mask)
 	    /* not EOF, get the error code */
 	    SendPosixErrorData(500, "Tcl_GetsObj() failed", Tcl_GetErrno());
 	}
-	/* cause the event loop is drop-out, thus exit */
+	/* cause the event loop to drop-out, thus exit */
 	done = 1;
     }
     Tcl_DecrRefCount(line);
