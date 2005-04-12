@@ -3,6 +3,8 @@
 
 #ifdef __WIN32__
 #   define WIN32_LEAN_AND_MEAN
+    /* Enables NT5 special features. */
+#   define _WIN32_WINNT 0x0500
 #   include <windows.h>
 #   include "tclWinError.h"
 #   include <winsock2.h>
@@ -27,6 +29,7 @@ Tcl_FileProc StdinReadable;
 void ParseNameProtocol (Tcl_Obj *line);
 void SendStart(void);
 void SendReady(void);
+void SendProtocolError (int protocolCode, CONST char *msg);
 void SendPosixErrorData (int protocolCode, CONST char *msg, int errorCode);
 #ifdef __WIN32__
 void SendWinErrorData (int protocolCode, CONST char *msg, DWORD errorCode);
@@ -69,6 +72,7 @@ Init (CONST char *appName)
     Tcl_CreateChannelHandler(inChan, TCL_READABLE, StdinReadable, inChan);
     Tcl_SetChannelOption(NULL, inChan, "-buffering", "line");
     Tcl_SetChannelOption(NULL, inChan, "-blocking", "no");
+    /* Use UTF-8 to avoid data loss */
     Tcl_SetChannelOption(NULL, inChan, "-encoding", "utf-8");
 
     isIpRE_IPv4 = Tcl_NewStringObj("^((25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)(\\.(25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)){3})$", -1);
@@ -146,19 +150,19 @@ ParseNameProtocol (Tcl_Obj *line)
     /* form is "<command> <namespace> <arg1> [<arg2>]" using Tcl list rules. */
     if (Tcl_ListObjGetElements(NULL, line, &objc, &objv) == TCL_OK) {
 	if (objc < 3 || objc > 5) {
-	    SendPosixErrorData(500, "improper number of arguments", EINVAL);
+	    SendProtocolError(600, "improper number of arguments");
 	    return;
 	}
 	/* get command */
 	if (Tcl_GetIndexFromObj(NULL, objv[0], cmdStings, "", TCL_EXACT,
 		&command) != TCL_OK) {
-	    SendPosixErrorData(501, "no such command", EINVAL);
+	    SendProtocolError(600, "no such command");
 	    return;
 	}
 	/* get namespace */
 	if (Tcl_GetIndexFromObj(NULL, objv[1], nsStings, "", TCL_EXACT,
 		&nameSpace) != TCL_OK) {
-	    SendPosixErrorData(502, "no such namespace", EINVAL);
+	    SendProtocolError(600, "no such namespace");
 	    return;
 	}
 	/* get arg1 */
@@ -195,8 +199,30 @@ SendReady(void)
 }
 
 void
+SendAnswers(Tcl_Obj *question, Tcl_Obj *answers)
+{
+    Tcl_Obj *output = Tcl_NewObj();
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(201));
+    Tcl_ListObjAppendElement(NULL, output, question);
+    Tcl_ListObjAppendElement(NULL, output, answers);
+    Tcl_WriteObj(outChan, output);
+    Tcl_WriteChars(outChan, "\n", -1);
+    Tcl_DecrRefCount(output);
+}
+
+void
 SendProtocolError (int protocolCode, CONST char *msg)
 {
+    Tcl_Obj *output = Tcl_NewObj();
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(protocolCode));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(msg, -1));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj("NAME", -1));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj("", -1));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(0));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj("", -1));
+    Tcl_WriteObj(outChan, output);
+    Tcl_DecrRefCount(output);
+    Tcl_WriteChars(outChan, "\n", -1);
 }
 
 void
@@ -204,7 +230,10 @@ SendPosixErrorData (int protocolCode, CONST char *msg, int errorCode)
 {
     Tcl_Obj *output = Tcl_NewObj();
 
-    Tcl_SetErrno(errorCode);
+    /* Assert this, should we be faking it for some purpose. */
+    if (Tcl_GetErrno() != errorCode) {
+	Tcl_SetErrno(errorCode);
+    }
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(protocolCode));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(msg, -1));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj("POSIX", -1));
@@ -237,8 +266,9 @@ SendWinErrorData (int protocolCode, CONST char *msg, DWORD errorCode)
 /***********************************************************************/
 
 void Do_IP_Work(int addressFamily, Tcl_Obj *question);
-void Do_IrDA_Work(enum Command command, Tcl_Obj *arg1, Tcl_Obj *arg2);
 int isIp (Tcl_Obj *name);
+void Do_IrDA_Work(enum Command command, Tcl_Obj *question, Tcl_Obj *argument);
+int Do_IrDA_Discovery (Tcl_Obj **answers);
 
 void
 DoNameWork (enum Command command, enum NameSpace nameSpace,
@@ -259,7 +289,7 @@ DoNameWork (enum Command command, enum NameSpace nameSpace,
 		    aFamily = AF_INET6; break;
 	    }
 	    if (command != NAME_QUERY) {
-		SendPosixErrorData(504, "The IP namespace only supports the query command", EINVAL);
+		SendProtocolError(600, "The IP namespace only supports the query command");
 		return;
 	    }
 	    Do_IP_Work(aFamily, arg1);
@@ -275,8 +305,11 @@ Do_IP_Work (int addressFamily, Tcl_Obj *question)
 {
     struct addrinfo hints;
     struct addrinfo *hostaddr, *addr;
-    int result, type;
-    Tcl_Obj *answers, *output;
+    int result, type, len;
+    CONST char *utf8Chars;
+    Tcl_Obj *answers;
+    Tcl_DString dnsTxt;
+    Tcl_Encoding dnsEnc;
 
     memset(&hints, 0, sizeof(struct addrinfo));
     hints.ai_flags  = 0;
@@ -284,15 +317,26 @@ Do_IP_Work (int addressFamily, Tcl_Obj *question)
     hints.ai_socktype = 0;
     hints.ai_protocol = 0;
 
-    result = getaddrinfo(Tcl_GetString(question), "", &hints, &hostaddr);
+    /*
+     * DNS appears to be ASCII limited historically, but may, in fact,
+     * support ISO-8859-1 in extended implemenations of BIND.
+     *
+     * TODO: find out for sure if ISO-8859-1 is acceptable.
+     */
+    dnsEnc = Tcl_GetEncoding(NULL, "ascii");
 
-    if (result != 0) {
+    Tcl_DStringInit(&dnsTxt);
+    utf8Chars = Tcl_GetStringFromObj(question, &len);
+    Tcl_UtfToExternalDString(dnsEnc, utf8Chars, len, &dnsTxt);
+
+    if ((result = getaddrinfo(Tcl_DStringValue(&dnsTxt), "", &hints,
+	    &hostaddr)) != 0) {
 #ifdef __WIN32__
-	SendWinErrorData(401, "lookup failed on getaddrinfo()", WSAGetLastError());
+	SendWinErrorData(405, "lookup failed on getaddrinfo()", WSAGetLastError());
 #else
 	/* TODO */
 #endif
-	return;
+	goto error1;
     }
 
     answers = Tcl_NewObj();
@@ -310,31 +354,32 @@ Do_IP_Work (int addressFamily, Tcl_Obj *question)
 	char hostStr[NI_MAXHOST];
 	int err;
 
-	err = getnameinfo(addr->ai_addr, addr->ai_addrlen, hostStr, NI_MAXHOST, NULL,
-		0, type);
+	err = getnameinfo(addr->ai_addr, addr->ai_addrlen, hostStr,
+		NI_MAXHOST, NULL, 0, type);
+
 	if (err == 0) {
-	    Tcl_ListObjAppendElement(NULL, answers, Tcl_NewStringObj(hostStr,-1));
+	    Tcl_ExternalToUtfDString(dnsEnc, hostStr, -1, &dnsTxt);
+	    Tcl_ListObjAppendElement(NULL, answers,
+		    Tcl_NewStringObj(Tcl_DStringValue(&dnsTxt),
+		    Tcl_DStringLength(&dnsTxt)));
 	} else {
 #ifdef __WIN32__
-	    SendWinErrorData(401, "lookup failed on getnameinfo()", WSAGetLastError());
+	    SendWinErrorData(406, "lookup failed on getnameinfo()", WSAGetLastError());
 #else
 	    /* TODO */
 #endif
-	    goto error;
+	    goto error2;
 	}
-
 	addr = addr->ai_next;
     }
 
-    /* reply code numeric */
-    output = Tcl_NewStringObj("201", -1);
-    Tcl_ListObjAppendElement(NULL, output, question);
-    Tcl_ListObjAppendElement(NULL, output, answers);
-    Tcl_WriteObj(outChan, output);
-    Tcl_WriteChars(outChan, "\n", -1);
-    Tcl_DecrRefCount(output);
-error:
+    /* reply with answers */
+    SendAnswers(question, answers);
+
+error2:
     freeaddrinfo(hostaddr);
+error1:
+    Tcl_DStringFree(&dnsTxt);
     return;
 }
 
@@ -354,6 +399,135 @@ isIp (Tcl_Obj *name)
 }
 
 void
-Do_IrDA_Work (enum Command command, Tcl_Obj *arg1, Tcl_Obj *arg2)
+Do_IrDA_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument)
 {
+    Tcl_Obj *answers = NULL;
+    switch (command) {
+	case NAME_QUERY:
+	    /* asterix means "get all", aka discovery.. */
+	    if (strcmp(Tcl_GetString(question), "*") == 0) {
+		if (Do_IrDA_Discovery(&answers) != TCL_OK) {
+		    /* error msg already sent. */
+		    return;
+		}
+	    } else {
+	    }
+	    break;
+	case NAME_REGISTER:
+	case NAME_UNREGISTER:
+	    break;
+    }
+    /* reply with answers */
+    SendAnswers(question, answers);
+}
+
+/* win specific */
+#include <af_irda.h>
+
+int
+Do_IrDA_Discovery (Tcl_Obj **answers)
+{
+    SOCKET sock;
+    DEVICELIST *deviceListStruct;
+    IRDA_DEVICE_INFO* thisDevice;
+    int code, charSet, nameLen, size, limit;
+    unsigned i, bit;
+    char isocharset[] = "iso-8859-?", *nameEnc;
+    Tcl_Encoding enc;
+    Tcl_Obj* entry[3];
+    const char *hints1[] = {
+	"PnP", "PDA", "Computer", "Printer", "Modem", "Fax", "LAN", NULL
+    };
+    const char *hints2[] = {
+	"Telephony", "Server", "Comm", "Message", "HTTP", "OBEX", NULL
+    };
+    char formatedId[12];
+    Tcl_DString deviceDString;
+
+    /* dunno... */
+    limit = 20;
+
+    /*
+     * First make an IrDA socket.
+     */
+
+    sock = WSASocket(AF_IRDA, SOCK_STREAM, 0, NULL, 0,
+	    WSA_FLAG_OVERLAPPED);
+
+    if (sock == INVALID_SOCKET) {
+	SendWinErrorData(407, "Cannot create IrDA socket", WSAGetLastError());
+	return TCL_ERROR;
+    }
+
+    /*
+     * Alloc the list we'll hand to getsockopt.
+     */
+
+    size = sizeof(DEVICELIST) - sizeof(IRDA_DEVICE_INFO)
+	    + (sizeof(IRDA_DEVICE_INFO) * limit);
+    deviceListStruct = (DEVICELIST *) ckalloc(size);
+    deviceListStruct->numDevice = 0;
+
+    code = getsockopt(sock, SOL_IRLMP, IRLMP_ENUMDEVICES,
+	    (char*) deviceListStruct, &size);
+
+    if (code == SOCKET_ERROR) {
+	SendWinErrorData(408, "getsockopt() failed", WSAGetLastError());
+	ckfree((char *)deviceListStruct);
+	return TCL_ERROR;
+    }
+
+    /*
+     * Create the output Tcl_Obj, if none exists there.
+     */
+
+    if (*answers == NULL) {
+	*answers = Tcl_NewObj();
+    }
+
+    for (i = 0; i < deviceListStruct->numDevice; i++) {
+	thisDevice = deviceListStruct->Device+i;
+	sprintf(formatedId, "%02x-%02x-%02x-%02x",
+		thisDevice->irdaDeviceID[0], thisDevice->irdaDeviceID[1],
+		thisDevice->irdaDeviceID[2], thisDevice->irdaDeviceID[3]);
+	entry[0] = Tcl_NewStringObj(formatedId, 11);
+	charSet = (thisDevice->irdaCharSet) & 0xff;
+	switch (charSet) {
+	    case 0xff:
+		nameEnc = "unicode"; break;
+	    case 0:
+		nameEnc = "ascii"; break;
+	    default:
+		nameEnc = isocharset; 
+		isocharset[9] = charSet + '0';
+		break;
+	}
+	enc = Tcl_GetEncoding(NULL, nameEnc);
+	nameLen = (thisDevice->irdaDeviceName)[21] ? 22 :
+		strlen(thisDevice->irdaDeviceName);
+	Tcl_ExternalToUtfDString(enc, thisDevice->irdaDeviceName,
+		nameLen, &deviceDString);
+	Tcl_FreeEncoding(enc);
+	entry[1] = Tcl_NewStringObj(Tcl_DStringValue(&deviceDString),
+		Tcl_DStringLength(&deviceDString));
+	Tcl_DStringFree(&deviceDString);
+	entry[2] = Tcl_NewObj();
+	for (bit=0; hints1[bit]; ++bit) {
+	    if (thisDevice->irdaDeviceHints1 & (1<<bit))
+		Tcl_ListObjAppendElement(NULL, entry[2],
+			Tcl_NewStringObj(hints1[bit],-1));
+	}
+	for (bit=0; hints2[bit]; ++bit) {
+	    if (thisDevice->irdaDeviceHints2 & (1<<bit))
+		Tcl_ListObjAppendElement(NULL, entry[2],
+			Tcl_NewStringObj(hints2[bit],-1));
+	}
+	Tcl_ListObjAppendElement(NULL, *answers,
+		Tcl_NewListObj(3, entry));
+    }
+
+    ckfree((char *)deviceListStruct);
+    closesocket(sock);
+
+    return TCL_OK;
 }
