@@ -1509,9 +1509,10 @@ IocpGetOptionProc (
 	}
     }
 
-    if ((len == 0) ||
-            ((len > 1) && (optionName[1] == 'p') &&
-                    (strncmp(optionName, "-peername", len) == 0))) {
+    if ((infoPtr->readyAccepts == NULL) /* not a listening socket*/
+	    && ((len == 0) || ((len > 1) && (optionName[1] == 'p') &&
+            (strncmp(optionName, "-peername", len) == 0))))
+    {
         if (infoPtr->remoteAddr == NULL) {
 	    size = infoPtr->proto->addrLen;
 	    infoPtr->remoteAddr = IocpAlloc(size);
