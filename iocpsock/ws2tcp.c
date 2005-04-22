@@ -160,19 +160,29 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
     Tcl_Obj *result = Tcl_NewObj();
 
     /* Get the numeric IP string. */
-    getnameinfo(addr, info->proto->addrLen, name, NI_MAXHOST, NULL,
-	    0, NI_NUMERICHOST);
-    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+    if (getnameinfo(addr, info->proto->addrLen, name, NI_MAXHOST, NULL,
+	    0, NI_NUMERICHOST) == NO_ERROR) {
+	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+    } else {
+	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj("", -1));
+    }
 
     /* Get resolved name string from the IP. */
-    getnameinfo(addr, info->proto->addrLen, name, NI_MAXHOST, NULL,
-	    0, 0);
-    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+    if (getnameinfo(addr, info->proto->addrLen, name, NI_MAXHOST, NULL,
+	    0, 0) == NO_ERROR) {
+	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+    } else {
+	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj("", -1));
+    }
 
     /* Get port numeric string. */
-    getnameinfo(addr, info->proto->addrLen, NULL, 0, name,
-	    NI_MAXSERV, NI_NUMERICSERV);
-    Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+    if (getnameinfo(addr, info->proto->addrLen, NULL, 0, name,
+	    NI_MAXSERV, NI_NUMERICSERV) == NO_ERROR) {
+	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
+    } else {
+	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj("", -1));
+    }
+
     return result;
 }
 
@@ -338,7 +348,10 @@ CreateTcpSocket(
 	}
     }
     addr = hostaddr;
-    /* if we have more than one and being passive, choose ipv4. */
+    /* 
+     * If we have more than one and being passive (bind() for a listen()),
+     * choose ipv4.
+     */
     if (addr->ai_next && host == NULL) {
 	while (addr->ai_family != AF_INET && addr->ai_next) {
 	    addr = addr->ai_next;
