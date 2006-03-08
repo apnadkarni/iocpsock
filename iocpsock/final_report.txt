@@ -167,4 +167,4 @@ I can change the receive algo to a "zero-byte" mode if you desire more
 efficient memory usage for the webserver.  BTW, Phil is constantly remarking
 on the webserver bloat.  Do you want this improved?  Please speak with me
 about the price as I can do this for you "per job" rather than "per hour"
-which I'm almost positive fits your business model more appropriatly.
+which I'm almost positive fits your business model more appropriately.
