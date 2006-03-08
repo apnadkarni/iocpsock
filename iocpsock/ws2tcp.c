@@ -153,13 +153,33 @@ TcpAcceptCallbackProc (
 }
 
 
+/*
+ *----------------------------------------------------------------------
+ *
+ * DecodeIpSockaddr --
+ *
+ *	Decodes the info from the sockaddr_in.
+ *
+ * Results:
+ *	A Tcl_Obj* as a list in the form {IP, name, port}.  name will
+ *	be empty, if the resolve fails.  The caller must free the
+ *	Tcl_Obj* when done.
+ *
+ * Side effects:
+ *	Reverse resolve may block for an unknown amount of time.
+ *
+ *----------------------------------------------------------------------
+ */
+
 Tcl_Obj *
 DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
 {
     char name[NI_MAXHOST];
     Tcl_Obj *result = Tcl_NewObj();
 
-    /* Get the numeric IP string. */
+    /*
+     * Get the numeric IP string.
+     */
     if (getnameinfo(addr, info->proto->addrLen, name, NI_MAXHOST, NULL,
 	    0, NI_NUMERICHOST) == NO_ERROR) {
 	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
@@ -167,7 +187,10 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
 	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj("", -1));
     }
 
-    /* Get resolved name string from the IP. */
+    /*
+     * Get the reverse resolved name through DNS from the IP.
+     * This may block for an unknown amount of time.
+     */
     if (getnameinfo(addr, info->proto->addrLen, name, NI_MAXHOST, NULL,
 	    0, 0) == NO_ERROR) {
 	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
@@ -175,7 +198,9 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
 	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj("", -1));
     }
 
-    /* Get port numeric string. */
+    /*
+     * Get port numeric string.
+     */
     if (getnameinfo(addr, info->proto->addrLen, NULL, 0, name,
 	    NI_MAXSERV, NI_NUMERICSERV) == NO_ERROR) {
 	Tcl_ListObjAppendElement(NULL, result, Tcl_NewStringObj(name, -1));
