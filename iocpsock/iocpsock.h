@@ -417,9 +417,15 @@ extern char *		GetSysMsg (DWORD id);
 extern Tcl_Obj *	GetSysMsgObj (DWORD id);
 extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
 extern Tcl_ObjCmdProc	Iocp_IrdaDiscoveryCmd;
+extern Tcl_ObjCmdProc	Iocp_IrdaIasQueryCmd;
+extern Tcl_ObjCmdProc	Iocp_IrdaIasSetCmd;
+extern Tcl_ObjCmdProc	Iocp_IrdaLazyDiscoveryCmd;
 extern FN_DECODEADDR	DecodeIpSockaddr;
 extern int		Iocp_IrdaDiscovery (Tcl_Interp *interp,
 			    Tcl_Obj **deviceList, int limit);
+extern int		Iocp_IrdaIasQuery (Tcl_Interp *interp,
+			    Tcl_Obj *deviceId, Tcl_Obj *serviceName,
+			    Tcl_Obj *attribName, Tcl_Obj **value);
 
 
 /*

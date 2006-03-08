@@ -69,7 +69,9 @@ Iocp_IrdaDiscovery (Tcl_Interp *interp, Tcl_Obj **deviceList, int limit)
      * First make an IrDA socket.
      */
 
-    sock = winSock.socket(AF_IRDA, SOCK_STREAM, 0);
+    sock = winSock.WSASocket(AF_IRDA, SOCK_STREAM, 0, NULL, 0,
+	    WSA_FLAG_OVERLAPPED);
+
     if (sock == INVALID_SOCKET) {
 	IocpWinConvertWSAError((DWORD) winSock.WSAGetLastError());
 	Tcl_AppendResult(interp, "Cannot create IrDA socket: ",
@@ -151,6 +153,134 @@ Iocp_IrdaDiscovery (Tcl_Interp *interp, Tcl_Obj **deviceList, int limit)
 
     return TCL_OK;
 }
+
+int
+Iocp_IrdaIasQuery (Tcl_Interp *interp, Tcl_Obj *deviceId,
+	Tcl_Obj *serviceName, Tcl_Obj *attribName, Tcl_Obj **value)
+{
+    SOCKET sock;
+    int code, size = sizeof(IAS_QUERY);
+    IAS_QUERY iasQuery;
+
+    /*
+     * Decode irdaDeviceId
+     */
+    code = sscanf(Tcl_GetString(deviceId), "%02x-%02x-%02x-%02x",
+	&iasQuery.irdaDeviceID[0], &iasQuery.irdaDeviceID[1],
+	&iasQuery.irdaDeviceID[2], &iasQuery.irdaDeviceID[3]);
+    if (code != 4) {
+	Tcl_AppendResult(interp, "Malformed IrDA DeviceID.  Must be in the form \"FF-FF-FF-FF.\"",
+		NULL);
+	return TCL_ERROR;
+    }
+
+    /*
+     * First, make an IrDA socket.
+     */
+
+    sock = winSock.socket(AF_IRDA, SOCK_STREAM, 0);
+
+    if (sock == INVALID_SOCKET) {
+	IocpWinConvertWSAError((DWORD) winSock.WSAGetLastError());
+	Tcl_AppendResult(interp, "Cannot create IrDA socket: ",
+		Tcl_PosixError(interp), NULL);
+	return TCL_ERROR;
+    }
+
+    if (attribName == NULL) {
+	strcpy(iasQuery.irdaAttribName, "IrDA:IrLMP:LsapSel");
+    } else {
+	strncpy(iasQuery.irdaAttribName, Tcl_GetString(attribName), 256);
+    }
+
+    strncpy(iasQuery.irdaClassName, Tcl_GetString(serviceName), 64);
+
+    code = winSock.getsockopt(sock, SOL_IRLMP, IRLMP_IAS_QUERY,
+	    (char*) &iasQuery, &size);
+
+    if (code == SOCKET_ERROR) {
+	if (winSock.WSAGetLastError() != WSAECONNREFUSED) {
+	    IocpWinConvertWSAError((DWORD) winSock.WSAGetLastError());
+	    Tcl_AppendResult(interp, "getsockopt() failed: ",
+		    Tcl_PosixError(interp), NULL);
+	} else {
+	    Tcl_AppendResult(interp, "No such service.", NULL);
+	}
+	winSock.closesocket(sock);
+	return TCL_ERROR;
+    }
+
+    /*
+     * Create the output Tcl_Obj, if none exists there.
+     */
+
+    if (*value == NULL) {
+	*value = Tcl_NewObj();
+    }
+
+    winSock.closesocket(sock);
+
+    switch (iasQuery.irdaAttribType) {
+	case IAS_ATTRIB_INT:
+	    Tcl_SetIntObj(*value, iasQuery.irdaAttribute.irdaAttribInt);
+	    return TCL_OK;
+	case IAS_ATTRIB_OCTETSEQ:
+	    Tcl_SetByteArrayObj(*value, iasQuery.irdaAttribute.irdaAttribOctetSeq.OctetSeq,
+		    iasQuery.irdaAttribute.irdaAttribOctetSeq.Len);
+	    return TCL_OK;
+	case IAS_ATTRIB_STR: {
+		Tcl_Encoding enc;
+		char isocharset[] = "iso-8859-?", *nameEnc;
+		int charSet = iasQuery.irdaAttribute.irdaAttribUsrStr.CharSet  & 0xff;
+		Tcl_DString deviceDString;
+		switch (charSet) {
+		    case 0xff:
+			nameEnc = "unicode";
+			break;
+		    case 0:
+			nameEnc = "ascii";
+			break;
+		    default:
+			nameEnc = isocharset; 
+			isocharset[9] = charSet + '0';
+			break;
+		}
+		enc = Tcl_GetEncoding(interp, nameEnc);
+		Tcl_ExternalToUtfDString(enc, iasQuery.irdaAttribute.irdaAttribUsrStr.UsrStr,
+			iasQuery.irdaAttribute.irdaAttribUsrStr.Len, &deviceDString);
+		Tcl_FreeEncoding(enc);
+		Tcl_SetStringObj(*value, Tcl_DStringValue(&deviceDString),
+			Tcl_DStringLength(&deviceDString));
+		Tcl_DStringFree(&deviceDString);
+	    }
+	    return TCL_OK;
+	case IAS_ATTRIB_NO_CLASS:
+	    Tcl_SetStringObj(*value, "", -1);
+	    return TCL_OK;
+	case IAS_ATTRIB_NO_ATTRIB:
+	    Tcl_SetStringObj(*value, "", -1);
+	    return TCL_OK;
+	default:
+	    Tcl_Panic("No such arm.");
+	    return TCL_ERROR;  /* makes compiler happy */
+    }
+}
+
+
+int
+Iocp_IrdaIasSet (Tcl_Interp *interp, Tcl_Obj *deviceId,
+	Tcl_Obj *className, Tcl_Obj *attrName, Tcl_Obj *newValue)
+{
+    return TCL_ERROR;
+}
+
+
+int
+Iocp_IrdaLazyDiscovery (Tcl_Interp *interp, Tcl_Obj *script)
+{
+    return TCL_ERROR;
+}
+
 
 Tcl_Channel
 Iocp_OpenIrdaClient (
