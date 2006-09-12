@@ -1,4 +1,4 @@
-#include "iocpsock.h"
+#include "iocpsockInt.h"
 
 Tcl_ObjCmdProc	Iocp_StatsObjCmd;
 
@@ -153,4 +153,10 @@ Iocpsock_Init (Tcl_Interp *interp)
     Tcl_CreateObjCommand(interp, "irda::lazy_discovery", Iocp_IrdaLazyDiscoveryCmd, 0L, 0L);
     Tcl_PkgProvide(interp, "Iocpsock", IOCPSOCK_VERSION);
     return TCL_OK;
+}
+
+EXTERN int
+Iocpsock_SafeInit (Tcl_Interp *interp)
+{
+    return Iocpsock_Init(interp);
 }
