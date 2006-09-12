@@ -36,6 +36,8 @@ void SendWinErrorData (int protocolCode, CONST char *msg, DWORD errorCode);
 #endif
 void DoNameWork(enum Verb verb, enum NameSpace nameSpace, Tcl_Obj *arg1,
 	       Tcl_Obj *arg2);
+void Do_EnumerateNamespaces(void);
+
 
 /* file scope globals */
 int done = 0;
@@ -47,10 +49,10 @@ int
 main (int argc, char *argv[])
 {
     if (Init(argv[0]) == TCL_ERROR) {
-	return EXIT_FAILURE;
+         return EXIT_FAILURE;
     }
     while (!done) {
-	Tcl_DoOneEvent(TCL_ALL_EVENTS);
+         Tcl_DoOneEvent(TCL_ALL_EVENTS);
     }
     Finalize();
     return EXIT_SUCCESS;
@@ -269,6 +271,8 @@ void Do_IP_Work(int addressFamily, Tcl_Obj *question);
 int isIp (Tcl_Obj *name);
 void Do_IrDA_Work(enum Command command, Tcl_Obj *question, Tcl_Obj *argument);
 int Do_IrDA_Discovery (Tcl_Obj **answers);
+int Do_IrDA_Query (Tcl_Obj *deviceId, Tcl_Obj *serviceName,
+	Tcl_Obj *attribName, Tcl_Obj **answers);
 
 void
 DoNameWork (enum Command command, enum NameSpace nameSpace,
@@ -318,10 +322,7 @@ Do_IP_Work (int addressFamily, Tcl_Obj *question)
     hints.ai_protocol = 0;
 
     /*
-     * DNS appears to be ASCII limited historically, but may, in fact,
-     * support ISO-8859-1 in extended implemenations of BIND.
-     *
-     * TODO: find out for sure if ISO-8859-1 is acceptable.
+     * See:  ftp://ftp.rfc-editor.org/in-notes/rfc3490.txt
      */
     dnsEnc = Tcl_GetEncoding(NULL, "ascii");
 
@@ -332,7 +333,8 @@ Do_IP_Work (int addressFamily, Tcl_Obj *question)
     if ((result = getaddrinfo(Tcl_DStringValue(&dnsTxt), "", &hints,
 	    &hostaddr)) != 0) {
 #ifdef __WIN32__
-	SendWinErrorData(405, "lookup failed on getaddrinfo()", WSAGetLastError());
+	Tcl_DStringAppend(&dnsTxt, " failed to resolve.", -1);
+	SendWinErrorData(405, Tcl_DStringValue(&dnsTxt), WSAGetLastError());
 #else
 	/* TODO */
 #endif
@@ -401,7 +403,10 @@ isIp (Tcl_Obj *name)
 void
 Do_IrDA_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument)
 {
+    int result, objc;
+    Tcl_Obj **objv;
     Tcl_Obj *answers = NULL;
+
     switch (command) {
 	case NAME_QUERY:
 	    /* asterix means "get all", aka discovery.. */
@@ -411,14 +416,23 @@ Do_IrDA_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument)
 		    return;
 		}
 	    } else {
+		result = Tcl_ListObjGetElements(NULL, argument, &objc, &objv);
+		if (result == TCL_OK && objc == 2) {
+		    if (Do_IrDA_Query(question, objv[0], objv[1], &answers) != TCL_OK) {
+			/* error msg already sent. */
+			return;
+		    }
+		}
 	    }
 	    break;
 	case NAME_REGISTER:
 	case NAME_UNREGISTER:
+	    /* TODO */
 	    break;
     }
     /* reply with answers */
     SendAnswers(question, answers);
+    return;
 }
 
 /* win specific */
@@ -530,4 +544,106 @@ Do_IrDA_Discovery (Tcl_Obj **answers)
     closesocket(sock);
 
     return TCL_OK;
+}
+
+int
+Do_IrDA_Query (Tcl_Obj *deviceId, Tcl_Obj *serviceName,
+	Tcl_Obj *attribName, Tcl_Obj **answers)
+{
+    SOCKET sock;
+    int code, size = sizeof(IAS_QUERY);
+    IAS_QUERY iasQuery;
+
+    /*
+     * Decode irdaDeviceId
+     */
+    code = sscanf(Tcl_GetString(deviceId), "%02x-%02x-%02x-%02x",
+	&iasQuery.irdaDeviceID[0], &iasQuery.irdaDeviceID[1],
+	&iasQuery.irdaDeviceID[2], &iasQuery.irdaDeviceID[3]);
+    if (code != 4) {
+	SendProtocolError(409, "Malformed IrDA DeviceID.  Must be in the form \"FF-FF-FF-FF.\"");
+	return TCL_ERROR;
+    }
+
+    /*
+     * First, make an IrDA socket.
+     */
+
+    sock = socket(AF_IRDA, SOCK_STREAM, 0);
+
+    if (sock == INVALID_SOCKET) {
+	SendWinErrorData(407, "Cannot create IrDA socket", WSAGetLastError());
+	return TCL_ERROR;
+    }
+
+    strncpy(iasQuery.irdaAttribName, Tcl_GetString(attribName), 256);
+    strncpy(iasQuery.irdaClassName, Tcl_GetString(serviceName), 64);
+
+    code = getsockopt(sock, SOL_IRLMP, IRLMP_IAS_QUERY,
+	    (char*) &iasQuery, &size);
+
+    if (code == SOCKET_ERROR) {
+	if (WSAGetLastError() != WSAECONNREFUSED) {
+	    SendWinErrorData(408, "getsockopt() failed", WSAGetLastError());
+	} else {
+	    SendProtocolError(410, "No such service.");
+	}
+	closesocket(sock);
+	return TCL_ERROR;
+    }
+
+    /*
+     * Create the output Tcl_Obj, if none exists there.
+     */
+
+    if (*answers == NULL) {
+	*answers = Tcl_NewObj();
+    }
+
+    closesocket(sock);
+
+    switch (iasQuery.irdaAttribType) {
+	case IAS_ATTRIB_INT:
+	    Tcl_SetIntObj(*answers, iasQuery.irdaAttribute.irdaAttribInt);
+	    return TCL_OK;
+	case IAS_ATTRIB_OCTETSEQ:
+	    Tcl_SetByteArrayObj(*answers, iasQuery.irdaAttribute.irdaAttribOctetSeq.OctetSeq,
+		    iasQuery.irdaAttribute.irdaAttribOctetSeq.Len);
+	    return TCL_OK;
+	case IAS_ATTRIB_STR: {
+		Tcl_Encoding enc;
+		char isocharset[] = "iso-8859-?", *nameEnc;
+		int charSet = iasQuery.irdaAttribute.irdaAttribUsrStr.CharSet  & 0xff;
+		Tcl_DString deviceDString;
+		switch (charSet) {
+		    case 0xff:
+			nameEnc = "unicode";
+			break;
+		    case 0:
+			nameEnc = "ascii";
+			break;
+		    default:
+			nameEnc = isocharset; 
+			isocharset[9] = charSet + '0';
+			break;
+		}
+		enc = Tcl_GetEncoding(NULL, nameEnc);
+		Tcl_ExternalToUtfDString(enc, iasQuery.irdaAttribute.irdaAttribUsrStr.UsrStr,
+			iasQuery.irdaAttribute.irdaAttribUsrStr.Len, &deviceDString);
+		Tcl_FreeEncoding(enc);
+		Tcl_SetStringObj(*answers, Tcl_DStringValue(&deviceDString),
+			Tcl_DStringLength(&deviceDString));
+		Tcl_DStringFree(&deviceDString);
+	    }
+	    return TCL_OK;
+	case IAS_ATTRIB_NO_CLASS:
+	    Tcl_SetStringObj(*answers, "no such class", -1);
+	    return TCL_OK;
+	case IAS_ATTRIB_NO_ATTRIB:
+	    Tcl_SetStringObj(*answers, "no such attribute", -1);
+	    return TCL_OK;
+	default:
+	    Tcl_Panic("No such arm.");
+	    return TCL_ERROR;  /* makes compiler happy */
+    }
 }
