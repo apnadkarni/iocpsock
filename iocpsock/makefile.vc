@@ -147,7 +147,7 @@ the environment.  Jump to this line to read the new instructions.
 #       c:\tcl_src\win\>c:\progra~1\micros~1\vc98\bin\vcvars32.bat
 #       Setting environment for using Microsoft Visual C++ tools.
 #       c:\tcl_src\win\>c:\progra~1\platfo~1\setenv.bat /pre64 /RETAIL
-#       Targeting Windows pre64 RETAIL
+#       Targeting Windows xp64 RETAIL
 #       c:\tcl_src\win\>nmake -f makefile.vc MACHINE=IA64
 #
 #------------------------------------------------------------------------------
@@ -246,6 +246,10 @@ DOCDIR		= $(ROOT)\doc
 GENERICDIR	= $(ROOT)\generic
 TOOLSDIR	= $(ROOT)\tools
 WINDIR		= $(ROOT)\win
+
+!if !defined(ZIP)
+ZIP = "c:\Program Files\zlib1.23\dll32\minizip"
+!endif
 
 
 #---------------------------------------------------------------------
@@ -502,6 +506,24 @@ install-libraries:
 	@$(CPY) "$(ROOT)\iocpDecls.h" "$(INCLUDE_INSTALL_DIR)"
 
 install-docs:
+	@echo installing man.html
+	@$(CPY) "$(ROOT)\man.html" "$(SCRIPT_INSTALL_DIR)"
+
+#---------------------------------------------------------------------
+# Distrubition.
+#---------------------------------------------------------------------
+
+dist:
+	@cd "$(_INSTALLDIR)"
+	-$(ZIP) -o -9 $(MAKEDIR)\iocpsock-$(VERSION)a1.zip \
+	    lib\iocpsock$(DOTVERSION)\iocpsock$(VERSION).dll \
+	    lib\iocpsock$(DOTVERSION)\pkgIndex.tcl \
+	    lib\iocpsock$(DOTVERSION)\man.html \
+	    lib\iocpstub$(VERSION).lib \
+	    lib\iocpsock$(VERSION)s.lib \
+	    include\iocpsock.h \
+	    include\iocpDecls.h
+	@cd "$(MAKEDIR)"
 
 
 #---------------------------------------------------------------------
