@@ -63,10 +63,10 @@ Iocpsock_InitStubs (interp, version, exact)
     CONST char *actualVersion;
     
     actualVersion = Tcl_PkgRequireEx(interp, "Iocpsock", version, exact,
-        (ClientData *) &expStubsPtr);
+        (ClientData *) &iocpStubsPtr);
 
     if (actualVersion == NULL) {
-	expStubsPtr = NULL;
+	iocpStubsPtr = NULL;
 	return NULL;
     }
 
