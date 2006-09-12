@@ -4,7 +4,7 @@
 // IOW, Nothing interesting in here; go read iocpsock_lolevel.c instead.
 
 
-#include "iocpsock.h"
+#include "iocpsockInt.h"
 
 
 
@@ -32,6 +32,49 @@ Iocp_IrdaDiscoveryCmd (
     if (result == TCL_OK) Tcl_SetObjResult(interp, discoveryData);
     return result;
 }
+
+
+int
+Iocp_IrdaIasQueryCmd (
+    ClientData notUsed,			/* Not used. */
+    Tcl_Interp *interp,			/* Current interpreter. */
+    int objc,				/* Number of arguments. */
+    Tcl_Obj *CONST objv[])		/* Argument objects. */
+{
+    Tcl_Obj *value = NULL;
+    int result;
+
+    if (objc < 3 || objc > 4) {
+	Tcl_WrongNumArgs(interp, 1, objv, "deviceId serviceName ?attribName?");
+	return TCL_ERROR;
+    }
+
+    result = Iocp_IrdaIasQuery(interp, objv[1], objv[2],
+	    (objc == 4 ? objv[3] : NULL), &value);
+    if (result == TCL_OK) Tcl_SetObjResult(interp, value);
+    return result;
+}
+
+int
+Iocp_IrdaIasSetCmd (
+    ClientData notUsed,			/* Not used. */
+    Tcl_Interp *interp,			/* Current interpreter. */
+    int objc,				/* Number of arguments. */
+    Tcl_Obj *CONST objv[])		/* Argument objects. */
+{
+    return TCL_ERROR;
+}
+
+int
+Iocp_IrdaLazyDiscoveryCmd (
+    ClientData notUsed,			/* Not used. */
+    Tcl_Interp *interp,			/* Current interpreter. */
+    int objc,				/* Number of arguments. */
+    Tcl_Obj *CONST objv[])		/* Argument objects. */
+{
+    return TCL_ERROR;
+}
+
 
 /*
  *----------------------------------------------------------------------
