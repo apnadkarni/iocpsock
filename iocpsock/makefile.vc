@@ -206,7 +206,7 @@ ROOT		= .
 STUBPREFIX	= iocpstub
 
 IOCPLIBNAME	= $(PROJECT)$(VERSION)$(SUFX).$(EXT)
-IOCPLIB		= $(OUT_DIR)\$(IOCPLIBNAME)
+IOCPLIB		= "$(OUT_DIR)\$(IOCPLIBNAME)"
 IOCPSTUBLIBNAME	= $(STUBPREFIX)$(VERSION).lib
 IOCPSTUBLIB	= "$(OUT_DIR)\$(IOCPSTUBLIBNAME)"
 
@@ -480,16 +480,26 @@ $<
 
 install-binaries:
 	@echo Installing to '$(SCRIPT_INSTALL_DIR)'
-	@echo installing $(IOCPLIB)
+	@echo installing $(IOCPLIBNAME)
+!if !$(STATIC_BUILD)
 	@$(CPY) "$(IOCPLIB)" "$(SCRIPT_INSTALL_DIR)\"
+!else
+	@$(CPY) "$(IOCPLIB)" "$(LIB_INSTALL_DIR)\"
+!endif
+	@echo installing $(IOCPSTUBLIBNAME)
+	@$(CPY) "$(IOCPSTUBLIB)" "$(LIB_INSTALL_DIR)\"
 
 install-libraries:
 !if !$(STATIC_BUILD)
 	@echo Creating package index "$(SCRIPT_INSTALL_DIR)\pkgIndex.tcl"
-	-del "$(SCRIPT_INSTALL_DIR)\pkgIndex.tcl"
-	echo package ifneeded Iocpsock $(DOTVERSION) [list load [file join $$dir $(IOCPLIBNAME)] Iocpsock] >"$(OUT_DIR)\pkgIndex.tcl"
-	$(CPY) "$(OUT_DIR)\pkgIndex.tcl" "$(SCRIPT_INSTALL_DIR)\"
+	@-del "$(SCRIPT_INSTALL_DIR)\pkgIndex.tcl"
+	@echo package ifneeded Iocpsock $(DOTVERSION) [list load [file join $$dir $(IOCPLIBNAME)] Iocpsock] >"$(OUT_DIR)\pkgIndex.tcl"
+	@$(CPY) "$(OUT_DIR)\pkgIndex.tcl" "$(SCRIPT_INSTALL_DIR)\"
 !endif
+	@echo installing iocpsock.h
+	@$(CPY) "$(ROOT)\iocpsock.h" "$(INCLUDE_INSTALL_DIR)"
+	@echo installing iocpDecls.h
+	@$(CPY) "$(ROOT)\iocpDecls.h" "$(INCLUDE_INSTALL_DIR)"
 
 install-docs:
 
