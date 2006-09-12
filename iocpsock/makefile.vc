@@ -406,6 +406,17 @@ $(TCLOBJS)
 <<
 !endif
 
+#---------------------------------------------------------------------
+# Regenerate the stubs files.
+#---------------------------------------------------------------------
+
+genstubs:
+!if $(TCLINSTALL)
+	@echo Need the source distribution to regenerate the Stubs table.
+!else
+	$(TCLSH) .\tools\genStubs.tcl $(GENERICDIR) \
+        	$(GENERICDIR)\$(PROJECT).decls
+!endif
 
 #---------------------------------------------------------------------
 # Dedependency rules
