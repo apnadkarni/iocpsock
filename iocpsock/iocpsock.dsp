@@ -222,6 +222,10 @@ SOURCE=.\linkedlist.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\makefile.vc
+# End Source File
+# Begin Source File
+
 SOURCE=.\ws2apltalk.c
 # End Source File
 # Begin Source File
