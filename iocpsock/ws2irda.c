@@ -1,4 +1,4 @@
-#include "iocpsock.h"
+#include "iocpsockInt.h"
 #include <af_irda.h>
 
 static FN_DECODEADDR DecodeIrdaSockaddr;

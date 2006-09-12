@@ -1,4 +1,4 @@
-#include "iocpsock.h"
+#include "iocpsockInt.h"
 
 static WS2ProtocolData tcp4ProtoData = {
     AF_INET,

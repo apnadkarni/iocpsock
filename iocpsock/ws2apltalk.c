@@ -1,4 +1,4 @@
-#include "iocpsock.h"
+#include "iocpsockInt.h"
 #include <atalkwsh.h>
 
 static FN_DECODEADDR DecodeAplTlkSockaddr;

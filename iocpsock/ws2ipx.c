@@ -1,4 +1,4 @@
-#include "iocpsock.h"
+#include "iocpsockInt.h"
 #include <wsipx.h>
 //#include <wsnwlink.h>	    NOT USED!
 

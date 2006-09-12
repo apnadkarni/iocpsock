@@ -1,4 +1,4 @@
-#include "iocpsock.h"
+#include "iocpsockInt.h"
 #include <wsnetbs.h>
 
 static FN_DECODEADDR DecodeNBiosSockaddr;

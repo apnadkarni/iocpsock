@@ -1,4 +1,4 @@
-#include "iocpsock.h"
+#include "iocpsockInt.h"
 #include <ws2atm.h>
 
 static FN_DECODEADDR DecodeAtmSockaddr;
