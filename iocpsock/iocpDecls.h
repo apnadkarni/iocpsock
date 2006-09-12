@@ -20,6 +20,118 @@
 
 /* !BEGIN!: Do not edit below this line. */
 
+/*
+ * Exported function declarations:
+ */
+
+#ifndef Iocpsock_Init_TCL_DECLARED
+#define Iocpsock_Init_TCL_DECLARED
+/* 0 */
+TCL_EXTERN(int)		Iocpsock_Init _ANSI_ARGS_((Tcl_Interp * interp));
+#endif
+#ifndef Iocpsock_SafeInit_TCL_DECLARED
+#define Iocpsock_SafeInit_TCL_DECLARED
+/* 1 */
+TCL_EXTERN(int)		Iocpsock_SafeInit _ANSI_ARGS_((Tcl_Interp * interp));
+#endif
+#ifndef Iocp_OpenTcpClient_TCL_DECLARED
+#define Iocp_OpenTcpClient_TCL_DECLARED
+/* 2 */
+TCL_EXTERN(Tcl_Channel)	 Iocp_OpenTcpClient _ANSI_ARGS_((Tcl_Interp * interp, 
+				CONST char * port, CONST char * host, 
+				CONST char * myaddr, CONST char * myport, 
+				int async));
+#endif
+#ifndef Iocp_OpenTcpServer_TCL_DECLARED
+#define Iocp_OpenTcpServer_TCL_DECLARED
+/* 3 */
+TCL_EXTERN(Tcl_Channel)	 Iocp_OpenTcpServer _ANSI_ARGS_((Tcl_Interp * interp, 
+				CONST char * port, CONST char * host, 
+				Tcl_TcpAcceptProc * acceptProc, 
+				ClientData acceptProcData));
+#endif
+#ifndef Iocp_OpenUdpSocket_TCL_DECLARED
+#define Iocp_OpenUdpSocket_TCL_DECLARED
+/* 4 */
+TCL_EXTERN(Tcl_Channel)	 Iocp_OpenUdpSocket _ANSI_ARGS_((Tcl_Interp * interp, 
+				CONST char * port, CONST char * host, 
+				CONST char * myaddr, CONST char * myport));
+#endif
+#ifndef Iocp_OpenIrdaClient_TCL_DECLARED
+#define Iocp_OpenIrdaClient_TCL_DECLARED
+/* 5 */
+TCL_EXTERN(Tcl_Channel)	 Iocp_OpenIrdaClient _ANSI_ARGS_((
+				Tcl_Interp * interp, 
+				CONST char * ServiceName, 
+				CONST char * DeviceId, 
+				CONST char * myDeviceId, 
+				CONST char * myServiceName, int async));
+#endif
+#ifndef Iocp_OpenIrdaServer_TCL_DECLARED
+#define Iocp_OpenIrdaServer_TCL_DECLARED
+/* 6 */
+TCL_EXTERN(Tcl_Channel)	 Iocp_OpenIrdaServer _ANSI_ARGS_((
+				Tcl_Interp * interp, 
+				CONST char * serviceName, 
+				CONST char * DeviceId, 
+				CONST char * myDeviceId, 
+				CONST char * myServiceName, int async));
+#endif
+
+typedef struct IocpStubHooks {
+    struct IocpIntStubs *iocpIntStubs;
+} IocpStubHooks;
+
+typedef struct IocpStubs {
+    int magic;
+    struct IocpStubHooks *hooks;
+
+    int (*iocpsock_Init) _ANSI_ARGS_((Tcl_Interp * interp)); /* 0 */
+    int (*iocpsock_SafeInit) _ANSI_ARGS_((Tcl_Interp * interp)); /* 1 */
+    Tcl_Channel (*iocp_OpenTcpClient) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, CONST char * myaddr, CONST char * myport, int async)); /* 2 */
+    Tcl_Channel (*iocp_OpenTcpServer) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, Tcl_TcpAcceptProc * acceptProc, ClientData acceptProcData)); /* 3 */
+    Tcl_Channel (*iocp_OpenUdpSocket) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, CONST char * myaddr, CONST char * myport)); /* 4 */
+    Tcl_Channel (*iocp_OpenIrdaClient) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * ServiceName, CONST char * DeviceId, CONST char * myDeviceId, CONST char * myServiceName, int async)); /* 5 */
+    Tcl_Channel (*iocp_OpenIrdaServer) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * serviceName, CONST char * DeviceId, CONST char * myDeviceId, CONST char * myServiceName, int async)); /* 6 */
+} IocpStubs;
+TCL_EXTERNC IocpStubs *iocpStubsPtr;
+
+#if defined(USE_IOCP_STUBS) && !defined(USE_IOCP_STUB_PROCS)
+
+/*
+ * Inline function declarations:
+ */
+
+#ifndef Iocpsock_Init
+#define Iocpsock_Init \
+	(iocpStubsPtr->iocpsock_Init) /* 0 */
+#endif
+#ifndef Iocpsock_SafeInit
+#define Iocpsock_SafeInit \
+	(iocpStubsPtr->iocpsock_SafeInit) /* 1 */
+#endif
+#ifndef Iocp_OpenTcpClient
+#define Iocp_OpenTcpClient \
+	(iocpStubsPtr->iocp_OpenTcpClient) /* 2 */
+#endif
+#ifndef Iocp_OpenTcpServer
+#define Iocp_OpenTcpServer \
+	(iocpStubsPtr->iocp_OpenTcpServer) /* 3 */
+#endif
+#ifndef Iocp_OpenUdpSocket
+#define Iocp_OpenUdpSocket \
+	(iocpStubsPtr->iocp_OpenUdpSocket) /* 4 */
+#endif
+#ifndef Iocp_OpenIrdaClient
+#define Iocp_OpenIrdaClient \
+	(iocpStubsPtr->iocp_OpenIrdaClient) /* 5 */
+#endif
+#ifndef Iocp_OpenIrdaServer
+#define Iocp_OpenIrdaServer \
+	(iocpStubsPtr->iocp_OpenIrdaServer) /* 6 */
+#endif
+
+#endif /* defined(USE_IOCP_STUBS) && !defined(USE_IOCP_STUB_PROCS) */
 
 /* !END!: Do not edit above this line. */
 

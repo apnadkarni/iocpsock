@@ -18,5 +18,25 @@
 
 /* !BEGIN!: Do not edit below this line. */
 
+IocpIntStubs iocpIntStubs = {
+    TCL_STUB_MAGIC,
+    NULL,
+};
+
+static IocpStubHooks iocpStubHooks = {
+    &iocpIntStubs
+};
+
+IocpStubs iocpStubs = {
+    TCL_STUB_MAGIC,
+    &iocpStubHooks,
+    Iocpsock_Init, /* 0 */
+    Iocpsock_SafeInit, /* 1 */
+    Iocp_OpenTcpClient, /* 2 */
+    Iocp_OpenTcpServer, /* 3 */
+    Iocp_OpenUdpSocket, /* 4 */
+    Iocp_OpenIrdaClient, /* 5 */
+    Iocp_OpenIrdaServer, /* 6 */
+};
 
 /* !END!: Do not edit above this line. */

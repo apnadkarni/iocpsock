@@ -20,6 +20,26 @@
 
 /* !BEGIN!: Do not edit below this line. */
 
+/*
+ * Exported function declarations:
+ */
+
+
+typedef struct IocpIntStubs {
+    int magic;
+    struct IocpIntStubHooks *hooks;
+
+} IocpIntStubs;
+TCL_EXTERNC IocpIntStubs *iocpIntStubsPtr;
+
+#if defined(USE_IOCP_STUBS) && !defined(USE_IOCP_STUB_PROCS)
+
+/*
+ * Inline function declarations:
+ */
+
+
+#endif /* defined(USE_IOCP_STUBS) && !defined(USE_IOCP_STUB_PROCS) */
 
 /* !END!: Do not edit above this line. */
 
