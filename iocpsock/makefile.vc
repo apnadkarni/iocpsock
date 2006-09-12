@@ -203,9 +203,12 @@ VERSION = $(DOTVERSION:.=)
 
 BINROOT		= .
 ROOT		= .
+STUBPREFIX	= iocpstub
 
 IOCPLIBNAME	= $(PROJECT)$(VERSION)$(SUFX).$(EXT)
 IOCPLIB		= $(OUT_DIR)\$(IOCPLIBNAME)
+IOCPSTUBLIBNAME	= $(STUBPREFIX)$(VERSION).lib
+IOCPSTUBLIB	= "$(OUT_DIR)\$(IOCPSTUBLIBNAME)"
 
 ### Make sure we use backslash only.
 LIB_INSTALL_DIR		= $(_INSTALLDIR)\lib
@@ -232,6 +235,10 @@ IOCPOBJS = \
 !if !$(STATIC_BUILD)
 	$(TMP_DIR)\iocpsock.res
 !endif
+
+IOCPSTUBOBJS = \
+	$(TMP_DIR)\iocpStubLib.obj
+
 
 ### The following paths CANNOT have spaces in them.
 COMPATDIR	= $(ROOT)\compat
@@ -291,8 +298,9 @@ crt = -MT
 !endif
 
 IOCP_INCLUDES	= -I"." $(TCL_INCLUDES)
-BASE_CFLAGS	= $(cflags) $(cdebug) $(crt) $(IOCP_INCLUDES) -DTCL_THREADS=1
-IOCP_CFLAGS	= $(BASE_CFLAGS) $(OPTDEFINES)
+IOCP_DEFINES	= -DBUILD_iocp -DTCL_THREADS=1
+IOCP_BASE_CFLAGS= $(cflags) $(cdebug) $(crt) $(IOCP_INCLUDES) $(IOCP_DEFINES)
+IOCP_CFLAGS	= $(IOCP_BASE_CFLAGS) $(OPTDEFINES)
 
 ### By convention, static builds do not use Stubs.  This is just a practice,
 ### not a technical limitation.
@@ -358,7 +366,7 @@ TESTFLAGS = -file $(TESTPAT)
 # Project specific targets
 #---------------------------------------------------------------------
 
-release:    setup $(IOCPLIB)
+release:    setup $(IOCPLIB) $(IOCPSTUBLIB)
 install:    install-binaries install-libraries install-docs
 
 
@@ -389,6 +397,9 @@ $**
 	-@del $*.exp
 	-@del $*.lib
 !endif
+
+$(IOCPSTUBLIB) : $(IOCPSTUBOBJS)
+	$(lib32) -nologo -out:$@ $(IOCPSTUBOBJS)
 
 
 #---------------------------------------------------------------------
@@ -432,6 +443,16 @@ genstubs:
 ### add a spacer in the output
 !message
 
+
+#---------------------------------------------------------------------
+# Special case object file targets
+#---------------------------------------------------------------------
+
+# The following object is part of the stub library and should not
+# be built as DLL objects but none of the symbols should be exported
+
+$(TMP_DIR)\iocpStubLib.obj :
+	$(cc32) -DSTATIC_BUILD $(IOCP_BASE_CFLAGS) -Zl -Fo$@ $?
 
 #---------------------------------------------------------------------
 # Implicit rules
