@@ -12,7 +12,7 @@
  * ----------------------------------------------------------------------
  */
 
-#include "iocpsock.h"
+#include "iocpsockInt.h"
 
 /*
  * The following declare the winsock loading error codes.
@@ -719,7 +719,8 @@ IocpEventSetupProc (
      * wait state.  This function call is very inexpensive.
      */
 
-    if (IocpLLIsNotEmpty(tsdPtr->readySockets)) {
+    if (IocpLLIsNotEmpty(tsdPtr->readySockets) ||
+		IocpLLIsNotEmpty(tsdPtr->deadSockets)) {
 	Tcl_SetMaxBlockTime(&blockTime);
     }
 }
@@ -745,6 +746,16 @@ IocpEventCheckProc (
     if (!(flags & TCL_FILE_EVENTS)) {
 	return;
     }
+
+    /*
+     * Sockets that are EOF, but not yet closed, are considered readable.
+     * Because Tcl historically requires that EOF channels shall still
+     * fire readable events until closed and our alert semantics are 
+     * such that we'll never get repeat notifications after EOF, we
+     * place this poll condition here.
+     */
+
+    evCount = IocpLLGetCount(tsdPtr->deadSockets);
 
     /*
      * Do we have any jobs to queue?  Take a snapshot of the count as
@@ -1509,7 +1520,7 @@ IocpGetOptionProc (
 	}
     }
 
-    if ((infoPtr->readyAccepts == NULL) /* not a listening socket*/
+    if ((infoPtr->readyAccepts == NULL) /* not a listening socket */
 	    && ((len == 0) || ((len > 1) && (optionName[1] == 'p') &&
             (strncmp(optionName, "-peername", len) == 0))))
     {
