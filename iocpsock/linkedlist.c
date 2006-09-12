@@ -9,7 +9,80 @@
  * ----------------------------------------------------------------------
  */
 
-#include "iocpsock.h"
+#include "iocpsockInt.h"
+
+/*
+ * compare and swap functions
+ */
+
+#if !defined(_MSC_VER)
+static inline char CAS (volatile void * addr, volatile void * value, void * newvalue) 
+{
+    register char ret;
+    __asm__ __volatile__ (
+	"# CAS \n\t"
+	"lock ; cmpxchg %2, (%1) \n\t"
+	"sete %0                 \n\t"
+	:"=a" (ret)
+	:"c" (addr), "d" (newvalue), "a" (value)
+    );
+    return ret;
+}
+
+static inline char CAS2 (volatile void * addr, volatile void * v1, volatile long v2, void * n1, long n2) 
+{
+    register char ret;
+    __asm__ __volatile__ (
+	"# CAS2 \n\t"
+	"lock ;  cmpxchg8b (%1) \n\t"
+	"sete %0                \n\t"
+	:"=a" (ret)
+	:"D" (addr), "d" (v2), "a" (v1), "b" (n1), "c" (n2)
+    );
+    return ret;
+}
+#else
+static __inline char CAS (volatile void * addr, volatile void * value, void * newvalue) 
+{
+    register char c;
+    __asm {
+	push	ebx
+	push	esi
+	mov	esi, addr
+	mov	eax, value
+	mov	ebx, newvalue
+	lock	cmpxchg dword ptr [esi], ebx
+	sete	c
+	pop	esi
+	pop	ebx
+    }
+    return c;
+}
+
+static __inline char CAS2 (volatile void * addr, volatile void * v1, volatile long v2, void * n1, long n2) 
+{
+    register char c;
+    __asm {
+	push	ebx
+	push	ecx
+	push	edx
+	push	esi
+	mov	esi, addr
+	mov	eax, v1
+	mov	ebx, n1
+	mov	ecx, n2
+	mov	edx, v2
+	lock    cmpxchg8b qword ptr [esi]
+	sete	c
+	pop	esi
+	pop	edx
+	pop	ecx
+	pop	ebx
+    }
+    return c;
+}
+#endif
+
 
 /* Bitmask macros. */
 #define mask_a( mask, val ) if ( ( mask & val ) != val ) { mask |= val; }
@@ -40,8 +113,7 @@ IocpLLCreate ()
     LPLLIST ll;
     
     /* Alloc a linked list. */
-    ll = IocpAlloc(sizeof(LLIST));
-    if (!ll) {
+    if (!(ll = IocpAlloc(sizeof(LLIST)))) {
 	return NULL;
     }
     if (!InitializeCriticalSectionAndSpinCount(&ll->lock, 4000)) {
