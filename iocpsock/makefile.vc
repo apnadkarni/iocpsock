@@ -514,8 +514,11 @@ install-docs:
 #---------------------------------------------------------------------
 
 dist:
+!if !defined(TAG)
+!error please set TAG for the zip title.
+!endif
 	@cd "$(_INSTALLDIR)"
-	-$(ZIP) -o -9 $(MAKEDIR)\iocpsock-$(VERSION)a1.zip \
+	-@$(ZIP) -o -9 $(MAKEDIR)\iocpsock-$(TAG).zip \
 	    lib\iocpsock$(DOTVERSION)\iocpsock$(VERSION).dll \
 	    lib\iocpsock$(DOTVERSION)\pkgIndex.tcl \
 	    lib\iocpsock$(DOTVERSION)\man.html \
