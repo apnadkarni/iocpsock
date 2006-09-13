@@ -408,14 +408,6 @@ extern __inline BOOL	IocpNPPFree (LPVOID block);
 
 
 /*
- * Error code management.
- */
-extern CONST char *	Tcl_Win32ErrMsg TCL_VARARGS_DEF(DWORD, arg1);
-extern CONST char *	Tcl_Win32Error TCL_VARARGS_DEF(Tcl_Interp *, arg1);
-extern CONST char *	IocpErrMsg TCL_VARARGS_DEF(DWORD, arg1);
-extern CONST char *	IocpError TCL_VARARGS_DEF(Tcl_Interp *, arg1);
-
-/*
  * ----------------------------------------------------------------------
  * Some stuff that needs to be switches or fconfigures, but aren't yet.
  * ----------------------------------------------------------------------
