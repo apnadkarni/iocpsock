@@ -105,13 +105,9 @@ Iocp_StatsObjCmd (
     return TCL_OK;
 }
 
-/* Set the EXTERN macro to export declared functions. */
-#undef TCL_STORAGE_CLASS
-#define TCL_STORAGE_CLASS DLLEXPORT
-
 
 /* This is the entry made to the dll (or static library) from Tcl. */
-EXTERN int
+int
 Iocpsock_Init (Tcl_Interp *interp)
 {
     Tcl_Obj *result;
@@ -155,7 +151,7 @@ Iocpsock_Init (Tcl_Interp *interp)
     return TCL_OK;
 }
 
-EXTERN int
+int
 Iocpsock_SafeInit (Tcl_Interp *interp)
 {
     return Iocpsock_Init(interp);

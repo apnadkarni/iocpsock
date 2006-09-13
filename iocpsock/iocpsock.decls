@@ -61,3 +61,108 @@ declare 6 generic {
 }
 
 interface iocpInt
+
+declare 0 generic {
+    Tcl_Obj * DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
+}
+declare 1 generic {
+    Tcl_Obj * DecodeIrdaSockaddr (SocketInfo *info, LPSOCKADDR addr)
+}
+declare 2 generic {
+    Tcl_Obj * DecodeIpxSockaddr (SocketInfo *info, LPSOCKADDR addr)
+}
+declare 3 generic {
+    ThreadSpecificData *InitSockets(void)
+}
+declare 4 generic {
+    void IocpInitProtocolData (SOCKET sock, WS2ProtocolData *pdata)
+}
+declare 5 generic {
+    int CreateSocketAddress (const char *addr, const char *port,
+	LPADDRINFO inhints, LPADDRINFO *result)
+}
+declare 6 generic {
+    void FreeSocketAddress(LPADDRINFO addrinfo)
+}
+declare 7 generic {
+    BOOL FindProtocolInfo(int af, int type, int protocol, DWORD flags,
+	WSAPROTOCOL_INFO *pinfo)
+}
+declare 8 generic {
+    DWORD PostOverlappedAccept (SocketInfo *infoPtr,
+	BufferInfo *acceptobj, int useBurst)
+}
+declare 9 generic {
+    DWORD PostOverlappedRecv (SocketInfo *infoPtr,
+	BufferInfo *recvobj, int useBurst)
+}
+declare 10 generic {
+    DWORD PostOverlappedQOS (SocketInfo *infoPtr, BufferInfo *bufPtr)
+}
+declare 11 generic {
+    void IocpWinConvertWSAError(DWORD errCode)
+}
+declare 12 generic {
+    void FreeBufferObj(BufferInfo *obj)
+}
+declare 13 generic {
+    BufferInfo * GetBufferObj (SocketInfo *infoPtr, SIZE_T buflen)
+}
+declare 14 generic {
+    SocketInfo * NewSocketInfo (SOCKET socket)
+}
+declare 15 generic {
+    void FreeSocketInfo (SocketInfo *infoPtr)
+}
+declare 16 generic {
+    int HasSockets (Tcl_Interp *interp)
+}
+declare 17 generic {
+    char * GetSysMsg (DWORD id)
+}
+declare 18 generic {
+    Tcl_Obj * GetSysMsgObj (DWORD id)
+}
+declare 19 generic {
+    int Iocp_IrdaDiscovery (Tcl_Interp *interp, Tcl_Obj **deviceList,
+	int limit)
+}
+declare 20 generic {
+    int Iocp_IrdaIasQuery (Tcl_Interp *interp, Tcl_Obj *deviceId,
+	Tcl_Obj *serviceName, Tcl_Obj *attribName, Tcl_Obj **value)
+}
+declare 21 generic {
+    LPLLIST IocpLLCreate (void)
+}
+declare 22 generic {
+    BOOL IocpLLDestroy (LPLLIST ll)
+}
+declare 23 generic {
+    LPLLNODE IocpLLPushBack (LPLLIST ll, LPVOID lpItem, LPLLNODE pnode,
+	DWORD dwState)
+}
+declare 24 generic {
+    LPLLNODE IocpLLPushFront (LPLLIST ll, LPVOID lpItem, LPLLNODE pnode,
+	DWORD dwState)
+}
+declare 25 generic {
+    BOOL IocpLLPop (LPLLNODE pnode, DWORD dwState)
+}
+declare 26 generic {
+    BOOL IocpLLPopAll (LPLLIST ll, LPLLNODE snode, DWORD dwState)
+}
+declare 27 generic {
+    LPVOID IocpLLPopBack (LPLLIST ll, DWORD dwState, DWORD timeout)
+}
+declare 28 generic {
+    LPVOID IocpLLPopFront (LPLLIST ll, DWORD dwState, DWORD timeout)
+}
+declare 29 generic {
+    BOOL IocpLLIsNotEmpty (LPLLIST ll)
+}
+declare 30 generic {
+    BOOL IocpLLNodeDestroy (LPLLNODE node)
+}
+declare 31 generic {
+    SIZE_T IocpLLGetCount (LPLLIST ll)
+}

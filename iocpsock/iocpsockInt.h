@@ -1,20 +1,6 @@
 #ifndef INCL_iocpsockInt_h_
 #define INCL_iocpsockInt_h_
 
-#include "iocpsock.h"
-
-#undef TCL_STORAGE_CLASS
-#ifdef BUILD_iocp
-#   define TCL_STORAGE_CLASS DLLEXPORT
-#else
-#   ifdef USE_IOCP_STUBS
-#	define TCL_STORAGE_CLASS
-#   else
-#	define TCL_STORAGE_CLASS DLLIMPORT
-#   endif
-#endif
-
-
 /* Enables NT5 special features. */
 #define _WIN32_WINNT 0x0500
 
@@ -131,13 +117,6 @@ typedef struct {
 } WinsockProcs;
 
 extern WinsockProcs winSock;
-extern int initialized;
-extern HMODULE iocpModule;
-extern LONG StatOpenSockets;
-extern LONG StatFailedAcceptExCalls;
-extern LONG StatGeneralBytesInUse;
-extern LONG StatSpecialBytesInUse;
-extern LONG StatFailedReplacementAcceptExCalls;
 
 /* wspiapi.h doesn't like typedefs, so fix it. */
 #define inet_addr	winSock.inet_addr
@@ -165,8 +144,8 @@ extern LONG StatFailedReplacementAcceptExCalls;
 #undef getservbyport
 #undef gethostbyaddr
 
-/* Required for the POSIX error constants (that should be public) */
-/* Require for the definition of the TCL_TSD_INIT macro */
+/* 1) Required for the POSIX error constants (that should be public) */
+/* 2) Require for the definition of the TCL_TSD_INIT macro */
 #define __WIN32__
 #include "tclInt.h"
 
@@ -176,6 +155,26 @@ extern LONG StatFailedReplacementAcceptExCalls;
 #undef ntohs
 #undef setsockopt
 
+#include "iocpsock.h"
+
+#undef TCL_STORAGE_CLASS
+#ifdef BUILD_iocp
+#   define TCL_STORAGE_CLASS DLLEXPORT
+#else
+#   ifdef USE_IOCP_STUBS
+#	define TCL_STORAGE_CLASS
+#   else
+#	define TCL_STORAGE_CLASS DLLIMPORT
+#   endif
+#endif
+
+extern int initialized;
+extern HMODULE iocpModule;
+extern LONG StatOpenSockets;
+extern LONG StatFailedAcceptExCalls;
+extern LONG StatGeneralBytesInUse;
+extern LONG StatSpecialBytesInUse;
+extern LONG StatFailedReplacementAcceptExCalls;
 
 /* Linked-List node object. */
 struct _ListNode;
@@ -255,6 +254,7 @@ enum IocpRecvMode {
     IOCP_RECVMODE_BURST_DETECT
 };
 
+
 #include <pshpack4.h>
 
 /* forward reference. */
@@ -306,11 +306,10 @@ typedef struct SocketInfo {
     LLNODE node;		    /* linked list node for the readySockts list. */
 } SocketInfo;
 
-#include <poppack.h>
-
 typedef Tcl_Obj * (FN_DECODEADDR) (SocketInfo *info, LPSOCKADDR addr);
-extern FN_DECODEADDR	DecodeIpSockaddr;
-//extern FN_DECODEADDR	DecodeIrdaSockaddr;
+
+
+#include <poppack.h>
 
 /*
  * Specific protocol information is stored here and shared to all
@@ -371,40 +370,12 @@ extern CompletionPortInfo IocpSubSystem;
 
 TCL_DECLARE_MUTEX(initLock)
 
-extern ThreadSpecificData *InitSockets();
-extern void		IocpInitProtocolData (SOCKET sock, WS2ProtocolData *pdata);
-extern int		CreateSocketAddress (const char *addr,
-			    const char *port, LPADDRINFO inhints,
-			    LPADDRINFO *result);
-extern void		FreeSocketAddress(LPADDRINFO addrinfo);
-extern BOOL		FindProtocolInfo(int af, int type, int protocol, DWORD flags,
-			    WSAPROTOCOL_INFO *pinfo);
-extern DWORD		PostOverlappedAccept (SocketInfo *infoPtr,
-			    BufferInfo *acceptobj, int useBurst);
-extern DWORD		PostOverlappedRecv (SocketInfo *infoPtr,
-			    BufferInfo *recvobj, int useBurst);
-extern DWORD		PostOverlappedQOS (SocketInfo *infoPtr,
-			    BufferInfo *bufPtr);
-extern void		IocpWinConvertWSAError(DWORD errCode);
-extern void		FreeBufferObj(BufferInfo *obj);
 
-extern BufferInfo *	GetBufferObj (SocketInfo *infoPtr,
-			    SIZE_T buflen);
-extern SocketInfo *	NewSocketInfo (SOCKET socket);
-extern void		FreeSocketInfo (SocketInfo *infoPtr);
-extern int		HasSockets (Tcl_Interp *interp);
-extern char *		GetSysMsg (DWORD id);
-extern Tcl_Obj *	GetSysMsgObj (DWORD id);
 extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
 extern Tcl_ObjCmdProc	Iocp_IrdaDiscoveryCmd;
 extern Tcl_ObjCmdProc	Iocp_IrdaIasQueryCmd;
 extern Tcl_ObjCmdProc	Iocp_IrdaIasSetCmd;
 extern Tcl_ObjCmdProc	Iocp_IrdaLazyDiscoveryCmd;
-extern int		Iocp_IrdaDiscovery (Tcl_Interp *interp,
-			    Tcl_Obj **deviceList, int limit);
-extern int		Iocp_IrdaIasQuery (Tcl_Interp *interp,
-			    Tcl_Obj *deviceId, Tcl_Obj *serviceName,
-			    Tcl_Obj *attribName, Tcl_Obj **value);
 
 
 /*
@@ -429,40 +400,19 @@ extern __inline LPVOID  IocpNPPReAlloc (LPVOID block, SIZE_T size);
 extern __inline BOOL	IocpNPPFree (LPVOID block);
 
 
-/* Thread safe linked-list management. */
-
-/* state bitmask. */
+/* 
+ * Thread safe linked-list management state bitmasks.
+ */
 #define IOCP_LL_NOLOCK		(1<<0)
 #define IOCP_LL_NODESTROY	(1<<1)
 
-extern LPLLIST		IocpLLCreate ();
-extern BOOL		IocpLLDestroy (LPLLIST ll);
-extern LPLLNODE		IocpLLPushBack (LPLLIST ll, LPVOID lpItem,
-				LPLLNODE pnode, DWORD dwState);
-extern LPLLNODE		IocpLLPushFront (LPLLIST ll, LPVOID lpItem,
-				LPLLNODE pnode, DWORD dwState);
-extern BOOL		IocpLLPop (LPLLNODE pnode, DWORD dwState);
-extern BOOL		IocpLLPopAll (LPLLIST ll, LPLLNODE snode,
-				DWORD dwState);
-extern LPVOID		IocpLLPopBack (LPLLIST ll, DWORD dwState,
-				DWORD timeout);
-extern LPVOID		IocpLLPopFront (LPLLIST ll, DWORD dwState,
-				DWORD timeout);
-extern BOOL		IocpLLIsNotEmpty (LPLLIST ll);
-extern BOOL		IocpLLNodeDestroy (LPLLNODE node);
-extern SIZE_T		IocpLLGetCount (LPLLIST ll);
 
 /*
- * Error code management.  The first four are missing from the core
- * which is why I prefix them with Tcl_ .
+ * Error code management.
  */
-extern CONST char *	Tcl_Win32ErrId (DWORD errorCode);
 extern CONST char *	Tcl_Win32ErrMsg TCL_VARARGS_DEF(DWORD, arg1);
-extern CONST char *	Tcl_Win32ErrMsgVA (DWORD errorCode, va_list argList);
 extern CONST char *	Tcl_Win32Error TCL_VARARGS_DEF(Tcl_Interp *, arg1);
-extern CONST char *	IocpErrId (DWORD errorCode);
 extern CONST char *	IocpErrMsg TCL_VARARGS_DEF(DWORD, arg1);
-extern CONST char *	IocpErrMsgVA (DWORD errorCode, va_list argList);
 extern CONST char *	IocpError TCL_VARARGS_DEF(Tcl_Interp *, arg1);
 
 /*

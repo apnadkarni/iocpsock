@@ -218,6 +218,11 @@ SOURCE=.\iocpStubInit.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\iocpStubLib.c
+# PROP Exclude_From_Build 1
+# End Source File
+# Begin Source File
+
 SOURCE=.\linkedlist.c
 # End Source File
 # Begin Source File

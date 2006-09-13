@@ -157,7 +157,7 @@ typedef struct SocketEvent {
 
 
 ThreadSpecificData *
-InitSockets()
+InitSockets(void)
 {
     WSADATA wsaData;
     OSVERSIONINFO os;

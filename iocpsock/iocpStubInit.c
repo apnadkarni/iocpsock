@@ -21,6 +21,38 @@
 IocpIntStubs iocpIntStubs = {
     TCL_STUB_MAGIC,
     NULL,
+    DecodeIpSockaddr, /* 0 */
+    DecodeIrdaSockaddr, /* 1 */
+    DecodeIpxSockaddr, /* 2 */
+    InitSockets, /* 3 */
+    IocpInitProtocolData, /* 4 */
+    CreateSocketAddress, /* 5 */
+    FreeSocketAddress, /* 6 */
+    FindProtocolInfo, /* 7 */
+    PostOverlappedAccept, /* 8 */
+    PostOverlappedRecv, /* 9 */
+    PostOverlappedQOS, /* 10 */
+    IocpWinConvertWSAError, /* 11 */
+    FreeBufferObj, /* 12 */
+    GetBufferObj, /* 13 */
+    NewSocketInfo, /* 14 */
+    FreeSocketInfo, /* 15 */
+    HasSockets, /* 16 */
+    GetSysMsg, /* 17 */
+    GetSysMsgObj, /* 18 */
+    Iocp_IrdaDiscovery, /* 19 */
+    Iocp_IrdaIasQuery, /* 20 */
+    IocpLLCreate, /* 21 */
+    IocpLLDestroy, /* 22 */
+    IocpLLPushBack, /* 23 */
+    IocpLLPushFront, /* 24 */
+    IocpLLPop, /* 25 */
+    IocpLLPopAll, /* 26 */
+    IocpLLPopBack, /* 27 */
+    IocpLLPopFront, /* 28 */
+    IocpLLIsNotEmpty, /* 29 */
+    IocpLLNodeDestroy, /* 30 */
+    IocpLLGetCount, /* 31 */
 };
 
 static IocpStubHooks iocpStubHooks = {

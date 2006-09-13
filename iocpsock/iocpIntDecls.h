@@ -24,11 +24,224 @@
  * Exported function declarations:
  */
 
+#ifndef DecodeIpSockaddr_TCL_DECLARED
+#define DecodeIpSockaddr_TCL_DECLARED
+/* 0 */
+TCL_EXTERN(Tcl_Obj *)	DecodeIpSockaddr _ANSI_ARGS_((SocketInfo * info, 
+				LPSOCKADDR addr));
+#endif
+#ifndef DecodeIrdaSockaddr_TCL_DECLARED
+#define DecodeIrdaSockaddr_TCL_DECLARED
+/* 1 */
+TCL_EXTERN(Tcl_Obj *)	DecodeIrdaSockaddr _ANSI_ARGS_((SocketInfo * info, 
+				LPSOCKADDR addr));
+#endif
+#ifndef DecodeIpxSockaddr_TCL_DECLARED
+#define DecodeIpxSockaddr_TCL_DECLARED
+/* 2 */
+TCL_EXTERN(Tcl_Obj *)	DecodeIpxSockaddr _ANSI_ARGS_((SocketInfo * info, 
+				LPSOCKADDR addr));
+#endif
+#ifndef InitSockets_TCL_DECLARED
+#define InitSockets_TCL_DECLARED
+/* 3 */
+TCL_EXTERN(ThreadSpecificData *) InitSockets _ANSI_ARGS_((void));
+#endif
+#ifndef IocpInitProtocolData_TCL_DECLARED
+#define IocpInitProtocolData_TCL_DECLARED
+/* 4 */
+TCL_EXTERN(void)	IocpInitProtocolData _ANSI_ARGS_((SOCKET sock, 
+				WS2ProtocolData * pdata));
+#endif
+#ifndef CreateSocketAddress_TCL_DECLARED
+#define CreateSocketAddress_TCL_DECLARED
+/* 5 */
+TCL_EXTERN(int)		CreateSocketAddress _ANSI_ARGS_((const char * addr, 
+				const char * port, LPADDRINFO inhints, 
+				LPADDRINFO * result));
+#endif
+#ifndef FreeSocketAddress_TCL_DECLARED
+#define FreeSocketAddress_TCL_DECLARED
+/* 6 */
+TCL_EXTERN(void)	FreeSocketAddress _ANSI_ARGS_((LPADDRINFO addrinfo));
+#endif
+#ifndef FindProtocolInfo_TCL_DECLARED
+#define FindProtocolInfo_TCL_DECLARED
+/* 7 */
+TCL_EXTERN(BOOL)	FindProtocolInfo _ANSI_ARGS_((int af, int type, 
+				int protocol, DWORD flags, 
+				WSAPROTOCOL_INFO * pinfo));
+#endif
+#ifndef PostOverlappedAccept_TCL_DECLARED
+#define PostOverlappedAccept_TCL_DECLARED
+/* 8 */
+TCL_EXTERN(DWORD)	PostOverlappedAccept _ANSI_ARGS_((
+				SocketInfo * infoPtr, BufferInfo * acceptobj, 
+				int useBurst));
+#endif
+#ifndef PostOverlappedRecv_TCL_DECLARED
+#define PostOverlappedRecv_TCL_DECLARED
+/* 9 */
+TCL_EXTERN(DWORD)	PostOverlappedRecv _ANSI_ARGS_((SocketInfo * infoPtr, 
+				BufferInfo * recvobj, int useBurst));
+#endif
+#ifndef PostOverlappedQOS_TCL_DECLARED
+#define PostOverlappedQOS_TCL_DECLARED
+/* 10 */
+TCL_EXTERN(DWORD)	PostOverlappedQOS _ANSI_ARGS_((SocketInfo * infoPtr, 
+				BufferInfo * bufPtr));
+#endif
+#ifndef IocpWinConvertWSAError_TCL_DECLARED
+#define IocpWinConvertWSAError_TCL_DECLARED
+/* 11 */
+TCL_EXTERN(void)	IocpWinConvertWSAError _ANSI_ARGS_((DWORD errCode));
+#endif
+#ifndef FreeBufferObj_TCL_DECLARED
+#define FreeBufferObj_TCL_DECLARED
+/* 12 */
+TCL_EXTERN(void)	FreeBufferObj _ANSI_ARGS_((BufferInfo * obj));
+#endif
+#ifndef GetBufferObj_TCL_DECLARED
+#define GetBufferObj_TCL_DECLARED
+/* 13 */
+TCL_EXTERN(BufferInfo *) GetBufferObj _ANSI_ARGS_((SocketInfo * infoPtr, 
+				SIZE_T buflen));
+#endif
+#ifndef NewSocketInfo_TCL_DECLARED
+#define NewSocketInfo_TCL_DECLARED
+/* 14 */
+TCL_EXTERN(SocketInfo *) NewSocketInfo _ANSI_ARGS_((SOCKET socket));
+#endif
+#ifndef FreeSocketInfo_TCL_DECLARED
+#define FreeSocketInfo_TCL_DECLARED
+/* 15 */
+TCL_EXTERN(void)	FreeSocketInfo _ANSI_ARGS_((SocketInfo * infoPtr));
+#endif
+#ifndef HasSockets_TCL_DECLARED
+#define HasSockets_TCL_DECLARED
+/* 16 */
+TCL_EXTERN(int)		HasSockets _ANSI_ARGS_((Tcl_Interp * interp));
+#endif
+#ifndef GetSysMsg_TCL_DECLARED
+#define GetSysMsg_TCL_DECLARED
+/* 17 */
+TCL_EXTERN(char *)	GetSysMsg _ANSI_ARGS_((DWORD id));
+#endif
+#ifndef GetSysMsgObj_TCL_DECLARED
+#define GetSysMsgObj_TCL_DECLARED
+/* 18 */
+TCL_EXTERN(Tcl_Obj *)	GetSysMsgObj _ANSI_ARGS_((DWORD id));
+#endif
+#ifndef Iocp_IrdaDiscovery_TCL_DECLARED
+#define Iocp_IrdaDiscovery_TCL_DECLARED
+/* 19 */
+TCL_EXTERN(int)		Iocp_IrdaDiscovery _ANSI_ARGS_((Tcl_Interp * interp, 
+				Tcl_Obj ** deviceList, int limit));
+#endif
+#ifndef Iocp_IrdaIasQuery_TCL_DECLARED
+#define Iocp_IrdaIasQuery_TCL_DECLARED
+/* 20 */
+TCL_EXTERN(int)		Iocp_IrdaIasQuery _ANSI_ARGS_((Tcl_Interp * interp, 
+				Tcl_Obj * deviceId, Tcl_Obj * serviceName, 
+				Tcl_Obj * attribName, Tcl_Obj ** value));
+#endif
+#ifndef IocpLLCreate_TCL_DECLARED
+#define IocpLLCreate_TCL_DECLARED
+/* 21 */
+TCL_EXTERN(LPLLIST)	IocpLLCreate _ANSI_ARGS_((void));
+#endif
+#ifndef IocpLLDestroy_TCL_DECLARED
+#define IocpLLDestroy_TCL_DECLARED
+/* 22 */
+TCL_EXTERN(BOOL)	IocpLLDestroy _ANSI_ARGS_((LPLLIST ll));
+#endif
+#ifndef IocpLLPushBack_TCL_DECLARED
+#define IocpLLPushBack_TCL_DECLARED
+/* 23 */
+TCL_EXTERN(LPLLNODE)	IocpLLPushBack _ANSI_ARGS_((LPLLIST ll, 
+				LPVOID lpItem, LPLLNODE pnode, DWORD dwState));
+#endif
+#ifndef IocpLLPushFront_TCL_DECLARED
+#define IocpLLPushFront_TCL_DECLARED
+/* 24 */
+TCL_EXTERN(LPLLNODE)	IocpLLPushFront _ANSI_ARGS_((LPLLIST ll, 
+				LPVOID lpItem, LPLLNODE pnode, DWORD dwState));
+#endif
+#ifndef IocpLLPop_TCL_DECLARED
+#define IocpLLPop_TCL_DECLARED
+/* 25 */
+TCL_EXTERN(BOOL)	IocpLLPop _ANSI_ARGS_((LPLLNODE pnode, DWORD dwState));
+#endif
+#ifndef IocpLLPopAll_TCL_DECLARED
+#define IocpLLPopAll_TCL_DECLARED
+/* 26 */
+TCL_EXTERN(BOOL)	IocpLLPopAll _ANSI_ARGS_((LPLLIST ll, LPLLNODE snode, 
+				DWORD dwState));
+#endif
+#ifndef IocpLLPopBack_TCL_DECLARED
+#define IocpLLPopBack_TCL_DECLARED
+/* 27 */
+TCL_EXTERN(LPVOID)	IocpLLPopBack _ANSI_ARGS_((LPLLIST ll, DWORD dwState, 
+				DWORD timeout));
+#endif
+#ifndef IocpLLPopFront_TCL_DECLARED
+#define IocpLLPopFront_TCL_DECLARED
+/* 28 */
+TCL_EXTERN(LPVOID)	IocpLLPopFront _ANSI_ARGS_((LPLLIST ll, 
+				DWORD dwState, DWORD timeout));
+#endif
+#ifndef IocpLLIsNotEmpty_TCL_DECLARED
+#define IocpLLIsNotEmpty_TCL_DECLARED
+/* 29 */
+TCL_EXTERN(BOOL)	IocpLLIsNotEmpty _ANSI_ARGS_((LPLLIST ll));
+#endif
+#ifndef IocpLLNodeDestroy_TCL_DECLARED
+#define IocpLLNodeDestroy_TCL_DECLARED
+/* 30 */
+TCL_EXTERN(BOOL)	IocpLLNodeDestroy _ANSI_ARGS_((LPLLNODE node));
+#endif
+#ifndef IocpLLGetCount_TCL_DECLARED
+#define IocpLLGetCount_TCL_DECLARED
+/* 31 */
+TCL_EXTERN(SIZE_T)	IocpLLGetCount _ANSI_ARGS_((LPLLIST ll));
+#endif
 
 typedef struct IocpIntStubs {
     int magic;
     struct IocpIntStubHooks *hooks;
 
+    Tcl_Obj * (*decodeIpSockaddr) _ANSI_ARGS_((SocketInfo * info, LPSOCKADDR addr)); /* 0 */
+    Tcl_Obj * (*decodeIrdaSockaddr) _ANSI_ARGS_((SocketInfo * info, LPSOCKADDR addr)); /* 1 */
+    Tcl_Obj * (*decodeIpxSockaddr) _ANSI_ARGS_((SocketInfo * info, LPSOCKADDR addr)); /* 2 */
+    ThreadSpecificData * (*initSockets) _ANSI_ARGS_((void)); /* 3 */
+    void (*iocpInitProtocolData) _ANSI_ARGS_((SOCKET sock, WS2ProtocolData * pdata)); /* 4 */
+    int (*createSocketAddress) _ANSI_ARGS_((const char * addr, const char * port, LPADDRINFO inhints, LPADDRINFO * result)); /* 5 */
+    void (*freeSocketAddress) _ANSI_ARGS_((LPADDRINFO addrinfo)); /* 6 */
+    BOOL (*findProtocolInfo) _ANSI_ARGS_((int af, int type, int protocol, DWORD flags, WSAPROTOCOL_INFO * pinfo)); /* 7 */
+    DWORD (*postOverlappedAccept) _ANSI_ARGS_((SocketInfo * infoPtr, BufferInfo * acceptobj, int useBurst)); /* 8 */
+    DWORD (*postOverlappedRecv) _ANSI_ARGS_((SocketInfo * infoPtr, BufferInfo * recvobj, int useBurst)); /* 9 */
+    DWORD (*postOverlappedQOS) _ANSI_ARGS_((SocketInfo * infoPtr, BufferInfo * bufPtr)); /* 10 */
+    void (*iocpWinConvertWSAError) _ANSI_ARGS_((DWORD errCode)); /* 11 */
+    void (*freeBufferObj) _ANSI_ARGS_((BufferInfo * obj)); /* 12 */
+    BufferInfo * (*getBufferObj) _ANSI_ARGS_((SocketInfo * infoPtr, SIZE_T buflen)); /* 13 */
+    SocketInfo * (*newSocketInfo) _ANSI_ARGS_((SOCKET socket)); /* 14 */
+    void (*freeSocketInfo) _ANSI_ARGS_((SocketInfo * infoPtr)); /* 15 */
+    int (*hasSockets) _ANSI_ARGS_((Tcl_Interp * interp)); /* 16 */
+    char * (*getSysMsg) _ANSI_ARGS_((DWORD id)); /* 17 */
+    Tcl_Obj * (*getSysMsgObj) _ANSI_ARGS_((DWORD id)); /* 18 */
+    int (*iocp_IrdaDiscovery) _ANSI_ARGS_((Tcl_Interp * interp, Tcl_Obj ** deviceList, int limit)); /* 19 */
+    int (*iocp_IrdaIasQuery) _ANSI_ARGS_((Tcl_Interp * interp, Tcl_Obj * deviceId, Tcl_Obj * serviceName, Tcl_Obj * attribName, Tcl_Obj ** value)); /* 20 */
+    LPLLIST (*iocpLLCreate) _ANSI_ARGS_((void)); /* 21 */
+    BOOL (*iocpLLDestroy) _ANSI_ARGS_((LPLLIST ll)); /* 22 */
+    LPLLNODE (*iocpLLPushBack) _ANSI_ARGS_((LPLLIST ll, LPVOID lpItem, LPLLNODE pnode, DWORD dwState)); /* 23 */
+    LPLLNODE (*iocpLLPushFront) _ANSI_ARGS_((LPLLIST ll, LPVOID lpItem, LPLLNODE pnode, DWORD dwState)); /* 24 */
+    BOOL (*iocpLLPop) _ANSI_ARGS_((LPLLNODE pnode, DWORD dwState)); /* 25 */
+    BOOL (*iocpLLPopAll) _ANSI_ARGS_((LPLLIST ll, LPLLNODE snode, DWORD dwState)); /* 26 */
+    LPVOID (*iocpLLPopBack) _ANSI_ARGS_((LPLLIST ll, DWORD dwState, DWORD timeout)); /* 27 */
+    LPVOID (*iocpLLPopFront) _ANSI_ARGS_((LPLLIST ll, DWORD dwState, DWORD timeout)); /* 28 */
+    BOOL (*iocpLLIsNotEmpty) _ANSI_ARGS_((LPLLIST ll)); /* 29 */
+    BOOL (*iocpLLNodeDestroy) _ANSI_ARGS_((LPLLNODE node)); /* 30 */
+    SIZE_T (*iocpLLGetCount) _ANSI_ARGS_((LPLLIST ll)); /* 31 */
 } IocpIntStubs;
 TCL_EXTERNC IocpIntStubs *iocpIntStubsPtr;
 
@@ -38,6 +251,134 @@ TCL_EXTERNC IocpIntStubs *iocpIntStubsPtr;
  * Inline function declarations:
  */
 
+#ifndef DecodeIpSockaddr
+#define DecodeIpSockaddr \
+	(iocpIntStubsPtr->decodeIpSockaddr) /* 0 */
+#endif
+#ifndef DecodeIrdaSockaddr
+#define DecodeIrdaSockaddr \
+	(iocpIntStubsPtr->decodeIrdaSockaddr) /* 1 */
+#endif
+#ifndef DecodeIpxSockaddr
+#define DecodeIpxSockaddr \
+	(iocpIntStubsPtr->decodeIpxSockaddr) /* 2 */
+#endif
+#ifndef InitSockets
+#define InitSockets \
+	(iocpIntStubsPtr->initSockets) /* 3 */
+#endif
+#ifndef IocpInitProtocolData
+#define IocpInitProtocolData \
+	(iocpIntStubsPtr->iocpInitProtocolData) /* 4 */
+#endif
+#ifndef CreateSocketAddress
+#define CreateSocketAddress \
+	(iocpIntStubsPtr->createSocketAddress) /* 5 */
+#endif
+#ifndef FreeSocketAddress
+#define FreeSocketAddress \
+	(iocpIntStubsPtr->freeSocketAddress) /* 6 */
+#endif
+#ifndef FindProtocolInfo
+#define FindProtocolInfo \
+	(iocpIntStubsPtr->findProtocolInfo) /* 7 */
+#endif
+#ifndef PostOverlappedAccept
+#define PostOverlappedAccept \
+	(iocpIntStubsPtr->postOverlappedAccept) /* 8 */
+#endif
+#ifndef PostOverlappedRecv
+#define PostOverlappedRecv \
+	(iocpIntStubsPtr->postOverlappedRecv) /* 9 */
+#endif
+#ifndef PostOverlappedQOS
+#define PostOverlappedQOS \
+	(iocpIntStubsPtr->postOverlappedQOS) /* 10 */
+#endif
+#ifndef IocpWinConvertWSAError
+#define IocpWinConvertWSAError \
+	(iocpIntStubsPtr->iocpWinConvertWSAError) /* 11 */
+#endif
+#ifndef FreeBufferObj
+#define FreeBufferObj \
+	(iocpIntStubsPtr->freeBufferObj) /* 12 */
+#endif
+#ifndef GetBufferObj
+#define GetBufferObj \
+	(iocpIntStubsPtr->getBufferObj) /* 13 */
+#endif
+#ifndef NewSocketInfo
+#define NewSocketInfo \
+	(iocpIntStubsPtr->newSocketInfo) /* 14 */
+#endif
+#ifndef FreeSocketInfo
+#define FreeSocketInfo \
+	(iocpIntStubsPtr->freeSocketInfo) /* 15 */
+#endif
+#ifndef HasSockets
+#define HasSockets \
+	(iocpIntStubsPtr->hasSockets) /* 16 */
+#endif
+#ifndef GetSysMsg
+#define GetSysMsg \
+	(iocpIntStubsPtr->getSysMsg) /* 17 */
+#endif
+#ifndef GetSysMsgObj
+#define GetSysMsgObj \
+	(iocpIntStubsPtr->getSysMsgObj) /* 18 */
+#endif
+#ifndef Iocp_IrdaDiscovery
+#define Iocp_IrdaDiscovery \
+	(iocpIntStubsPtr->iocp_IrdaDiscovery) /* 19 */
+#endif
+#ifndef Iocp_IrdaIasQuery
+#define Iocp_IrdaIasQuery \
+	(iocpIntStubsPtr->iocp_IrdaIasQuery) /* 20 */
+#endif
+#ifndef IocpLLCreate
+#define IocpLLCreate \
+	(iocpIntStubsPtr->iocpLLCreate) /* 21 */
+#endif
+#ifndef IocpLLDestroy
+#define IocpLLDestroy \
+	(iocpIntStubsPtr->iocpLLDestroy) /* 22 */
+#endif
+#ifndef IocpLLPushBack
+#define IocpLLPushBack \
+	(iocpIntStubsPtr->iocpLLPushBack) /* 23 */
+#endif
+#ifndef IocpLLPushFront
+#define IocpLLPushFront \
+	(iocpIntStubsPtr->iocpLLPushFront) /* 24 */
+#endif
+#ifndef IocpLLPop
+#define IocpLLPop \
+	(iocpIntStubsPtr->iocpLLPop) /* 25 */
+#endif
+#ifndef IocpLLPopAll
+#define IocpLLPopAll \
+	(iocpIntStubsPtr->iocpLLPopAll) /* 26 */
+#endif
+#ifndef IocpLLPopBack
+#define IocpLLPopBack \
+	(iocpIntStubsPtr->iocpLLPopBack) /* 27 */
+#endif
+#ifndef IocpLLPopFront
+#define IocpLLPopFront \
+	(iocpIntStubsPtr->iocpLLPopFront) /* 28 */
+#endif
+#ifndef IocpLLIsNotEmpty
+#define IocpLLIsNotEmpty \
+	(iocpIntStubsPtr->iocpLLIsNotEmpty) /* 29 */
+#endif
+#ifndef IocpLLNodeDestroy
+#define IocpLLNodeDestroy \
+	(iocpIntStubsPtr->iocpLLNodeDestroy) /* 30 */
+#endif
+#ifndef IocpLLGetCount
+#define IocpLLGetCount \
+	(iocpIntStubsPtr->iocpLLGetCount) /* 31 */
+#endif
 
 #endif /* defined(USE_IOCP_STUBS) && !defined(USE_IOCP_STUB_PROCS) */
 

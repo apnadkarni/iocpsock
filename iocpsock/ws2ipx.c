@@ -2,8 +2,6 @@
 #include <wsipx.h>
 //#include <wsnwlink.h>	    NOT USED!
 
-static FN_DECODEADDR DecodeIpxSockaddr;
-
 static WS2ProtocolData ipxProtoData = {
     AF_IPX,
     SOCK_DGRAM,
@@ -79,7 +77,7 @@ static WS2ProtocolData spx2StreamProtoData = {
     NULL
 };
 
-static Tcl_Obj *
+Tcl_Obj *
 DecodeIpxSockaddr (SocketInfo *info, LPSOCKADDR addr)
 {
     static char dest[128];

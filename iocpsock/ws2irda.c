@@ -1,8 +1,6 @@
 #include "iocpsockInt.h"
 #include <af_irda.h>
 
-static FN_DECODEADDR DecodeIrdaSockaddr;
-
 static WS2ProtocolData irdaProtoData = {
     AF_IRDA,
     SOCK_STREAM,
@@ -24,7 +22,7 @@ static SocketInfo *	CreateIrdaSocket(Tcl_Interp *interp,
 				CONST char *myport, int async);
 
 
-static Tcl_Obj *
+Tcl_Obj *
 DecodeIrdaSockaddr (SocketInfo *info, LPSOCKADDR addr)
 {
     char formatedId[12];
