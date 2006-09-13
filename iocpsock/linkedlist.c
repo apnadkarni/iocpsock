@@ -108,7 +108,7 @@ static __inline char CAS2 (volatile void * addr, volatile void * v1, volatile lo
  */
 
 LPLLIST
-IocpLLCreate ()
+IocpLLCreate (void)
 {   
     LPLLIST ll;
     
