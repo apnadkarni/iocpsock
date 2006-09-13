@@ -1,3 +1,121 @@
+2006-09-12  davygrvy
+	* iocpDecls.h:
+	* iocpIntDecls.h:
+	* iocpStubInit.c:
+		genStubs run
+
+	* makefile.vc:
+		install target all fixed-up for exporting a Stubs table
+
+	* iocpStubLib.c:
+		fixed bad edit bug
+
+	* makefile.vc:
+		now exporting a Stubs library
+
+	* iocpsock.h:
+		new edit ready for Stubs
+
+	* makefile.vc:
+		added a genstubs target
+
+	* makefile.vc:
+		dist target added
+
+	* iocpsock_hilevel.c:
+		Some Irda stuff added, but needs to be tested more and adapted
+		into the generic framework
+
+	* tools/genStubs.tcl:
+		A modified genStubs script to avoid the Borland prototype bug
+
+	* iocpsock.dsp:
+	* ws2apltalk.c:
+	* ws2atm.c:
+	* ws2decnet.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+	* ws2isotp4.c:
+	* ws2netbios.c:
+	* ws2tcp.c:
+	* ws2udp.c:
+	* ws2vines.c:
+		getting ready for Stubs
+
+	* iocpsock_lolevel.c:
+		A test for dead sockets added, but needs to be tested
+
+	* iocpDecls.h:
+	* iocpIntDecls.h:
+	* iocpStubInit.c:
+	* iocpStubLib.c:
+	* iocpsock.decls:
+	* iocpsockInt.h:
+		blank files, in case I delete them (again)
+
+	* dllmain.c:
+		added a safe init
+
+	* tclname.c:
+	* tclname.dsp:
+		continuing experiments with IrDA
+
+	* linkedlist.c:
+		compare and exchange code added, but not yet being used (but
+		will one day)
+
+	* iocpsock_thrdpool.c:
+		This will be used one day (but not today)
+
+2006-03-08  davygrvy
+	* final_report.txt:
+		speling
+
+	* dllmain.c:
+	* iocpsock.h:
+	* ws2irda.c:
+		some IrDA new stuff
+
+	* ws2ipx.c:
+		Added DecodeIpxSockaddr() according to an example I found for
+		how it should be displayed
+
+	* ws2tcp.c:
+		better commenting for DecodeIpSockaddr()
+
+2005-04-22  davygrvy
+	* ws2tcp.c:
+		check for proper return values from getaddrinfo() calls in
+		DecodeIpSockaddr()
+
+2005-04-21  davygrvy
+	* iocpsock_lolevel.c:
+		fconfigure -peername on server socket was returning garbage
+
+2005-04-12  davygrvy
+	* tclname.c:
+		Can now do an IrDA discovery. Witness:
+		1 {Tcl name resolver version: 1.0}
+		200 ready
+		query irda *
+		201 * {{83-18-00-00 THINKPAD-600E {Computer Telephony Comm OBEX}}}
+		200 ready
+
+2005-04-11  davygrvy
+	* iocpsock.dsw:
+	* tclWinError.c:
+	* tclWinError.h:
+	* tclname.c:
+	* tclname.dsp:
+	* tclname.dsp:
+		NEW!  external name tool.  Just DNS query for now.
+
+	* tclname.c:
+		some more small cruft fixed.
+
+	* tclname.c:
+		small cruft fixed.
+
 2005-03-29  davygrvy
 	* dllmain.c:
 	* iocpsock.h:
