@@ -214,6 +214,148 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
 /*
  *----------------------------------------------------------------------
  *
+ * Iocp_MakeTcp4ClientChannel --
+ *
+ *	Creates a Tcl_Channel from an existing client TCP4 socket.
+ *
+ * Results:
+ *	The Tcl_Channel wrapped around the preexisting TCP4 socket.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+Tcl_Channel
+Iocp_MakeTcp4ClientChannel(
+    ClientData cdata)		/* The socket to wrap up into a channel. */
+{
+    SocketInfo *infoPtr;
+    BufferInfo *bufPtr;
+    char channelName[16 + TCL_INTEGER_SPACE];
+    SOCKET sock = (SOCKET) cdata;
+    WS2ProtocolData *pdata;
+    int i;
+    ThreadSpecificData *tsdPtr = InitSockets();
+
+
+    /* Only IPv4 */
+    pdata = &tcp4ProtoData;
+    IocpInitProtocolData(sock, pdata);
+
+    infoPtr = NewSocketInfo(sock);
+    infoPtr->proto = pdata;
+
+    /* Info needed to get back to this thread. */
+    infoPtr->tsdHome = tsdPtr;
+
+    /* 
+     * Associate the socket and its SocketInfo struct to the
+     * completion port.  This implies an automatic set to
+     * non-blocking.
+     */
+    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
+	    (ULONG_PTR)infoPtr, 0) == NULL) {
+	IocpWinConvertWSAError(GetLastError());
+	FreeSocketInfo(infoPtr);
+	return NULL;
+    }
+
+    /*
+     * Start watching for read events on the socket.
+     */
+
+    infoPtr->llPendingRecv = IocpLLCreate();
+
+    /* post IOCP_INITIAL_RECV_COUNT recvs. */
+    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
+	bufPtr = GetBufferObj(infoPtr,
+		(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
+	PostOverlappedRecv(infoPtr, bufPtr, 0);
+    }
+
+    wsprintf(channelName, "iocp%lu", infoPtr->socket);
+    infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
+	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
+    Tcl_SetChannelOption(NULL, infoPtr->channel, "-translation", "auto crlf");
+    return infoPtr->channel;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
+ * Iocp_MakeTcp6ClientChannel --
+ *
+ *	Creates a Tcl_Channel from an existing client TCP6 socket.
+ *
+ * Results:
+ *	The Tcl_Channel wrapped around the preexisting TCP6 socket.
+ *
+ * Side effects:
+ *	None.
+ *
+ *----------------------------------------------------------------------
+ */
+
+Tcl_Channel
+Iocp_MakeTcp6ClientChannel(
+    ClientData cdata)		/* The socket to wrap up into a channel. */
+{
+    SocketInfo *infoPtr;
+    BufferInfo *bufPtr;
+    char channelName[16 + TCL_INTEGER_SPACE];
+    SOCKET sock = (SOCKET) cdata;
+    WS2ProtocolData *pdata;
+    int i;
+    ThreadSpecificData *tsdPtr = InitSockets();
+
+
+    /* Only IPv6 */
+    pdata = &tcp6ProtoData;
+    IocpInitProtocolData(sock, pdata);
+
+    infoPtr = NewSocketInfo(sock);
+    infoPtr->proto = pdata;
+
+    /* Info needed to get back to this thread. */
+    infoPtr->tsdHome = tsdPtr;
+
+    /* 
+     * Associate the socket and its SocketInfo struct to the
+     * completion port.  This implies an automatic set to
+     * non-blocking.
+     */
+    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
+	    (ULONG_PTR)infoPtr, 0) == NULL) {
+	IocpWinConvertWSAError(GetLastError());
+	FreeSocketInfo(infoPtr);
+	return NULL;
+    }
+
+    /*
+     * Start watching for read events on the socket.
+     */
+
+    infoPtr->llPendingRecv = IocpLLCreate();
+
+    /* post IOCP_INITIAL_RECV_COUNT recvs. */
+    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
+	bufPtr = GetBufferObj(infoPtr,
+		(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
+	PostOverlappedRecv(infoPtr, bufPtr, 0);
+    }
+
+    wsprintf(channelName, "iocp%lu", infoPtr->socket);
+    infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
+	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
+    Tcl_SetChannelOption(NULL, infoPtr->channel, "-translation", "auto crlf");
+    return infoPtr->channel;
+}
+
+/*
+ *----------------------------------------------------------------------
+ *
  * Iocp_OpenTcpClient --
  *
  *	Opens a TCP client socket and creates a channel around it.

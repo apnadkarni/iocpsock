@@ -14,6 +14,8 @@ if {[lsearch [namespace children] ::tcltest] == -1} {
 ::tcltest::loadTestedCommands
 ::tcltest::testConstraint xp \
 	[expr {$::tcl_platform(os) == "Windows NT" && $::tcl_platform(osVersion) > 5.0}]
+::tcltest::testConstraint threads \
+	[expr {[info exist ::tcl_platform(threaded)] && $::tcl_platform(threaded)}]
 
 test socket2-1.1 {Tcl_WrongNumArgs message} -constraints {
     nt
@@ -42,11 +44,10 @@ test socket2-1.3 {Check all fconfigure options} -constraints {
     nt
 } -match glob -body {
     set s [socket2 -server foobar 0]
-    set port [lindex [fconfigure $s -sockname] 2]
     fconfigure $s
 } -cleanup {
     catch {close $s}
-} -result {-blocking 1 -buffering full -buffersize 4096 -encoding cp1252 -eofchar {} -translation auto -peername {0.0.0.0 0.0.0.0 0} -sockname {*} -keepalive 0 -nagle 1 -backlog {5 5} -sendcap {20 0} -recvburst {20 0}}
+} -result {-blocking 1 -buffering full -buffersize 4096 -encoding cp1252 -eofchar {} -translation auto -peername {0.0.0.0 0.0.0.0 0} -sockname {*} -keepalive 0 -nagle 1 -backlog {5 5} -sendcap {20 0} -recvmode {zero-byte}}
 
 
 ### Accepts should not be greedy or we risk resource starvation
@@ -194,6 +195,34 @@ test socket2-3.1 {Keep hammering the readable handler for EOF notices until serv
     unset notices
 } -result {{got connect} {(6): hello
 } closing 20}
+
+test socket2-4.1 {TIP #218 support -- test #1} -constraints {
+    nt threads
+} -setup {
+    package require Thread
+    set reader [thread::create {
+	proc GotRead {s} {
+	    global notices
+	    if {[string length [set e [fconfigure $s -error]]]} {
+		lappend notices "error: $s: $e : closing socket"
+		close $s
+		return
+	    }
+	    set stuff [read $s]
+	    set got [string length $stuff]
+	    if {$got} {lappend notices "($got): $stuff"}
+	    if {[eof $s]} {
+		lappend notices "closing"
+		close $s
+	    }
+	}
+	thread::wait
+    }]
+} -body {
+    socket2
+} -cleanup {
+    thread::send $reader thread::unwind
+} -result {}
 
 # cleanup
 ::tcltest::cleanupTests

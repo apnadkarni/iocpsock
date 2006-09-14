@@ -43,22 +43,34 @@ declare 3 generic {
 	Tcl_TcpAcceptProc *acceptProc, ClientData acceptProcData)
 }
 declare 4 generic {
-    Tcl_Channel Iocp_OpenUdpSocket (Tcl_Interp *interp,
-	CONST char *port, CONST char *host, CONST char *myaddr,
-	CONST char *myport)
+    Tcl_Channel Iocp_MakeTcp4ClientChannel(ClientData cdata)
 }
 declare 5 generic {
-    Tcl_Channel Iocp_OpenIrdaClient (Tcl_Interp *interp,
-	CONST char *ServiceName, CONST char *DeviceId,
-	CONST char *myDeviceId, CONST char *myServiceName,
-	int async)
+    Tcl_Channel Iocp_MakeTcp6ClientChannel(ClientData cdata)
 }
-declare 6 generic {
-    Tcl_Channel Iocp_OpenIrdaServer (Tcl_Interp *interp,
-	CONST char *serviceName, CONST char *DeviceId,
-	CONST char *myDeviceId, CONST char *myServiceName,
-	int async)
-}
+#declare 6 generic {
+#    Tcl_Channel Iocp_OpenUdpSocket (Tcl_Interp *interp,
+#	CONST char *port, CONST char *host, CONST char *myaddr,
+#	CONST char *myport)
+#}
+#declare 7 generic {
+#    Tcl_Channel Iocp_MakeUdp4ClientChannel(ClientData cdata)
+#}
+#declare 8 generic {
+#    Tcl_Channel Iocp_MakeUdp6ClientChannel(ClientData cdata)
+#}
+#declare 9 generic {
+#    Tcl_Channel Iocp_OpenIrdaClient (Tcl_Interp *interp,
+#	CONST char *ServiceName, CONST char *DeviceId,
+#	CONST char *myDeviceId, CONST char *myServiceName,
+#	int async)
+#}
+#declare 10 generic {
+#    Tcl_Channel Iocp_OpenIrdaServer (Tcl_Interp *interp,
+#	CONST char *serviceName, CONST char *DeviceId,
+#	CONST char *myDeviceId, CONST char *myServiceName,
+#	int async)
+#}
 
 interface iocpInt
 

@@ -66,9 +66,8 @@ IocpStubs iocpStubs = {
     Iocpsock_SafeInit, /* 1 */
     Iocp_OpenTcpClient, /* 2 */
     Iocp_OpenTcpServer, /* 3 */
-    Iocp_OpenUdpSocket, /* 4 */
-    Iocp_OpenIrdaClient, /* 5 */
-    Iocp_OpenIrdaServer, /* 6 */
+    Iocp_MakeTcp4ClientChannel, /* 4 */
+    Iocp_MakeTcp6ClientChannel, /* 5 */
 };
 
 /* !END!: Do not edit above this line. */

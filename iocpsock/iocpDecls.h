@@ -50,32 +50,17 @@ TCL_EXTERN(Tcl_Channel)	 Iocp_OpenTcpServer _ANSI_ARGS_((Tcl_Interp * interp,
 				Tcl_TcpAcceptProc * acceptProc, 
 				ClientData acceptProcData));
 #endif
-#ifndef Iocp_OpenUdpSocket_TCL_DECLARED
-#define Iocp_OpenUdpSocket_TCL_DECLARED
+#ifndef Iocp_MakeTcp4ClientChannel_TCL_DECLARED
+#define Iocp_MakeTcp4ClientChannel_TCL_DECLARED
 /* 4 */
-TCL_EXTERN(Tcl_Channel)	 Iocp_OpenUdpSocket _ANSI_ARGS_((Tcl_Interp * interp, 
-				CONST char * port, CONST char * host, 
-				CONST char * myaddr, CONST char * myport));
+TCL_EXTERN(Tcl_Channel)	 Iocp_MakeTcp4ClientChannel _ANSI_ARGS_((
+				ClientData cdata));
 #endif
-#ifndef Iocp_OpenIrdaClient_TCL_DECLARED
-#define Iocp_OpenIrdaClient_TCL_DECLARED
+#ifndef Iocp_MakeTcp6ClientChannel_TCL_DECLARED
+#define Iocp_MakeTcp6ClientChannel_TCL_DECLARED
 /* 5 */
-TCL_EXTERN(Tcl_Channel)	 Iocp_OpenIrdaClient _ANSI_ARGS_((
-				Tcl_Interp * interp, 
-				CONST char * ServiceName, 
-				CONST char * DeviceId, 
-				CONST char * myDeviceId, 
-				CONST char * myServiceName, int async));
-#endif
-#ifndef Iocp_OpenIrdaServer_TCL_DECLARED
-#define Iocp_OpenIrdaServer_TCL_DECLARED
-/* 6 */
-TCL_EXTERN(Tcl_Channel)	 Iocp_OpenIrdaServer _ANSI_ARGS_((
-				Tcl_Interp * interp, 
-				CONST char * serviceName, 
-				CONST char * DeviceId, 
-				CONST char * myDeviceId, 
-				CONST char * myServiceName, int async));
+TCL_EXTERN(Tcl_Channel)	 Iocp_MakeTcp6ClientChannel _ANSI_ARGS_((
+				ClientData cdata));
 #endif
 
 typedef struct IocpStubHooks {
@@ -90,9 +75,8 @@ typedef struct IocpStubs {
     int (*iocpsock_SafeInit) _ANSI_ARGS_((Tcl_Interp * interp)); /* 1 */
     Tcl_Channel (*iocp_OpenTcpClient) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, CONST char * myaddr, CONST char * myport, int async)); /* 2 */
     Tcl_Channel (*iocp_OpenTcpServer) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, Tcl_TcpAcceptProc * acceptProc, ClientData acceptProcData)); /* 3 */
-    Tcl_Channel (*iocp_OpenUdpSocket) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, CONST char * myaddr, CONST char * myport)); /* 4 */
-    Tcl_Channel (*iocp_OpenIrdaClient) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * ServiceName, CONST char * DeviceId, CONST char * myDeviceId, CONST char * myServiceName, int async)); /* 5 */
-    Tcl_Channel (*iocp_OpenIrdaServer) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * serviceName, CONST char * DeviceId, CONST char * myDeviceId, CONST char * myServiceName, int async)); /* 6 */
+    Tcl_Channel (*iocp_MakeTcp4ClientChannel) _ANSI_ARGS_((ClientData cdata)); /* 4 */
+    Tcl_Channel (*iocp_MakeTcp6ClientChannel) _ANSI_ARGS_((ClientData cdata)); /* 5 */
 } IocpStubs;
 TCL_EXTERNC IocpStubs *iocpStubsPtr;
 
@@ -118,17 +102,13 @@ TCL_EXTERNC IocpStubs *iocpStubsPtr;
 #define Iocp_OpenTcpServer \
 	(iocpStubsPtr->iocp_OpenTcpServer) /* 3 */
 #endif
-#ifndef Iocp_OpenUdpSocket
-#define Iocp_OpenUdpSocket \
-	(iocpStubsPtr->iocp_OpenUdpSocket) /* 4 */
+#ifndef Iocp_MakeTcp4ClientChannel
+#define Iocp_MakeTcp4ClientChannel \
+	(iocpStubsPtr->iocp_MakeTcp4ClientChannel) /* 4 */
 #endif
-#ifndef Iocp_OpenIrdaClient
-#define Iocp_OpenIrdaClient \
-	(iocpStubsPtr->iocp_OpenIrdaClient) /* 5 */
-#endif
-#ifndef Iocp_OpenIrdaServer
-#define Iocp_OpenIrdaServer \
-	(iocpStubsPtr->iocp_OpenIrdaServer) /* 6 */
+#ifndef Iocp_MakeTcp6ClientChannel
+#define Iocp_MakeTcp6ClientChannel \
+	(iocpStubsPtr->iocp_MakeTcp6ClientChannel) /* 5 */
 #endif
 
 #endif /* defined(USE_IOCP_STUBS) && !defined(USE_IOCP_STUB_PROCS) */
