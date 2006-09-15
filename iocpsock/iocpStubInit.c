@@ -64,10 +64,13 @@ IocpStubs iocpStubs = {
     &iocpStubHooks,
     Iocpsock_Init, /* 0 */
     Iocpsock_SafeInit, /* 1 */
-    Iocp_OpenTcpClient, /* 2 */
-    Iocp_OpenTcpServer, /* 3 */
-    Iocp_MakeTcp4ClientChannel, /* 4 */
-    Iocp_MakeTcp6ClientChannel, /* 5 */
+    Tcl_Win32ErrId, /* 2 */
+    Tcl_Win32ErrMsg, /* 3 */
+    Tcl_Win32Error, /* 4 */
+    Iocp_OpenTcpClient, /* 5 */
+    Iocp_OpenTcpServer, /* 6 */
+    Iocp_MakeTcp4ClientChannel, /* 7 */
+    Iocp_MakeTcp6ClientChannel, /* 8 */
 };
 
 /* !END!: Do not edit above this line. */

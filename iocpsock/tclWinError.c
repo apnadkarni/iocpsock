@@ -1,5 +1,4 @@
-#include "tcl.h"
-#include "tclWinError.h"
+#include "iocpsock.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -3432,7 +3431,7 @@ static Tcl_ThreadDataKey dataKey;
  */
 
 CONST char *
-Tcl_Win32ErrId (DWORD errorCode)
+Tcl_Win32ErrId (unsigned long errorCode)
 {
     switch (errorCode) {
 	case ERROR_SUCCESS :		    return "ERROR_SUCCESS";
@@ -5269,8 +5268,7 @@ Tcl_Win32ErrId (DWORD errorCode)
  *	Same as Tcl_ErrnoMsg(), but for windows error codes.
  *
  * Results:
- *      The message that is associated with the error code.  Not
- *	localized.
+ *      The message that is associated with the error code.
  *    
  * Side Effects:
  *	None.
@@ -5279,37 +5277,7 @@ Tcl_Win32ErrId (DWORD errorCode)
  */
 
 CONST char *
-Tcl_Win32ErrMsg TCL_VARARGS_DEF(DWORD, arg1)
-{
-    va_list argList;
-    DWORD errorCode;
-    CONST char *msg;
-
-    errorCode = TCL_VARARGS_START(DWORD, arg1, argList);
-    msg = Tcl_Win32ErrMsgVA(errorCode, argList);
-    va_end(argList);
-    return msg;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * Tcl_Win32ErrMsgVA --
- *
- *	Same as Tcl_Win32ErrMsg, but takes a spread va_list.
- *
- * Results:
- *      The message that is associated with the error code.  Not
- *	localized.
- *    
- * Side Effects:
- *	caller is responsible for clearing the va_list.
- *
- *----------------------------------------------------------------------
- */
-
-CONST char *
-Tcl_Win32ErrMsgVA (DWORD errorCode, va_list argList)
+Tcl_Win32ErrMsg (unsigned long errorCode)
 {
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
     DWORD result;
@@ -5328,10 +5296,10 @@ Tcl_Win32ErrMsgVA (DWORD errorCode, va_list argList)
 	    FORMAT_MESSAGE_MAX_WIDTH_MASK,
 	    0L,
 	    errorCode,
-	    0,
+	    0,			    /* use best guess localization */
 	    tsdPtr->sysMsgSpace,
 	    ERR_BUF_SIZE,
-	    &argList);
+	    NULL);
 
     return (result ? tsdPtr->sysMsgSpace : NULL);
 }
@@ -5353,17 +5321,13 @@ Tcl_Win32ErrMsgVA (DWORD errorCode, va_list argList)
  */
 
 CONST char *
-Tcl_Win32Error TCL_VARARGS_DEF(Tcl_Interp *, arg1)
+Tcl_Win32Error (Tcl_Interp *interp)
 {
     CONST char *id, *msg;
-    va_list argList;
-    Tcl_Interp *interp;
     DWORD err = GetLastError();
 
-    interp = TCL_VARARGS_START(Tcl_Interp *, arg1, argList);
     id = Tcl_Win32ErrId(err);
-    msg = Tcl_Win32ErrMsgVA(err, argList);
-    va_end(argList);
+    msg = Tcl_Win32ErrMsg(err);
     Tcl_SetErrorCode(interp, "WIN32", id, msg, 0L);
     return msg;
 }

@@ -211,6 +211,7 @@ SOURCE=.\iocpsock_lolevel.c
 # Begin Source File
 
 SOURCE=.\iocpsock_thrdpool.c
+# PROP Exclude_From_Build 1
 # End Source File
 # Begin Source File
 
@@ -228,6 +229,10 @@ SOURCE=.\linkedlist.c
 # Begin Source File
 
 SOURCE=.\makefile.vc
+# End Source File
+# Begin Source File
+
+SOURCE=.\tclWinError.c
 # End Source File
 # Begin Source File
 
