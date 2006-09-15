@@ -46,20 +46,52 @@ The <b>IOCPSOCK</b> extension contains two (2) commands provided to the interpre
                 Sets (or gets) the limit in terms of the count of concurrent
                 buffers allowed.  Think of this as a poor-man's throttle.
                 More means speedier, but the per socket resource limit is
-                raised.
+                raised.  Use &quot;1&quot; for lowest resource usage and
+		about &quot;25&quot; for highest performance.
             </dd>
             <dt>-recvmode</dt>
             <dd>
                 Sets (or gets) the receive mode and properties of the mode.
-                Choices are <i>zero-byte</i>, or <i>burst</i>. <i>zero-byte</i>
-                is the lowest in terms of resource usage per socket, but
-                is not the speediest.  <i>burst</i> mode allows for reads
-                behind the scenes and will increase the concurrent pool
-                to match the in-coming (instantanious) load within the
-                limits specified.  Use <i>zero-byte</i> mode for many
-		sockets that transfer little data (httpd).  Use <i>burst</i>
-		mode when few sockets need to transfer large amounts of data
-		(ftpd).
+                Choices are &quot;<i>zero-byte</i>&quot;,
+		&quot;<i>flow-controlled</i>&quot; or
+		&quot;<i>burst-detection &lt;cap&gt;</i>&quot;.
+		<p/>
+		<i>zero-byte</i> is the lowest in terms of resource usage
+		per socket and is the default, but is not the speediest.
+		What's going on under-the-hood is a zero-byte receive buffer
+		is used for the overlapped WSARecv call so it is only used
+		as an alert for when the socket becomes readable.  When the
+		call to read the socket comes in to the Tcl_DriverInputProc,
+		a non-blocking, non-posting WSARecv call is made using the
+		actual channel buffer as the write space.  This mode is best
+		used with applications that have a high concurrent socket
+		count (possibly over 50K), move small amounts of data and
+		that will have a long life span.  HTTPD is a good example
+		where this mode would be helpful.
+		<p/>
+		<i>flow-controlled</i> is the &quot;normal&quot; mode that
+		should be used for fast transfers.  Under-the-hood, this is
+		&quot;by-the-book&quot; overlapped-I/O.  To start the
+		socket &quot;listening&quot; for receives, WSARecv is
+		called for overlapped operation with a pre-allocated buffer
+		that is handed to the kernel.  For when the Tcl_DriverInputProc
+		is called, the buffer is memcpy'd into the channel buffer, and
+		a new overlapped WSARecv call is made with a new kernel buffer
+		(same size as the channel buffer) to take the last ones place.
+		<p/>
+		<i>burst-detection</i> mode allows for reads behind the scenes
+		and will increase the concurrent pool of outstanding WSARecv
+		calls within the limits specified.  &lt;cap&gt; is the pool
+		size limit. Overlapped-I/O has the
+		ability to post numerous outstanding WSARecv calls to match
+		the (instantanious) in-coming load.  This mode should only
+		be used for problematic networks that are &quot;bursty&quot;
+		with regards to data flow.  One should not use this mode
+		if resource usage is at a premium or if the sockets are
+		long-lived.  <i>flow-controlled</i> is the better option
+		until you know you can improve transfer performance with
+		<i>burst-detection</i>.
+		<p/>
             </dd>
         </dl>
     </dd>
