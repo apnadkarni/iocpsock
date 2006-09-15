@@ -70,13 +70,13 @@ TCL_EXTERN(Tcl_Channel)	 Iocp_OpenTcpServer _ANSI_ARGS_((Tcl_Interp * interp,
 #define Iocp_MakeTcp4ClientChannel_TCL_DECLARED
 /* 7 */
 TCL_EXTERN(Tcl_Channel)	 Iocp_MakeTcp4ClientChannel _ANSI_ARGS_((
-				ClientData cdata));
+				ClientData sock));
 #endif
 #ifndef Iocp_MakeTcp6ClientChannel_TCL_DECLARED
 #define Iocp_MakeTcp6ClientChannel_TCL_DECLARED
 /* 8 */
 TCL_EXTERN(Tcl_Channel)	 Iocp_MakeTcp6ClientChannel _ANSI_ARGS_((
-				ClientData cdata));
+				ClientData sock));
 #endif
 
 typedef struct IocpStubHooks {
@@ -94,8 +94,8 @@ typedef struct IocpStubs {
     CONST char * (*tcl_Win32Error) _ANSI_ARGS_((Tcl_Interp * interp)); /* 4 */
     Tcl_Channel (*iocp_OpenTcpClient) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, CONST char * myaddr, CONST char * myport, int async)); /* 5 */
     Tcl_Channel (*iocp_OpenTcpServer) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, Tcl_TcpAcceptProc * acceptProc, ClientData acceptProcData)); /* 6 */
-    Tcl_Channel (*iocp_MakeTcp4ClientChannel) _ANSI_ARGS_((ClientData cdata)); /* 7 */
-    Tcl_Channel (*iocp_MakeTcp6ClientChannel) _ANSI_ARGS_((ClientData cdata)); /* 8 */
+    Tcl_Channel (*iocp_MakeTcp4ClientChannel) _ANSI_ARGS_((ClientData sock)); /* 7 */
+    Tcl_Channel (*iocp_MakeTcp6ClientChannel) _ANSI_ARGS_((ClientData sock)); /* 8 */
 } IocpStubs;
 TCL_EXTERNC IocpStubs *iocpStubsPtr;
 

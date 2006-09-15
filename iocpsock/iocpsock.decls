@@ -57,10 +57,10 @@ declare 6 generic {
 	Tcl_TcpAcceptProc *acceptProc, ClientData acceptProcData)
 }
 declare 7 generic {
-    Tcl_Channel Iocp_MakeTcp4ClientChannel(ClientData cdata)
+    Tcl_Channel Iocp_MakeTcp4ClientChannel(ClientData sock)
 }
 declare 8 generic {
-    Tcl_Channel Iocp_MakeTcp6ClientChannel(ClientData cdata)
+    Tcl_Channel Iocp_MakeTcp6ClientChannel(ClientData sock)
 }
 #declare 9 generic {
 #    Tcl_Channel Iocp_OpenUdpSocket (Tcl_Interp *interp,
@@ -143,12 +143,12 @@ declare 15 generic {
 declare 16 generic {
     int HasSockets (Tcl_Interp *interp)
 }
-declare 17 generic {
-    char * GetSysMsg (DWORD id)
-}
-declare 18 generic {
-    Tcl_Obj * GetSysMsgObj (DWORD id)
-}
+#declare 17 generic {
+#    char * GetSysMsg (DWORD id)
+#}
+#declare 18 generic {
+#    Tcl_Obj * GetSysMsgObj (DWORD id)
+#}
 declare 19 generic {
     int Iocp_IrdaDiscovery (Tcl_Interp *interp, Tcl_Obj **deviceList,
 	int limit)

@@ -122,16 +122,8 @@ TCL_EXTERN(void)	FreeSocketInfo _ANSI_ARGS_((SocketInfo * infoPtr));
 /* 16 */
 TCL_EXTERN(int)		HasSockets _ANSI_ARGS_((Tcl_Interp * interp));
 #endif
-#ifndef GetSysMsg_TCL_DECLARED
-#define GetSysMsg_TCL_DECLARED
-/* 17 */
-TCL_EXTERN(char *)	GetSysMsg _ANSI_ARGS_((DWORD id));
-#endif
-#ifndef GetSysMsgObj_TCL_DECLARED
-#define GetSysMsgObj_TCL_DECLARED
-/* 18 */
-TCL_EXTERN(Tcl_Obj *)	GetSysMsgObj _ANSI_ARGS_((DWORD id));
-#endif
+/* Slot 17 is reserved */
+/* Slot 18 is reserved */
 #ifndef Iocp_IrdaDiscovery_TCL_DECLARED
 #define Iocp_IrdaDiscovery_TCL_DECLARED
 /* 19 */
@@ -227,8 +219,8 @@ typedef struct IocpIntStubs {
     SocketInfo * (*newSocketInfo) _ANSI_ARGS_((SOCKET socket)); /* 14 */
     void (*freeSocketInfo) _ANSI_ARGS_((SocketInfo * infoPtr)); /* 15 */
     int (*hasSockets) _ANSI_ARGS_((Tcl_Interp * interp)); /* 16 */
-    char * (*getSysMsg) _ANSI_ARGS_((DWORD id)); /* 17 */
-    Tcl_Obj * (*getSysMsgObj) _ANSI_ARGS_((DWORD id)); /* 18 */
+    void *reserved17;
+    void *reserved18;
     int (*iocp_IrdaDiscovery) _ANSI_ARGS_((Tcl_Interp * interp, Tcl_Obj ** deviceList, int limit)); /* 19 */
     int (*iocp_IrdaIasQuery) _ANSI_ARGS_((Tcl_Interp * interp, Tcl_Obj * deviceId, Tcl_Obj * serviceName, Tcl_Obj * attribName, Tcl_Obj ** value)); /* 20 */
     LPLLIST (*iocpLLCreate) _ANSI_ARGS_((void)); /* 21 */
@@ -319,14 +311,8 @@ TCL_EXTERNC IocpIntStubs *iocpIntStubsPtr;
 #define HasSockets \
 	(iocpIntStubsPtr->hasSockets) /* 16 */
 #endif
-#ifndef GetSysMsg
-#define GetSysMsg \
-	(iocpIntStubsPtr->getSysMsg) /* 17 */
-#endif
-#ifndef GetSysMsgObj
-#define GetSysMsgObj \
-	(iocpIntStubsPtr->getSysMsgObj) /* 18 */
-#endif
+/* Slot 17 is reserved */
+/* Slot 18 is reserved */
 #ifndef Iocp_IrdaDiscovery
 #define Iocp_IrdaDiscovery \
 	(iocpIntStubsPtr->iocp_IrdaDiscovery) /* 19 */

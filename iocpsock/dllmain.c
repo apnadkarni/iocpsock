@@ -42,25 +42,6 @@ DllMain (HANDLE hModule, DWORD dwReason, LPVOID lpReserved)
 }
 #endif
 
-char *
-GetSysMsg(DWORD id)
-{
-    int chars;
-    static char sysMsgSpace[512];
-
-    chars = wsprintf(sysMsgSpace, "[%u] ", id);
-    FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM |FORMAT_MESSAGE_IGNORE_INSERTS |
-	    FORMAT_MESSAGE_MAX_WIDTH_MASK, 0L, id, 0, sysMsgSpace+chars, (512-chars),
-	    0);
-    return sysMsgSpace;
-}
-
-Tcl_Obj *
-GetSysMsgObj(DWORD id)
-{
-    return Tcl_NewStringObj(GetSysMsg(id), -1);
-}
-
 static const char *HtmlStart = "<tr><td>";
 static const char *HtmlMiddle = "</td><td>";
 static const char *HtmlEnd = "</td></tr>\n";
@@ -143,10 +124,10 @@ Iocpsock_Init (Tcl_Interp *interp)
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
     Tcl_CreateObjCommand(interp, "iocp_stats", Iocp_StatsObjCmd, 0L, 0L);
-    Tcl_CreateObjCommand(interp, "irda::discovery", Iocp_IrdaDiscoveryCmd, 0L, 0L);
-    Tcl_CreateObjCommand(interp, "irda::ias_query", Iocp_IrdaIasQueryCmd, 0L, 0L);
-    Tcl_CreateObjCommand(interp, "irda::ias_set", Iocp_IrdaIasSetCmd, 0L, 0L);
-    Tcl_CreateObjCommand(interp, "irda::lazy_discovery", Iocp_IrdaLazyDiscoveryCmd, 0L, 0L);
+//    Tcl_CreateObjCommand(interp, "irda::discovery", Iocp_IrdaDiscoveryCmd, 0L, 0L);
+//    Tcl_CreateObjCommand(interp, "irda::ias_query", Iocp_IrdaIasQueryCmd, 0L, 0L);
+//    Tcl_CreateObjCommand(interp, "irda::ias_set", Iocp_IrdaIasSetCmd, 0L, 0L);
+//    Tcl_CreateObjCommand(interp, "irda::lazy_discovery", Iocp_IrdaLazyDiscoveryCmd, 0L, 0L);
     Tcl_PkgProvide(interp, "Iocpsock", IOCPSOCK_VERSION);
     return TCL_OK;
 }
