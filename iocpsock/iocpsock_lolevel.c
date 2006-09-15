@@ -972,6 +972,10 @@ IocpCloseProc (
     int errorCode = 0;
     BufferInfo *bufPtr;
 
+    /* TODO: Tcl convention says a blocking device should wait for
+    all data and return an error code (if any). A non-blocking
+    device should hard-close.. what to do here? */
+
     /*
      * The core wants to close channels after the exit handler!
      * Our heap is gone!
@@ -1007,8 +1011,6 @@ IocpCloseProc (
 	    /* Close this listening socket directly. */
 	    infoPtr->flags |= IOCP_CLOSABLE;
 	    InterlockedDecrement(&infoPtr->outstandingOps);
-	    /* collect stats */
-	    InterlockedDecrement(&StatOpenSockets);
 	    temp = infoPtr->socket;
 	    infoPtr->socket = INVALID_SOCKET;
 	    winSock.closesocket(temp);
@@ -1852,10 +1854,11 @@ FreeSocketInfo (SocketInfo *infoPtr)
 
     /* Just in case... */
     if (infoPtr->socket != INVALID_SOCKET) {
-	/* collect stats */
-	InterlockedDecrement(&StatOpenSockets);
 	winSock.closesocket(infoPtr->socket);
     }
+
+    /* collect stats */
+    InterlockedDecrement(&StatOpenSockets);
 
     DeleteCriticalSection(&infoPtr->tsdLock);
 
