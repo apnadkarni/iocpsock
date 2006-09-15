@@ -5312,7 +5312,8 @@ Tcl_Win32ErrMsg (unsigned long errorCode)
  *	Same as Tcl_PosixError(), but for windows error codes.
  *
  * Results:
- *      The message that is associated with the error code.
+ *      The class, ID and message that is associated with the error
+ *	code.
  *    
  * Side Effects:
  *	sets $errorCode in the specified interpreter.
