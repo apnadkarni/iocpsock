@@ -720,7 +720,7 @@ IocpEventSetupProc (
      */
 
     if (IocpLLIsNotEmpty(tsdPtr->readySockets) ||
-		IocpLLIsNotEmpty(tsdPtr->deadSockets)) {
+		0 /*TODO: IocpLLIsNotEmpty(tsdPtr->deadSockets)*/) {
 	Tcl_SetMaxBlockTime(&blockTime);
     }
 }
@@ -755,7 +755,7 @@ IocpEventCheckProc (
      * place this poll condition here.
      */
 
-    evCount = IocpLLGetCount(tsdPtr->deadSockets);
+    /* TODO: evCount = IocpLLGetCount(tsdPtr->deadSockets); */
 
     /*
      * Do we have any jobs to queue?  Take a snapshot of the count as
