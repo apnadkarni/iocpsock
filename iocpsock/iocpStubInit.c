@@ -38,8 +38,8 @@ IocpIntStubs iocpIntStubs = {
     NewSocketInfo, /* 14 */
     FreeSocketInfo, /* 15 */
     HasSockets, /* 16 */
-    GetSysMsg, /* 17 */
-    GetSysMsgObj, /* 18 */
+    NULL, /* 17 */
+    NULL, /* 18 */
     Iocp_IrdaDiscovery, /* 19 */
     Iocp_IrdaIasQuery, /* 20 */
     IocpLLCreate, /* 21 */
