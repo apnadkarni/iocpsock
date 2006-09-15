@@ -222,6 +222,7 @@ IOCPOBJS = \
 	$(TMP_DIR)\iocpsock_hilevel.obj \
 	$(TMP_DIR)\iocpsock_lolevel.obj \
 	$(TMP_DIR)\linkedlist.obj \
+	$(TMP_DIR)\tclWinError.obj \
 	$(TMP_DIR)\ws2apltalk.obj \
 	$(TMP_DIR)\ws2atm.obj \
 	$(TMP_DIR)\ws2decnet.obj \
@@ -510,13 +511,14 @@ install-docs:
 	@$(CPY) "$(ROOT)\man.html" "$(SCRIPT_INSTALL_DIR)"
 
 #---------------------------------------------------------------------
-# Distrubition.
+# Distribution.
 #---------------------------------------------------------------------
 
-dist:
 !if !defined(TAG)
-!error please set TAG for the zip title.
+TAG = "3.0a1"
 !endif
+
+dist:
 	@cd "$(_INSTALLDIR)"
 	-@$(ZIP) -o -9 $(MAKEDIR)\iocpsock-$(TAG).zip \
 	    lib\iocpsock$(DOTVERSION)\iocpsock$(VERSION).dll \
