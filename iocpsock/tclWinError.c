@@ -5293,6 +5293,7 @@ Tcl_Win32ErrMsg (unsigned long errorCode)
 
     result = FormatMessage (
 	    FORMAT_MESSAGE_FROM_SYSTEM |
+	    FORMAT_MESSAGE_IGNORE_INSERTS |
 	    FORMAT_MESSAGE_MAX_WIDTH_MASK,
 	    0L,
 	    errorCode,
