@@ -1,14 +1,24 @@
-<STYLE TYPE="text/css">
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<title>IOCPSOCK 3.0 Man page</title>
+<style type="text/css">
   H1 { font-size: x-large; color: red }
   H2 { font-size: large; color: blue }
   DT { color: brown }
-</STYLE>
+  .proto { white-space: nowrap }
+  .type { color: green }
+  .name { font-weight: bold }
+  .oper { color: red }
+</style>
+</head>
+<body>
 <hr/>
 <h1>IOCPSOCK version 3.0</h1>
 <br/>
 The <b>IOCPSOCK</b> extension contains two (2) commands provided to the interpreter:
 <dl>
-
     <dt>socket2</dt>
     <dd>
         Has the exact syntax as the core's <a href="http://wiki.tcl.tk/1114"
@@ -46,7 +56,10 @@ The <b>IOCPSOCK</b> extension contains two (2) commands provided to the interpre
                 is not the speediest.  <i>burst</i> mode allows for reads
                 behind the scenes and will increase the concurrent pool
                 to match the in-coming (instantanious) load within the
-                limits specified.
+                limits specified.  Use <i>zero-byte</i> mode for many
+		sockets that transfer little data (httpd).  Use <i>burst</i>
+		mode when few sockets need to transfer large amounts of data
+		(ftpd).
             </dd>
         </dl>
     </dd>
@@ -57,4 +70,83 @@ The <b>IOCPSOCK</b> extension contains two (2) commands provided to the interpre
     </dd>
 
 </dl>
-more details to follow..
+The <b>IOCPSOCK</b> extension also exports the following commands through its own Stubs file (iocpstubXX.lib):
+<dl>
+    <dt><span class=proto><span class=type>int</span> <span class=name>Iocpsock_Init</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>)</span></span></dt>
+    <dd>
+	Initializes the extension for use in the current interpreter.<p/>
+    </dd>
+
+    <dt><span class=proto><span class=type>int</span> <span class=name>Iocpsock_SafeInit</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>)</span></span></dt>
+    <dd>
+	Same as <span class=name>Iocpsock_Init</span> as the use of
+	socket are not considered unsafe.<p/>
+    </dd>
+
+    <dt><span class=proto><span class=type>Tcl_Channel</span> <span class=name>Iocp_OpenTcpClient</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>port</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>host</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>myaddr</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>myport</span><span class=oper>,</span> <span class=type>int</span> <span class=name>async</span><span class=oper>)</span></span></dt>
+    <dd>
+	Same as the core's
+	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/OpenTcp.htm"><span class=name>Tcl_OpenTcpClient</span></a>,
+	but the port and myport arguments are a <span class=type>CONST char *</span>
+	not an <span class=type>int</span> to support service names to getaddrinfo().<p/>
+    </dd>
+
+    <dt><span class=proto><span class=type>Tcl_Channel</span> <span class=name>Iocp_OpenTcpServer</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>port</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>host</span><span class=oper>,</span> <span class=type>Tcl_TcpAcceptProc *</span><span class=name>acceptProc</span><span class=oper>,</span> <span class=type>ClientData</span> <span class=name>acceptProcData</span><span class=oper>)</span></span></dt>
+    <dd>
+	Same as the core's
+	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/OpenTcp.htm"><span class=name>Tcl_OpenTcpServer</span></a>,
+	but the port argument is a <span class=type>CONST char *</span>
+	not an <span class=type>int</span> to support service names to getaddrinfo().<p/>
+    </dd>
+
+    <dt><span class=proto><span class=type>Tcl_Channel</span> <span class=name>Iocp_MakeTcp4ClientChannel</span> <span class=oper>(</span><span class=type>ClientData</span> <span class=name>sock</span><span class=oper>)</span></span></dt>
+    <dd>
+	Just like the core's
+	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/OpenTcp.htm"><span class=name>Tcl_MakeTcpClientChannel</span></a>,
+	but can fail and return a NULL Tcl_Channel.  When it does fail,
+	check for the error with GetLastError().  You may use the exported
+	Tcl_Win32Err* helper functions if you like.  NOTE: Only for
+	use with IPv4 sockets.<p/>
+    </dd>
+
+    <dt><span class=proto><span class=type>Tcl_Channel</span> <span class=name>Iocp_MakeTcp6ClientChannel</span> <span class=oper>(</span><span class=type>ClientData</span> <span class=name>sock</span><span class=oper>)</span></span></dt>
+    <dd>
+	Same as <span class=name>Iocp_MakeTcp4ClientChannel</span>,
+	but for IPv6 sockets only.<p/>
+    </dd>
+
+    <dt><span class=proto><span class=type>CONST char *</span><span class=name>Tcl_Win32ErrId</span> <span class=oper>(</span><span class=type>unsigned long</span> <span class=name>errorCode</span><span class=oper>)</span></span></dt>
+    <dd>
+	<span class=name>Tcl_Win32ErrId</span> returns a machine-readable
+	textual identifier such as "ERROR_DEVICE_DOOR_OPEN" that corresponds
+	to the current value of of the error code given.  One normally calls
+	it with the return of GetLastError() or WSAGetLastError() depending
+	on the context.  Same as the core's <a href="http://www.tcl.tk/man/tcl8.5/TclLib/SetErrno.htm"><span class=name>Tcl_ErrnoId()</span></a>,
+	but for the Win32 class of errors.<p/>
+    </dd>
+
+    <dt><span class=proto><span class=type>CONST char *</span><span class=name>Tcl_Win32ErrMsg</span> <span class=oper>(</span><span class=type>unsigned long</span> <span class=name>errorCode</span><span class=oper>)</span></span></dt>
+    <dd>
+	<span class=name>Tcl_Win32ErrMsg</span> returns a human-readable
+	string such as "permission denied" that corresponds to the value
+	of its errorCode argument. The errorCode argument is typically the
+	value returned by GetLastError() or WSAGetLastError() depending
+	on the context. The strings returned by these functions are
+	statically allocated and the caller must not free or modify them.
+	Same as the core's <a href="http://www.tcl.tk/man/tcl8.5/TclLib/SetErrno.htm"><span class=name>Tcl_ErrnoMsg</span></a>,
+	but for the Win32 class of errors.<p/>
+    </dd>
+
+    <dt><span class=proto><span class=type>CONST char *</span><span class=name>Tcl_Win32Error</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>)</span></span></dt>
+    <dd>
+	<span class=name>Tcl_Win32Error</span> returns a human-readable
+	diagnostic message for the error (this is the same value that
+	will appear as the third element in the -errorcode value). It
+	may be convenient to include this string as part of the error
+	message returned to the application in the interpreter's result.
+	Same as the core's <a href="http://www.tcl.tk/man/tcl8.5/TclLib/AddErrInfo.htm"><span class=name>Tcl_PosixError</span></a>,
+	but for the Win32 class of errors.<p/>
+    </dd>
+</dl>
+<body>
+</html>
