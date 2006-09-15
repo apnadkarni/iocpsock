@@ -228,13 +228,13 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
  */
 
 Tcl_Channel
-Iocp_MakeTcp4ClientChannel(
-    ClientData cdata)		/* The socket to wrap up into a channel. */
+Iocp_MakeTcp4ClientChannel (
+    ClientData sock)		/* The socket to wrap up into a channel. */
 {
     SocketInfo *infoPtr;
     BufferInfo *bufPtr;
     char channelName[16 + TCL_INTEGER_SPACE];
-    SOCKET sock = (SOCKET) cdata;
+    SOCKET socket = (SOCKET) sock;
     WS2ProtocolData *pdata;
     int i;
     ThreadSpecificData *tsdPtr = InitSockets();
@@ -242,9 +242,9 @@ Iocp_MakeTcp4ClientChannel(
 
     /* Only IPv4 */
     pdata = &tcp4ProtoData;
-    IocpInitProtocolData(sock, pdata);
+    IocpInitProtocolData(socket, pdata);
 
-    infoPtr = NewSocketInfo(sock);
+    infoPtr = NewSocketInfo(socket);
     infoPtr->proto = pdata;
 
     /* Info needed to get back to this thread. */
@@ -255,9 +255,10 @@ Iocp_MakeTcp4ClientChannel(
      * completion port.  This implies an automatic set to
      * non-blocking.
      */
-    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
+    if (CreateIoCompletionPort((HANDLE)socket, IocpSubSystem.port,
 	    (ULONG_PTR)infoPtr, 0) == NULL) {
-	IocpWinConvertWSAError(GetLastError());
+	/* FreeSocketInfo should not close this SOCKET for us. */
+	infoPtr->socket = INVALID_SOCKET;
 	FreeSocketInfo(infoPtr);
 	return NULL;
     }
@@ -269,7 +270,7 @@ Iocp_MakeTcp4ClientChannel(
     infoPtr->llPendingRecv = IocpLLCreate();
 
     /* post IOCP_INITIAL_RECV_COUNT recvs. */
-    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
+    for(i = 0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
 	bufPtr = GetBufferObj(infoPtr,
 		(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
 	PostOverlappedRecv(infoPtr, bufPtr, 0);
@@ -299,13 +300,13 @@ Iocp_MakeTcp4ClientChannel(
  */
 
 Tcl_Channel
-Iocp_MakeTcp6ClientChannel(
-    ClientData cdata)		/* The socket to wrap up into a channel. */
+Iocp_MakeTcp6ClientChannel (
+    ClientData sock)		/* The socket to wrap up into a channel. */
 {
     SocketInfo *infoPtr;
     BufferInfo *bufPtr;
     char channelName[16 + TCL_INTEGER_SPACE];
-    SOCKET sock = (SOCKET) cdata;
+    SOCKET socket = (SOCKET) sock;
     WS2ProtocolData *pdata;
     int i;
     ThreadSpecificData *tsdPtr = InitSockets();
@@ -313,9 +314,9 @@ Iocp_MakeTcp6ClientChannel(
 
     /* Only IPv6 */
     pdata = &tcp6ProtoData;
-    IocpInitProtocolData(sock, pdata);
+    IocpInitProtocolData(socket, pdata);
 
-    infoPtr = NewSocketInfo(sock);
+    infoPtr = NewSocketInfo(socket);
     infoPtr->proto = pdata;
 
     /* Info needed to get back to this thread. */
@@ -326,9 +327,10 @@ Iocp_MakeTcp6ClientChannel(
      * completion port.  This implies an automatic set to
      * non-blocking.
      */
-    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
+    if (CreateIoCompletionPort((HANDLE)socket, IocpSubSystem.port,
 	    (ULONG_PTR)infoPtr, 0) == NULL) {
-	IocpWinConvertWSAError(GetLastError());
+	/* FreeSocketInfo should not close this SOCKET for us. */
+	infoPtr->socket = INVALID_SOCKET;
 	FreeSocketInfo(infoPtr);
 	return NULL;
     }
@@ -340,7 +342,7 @@ Iocp_MakeTcp6ClientChannel(
     infoPtr->llPendingRecv = IocpLLCreate();
 
     /* post IOCP_INITIAL_RECV_COUNT recvs. */
-    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
+    for(i = 0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
 	bufPtr = GetBufferObj(infoPtr,
 		(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
 	PostOverlappedRecv(infoPtr, bufPtr, 0);
