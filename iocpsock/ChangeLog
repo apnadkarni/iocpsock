@@ -1,3 +1,80 @@
+2006-09-15  davygrvy
+	* dllmain.c:
+	* iocpDecls.h:
+	* iocpIntDecls.h:
+	* iocpStubInit.c:
+	* iocpsock.decls:
+	* iocpsock_lolevel.c:
+		removed GetSysMsg and GetSysMsgObj
+
+	* tclWinError.c:
+		cleaned-up and working well.
+
+	* ws2tcp.c:
+		Changed Iocp_MakeTcp(4|6)ClientChannel to not close the socket
+		on an error.
+
+	* iocpsock_lolevel.c:
+		removed use of deadSockets member of ThreadSpecificData struct
+		  I'll get to this later
+
+	* man.html:
+		more stuff added to documentation about the new exports
+
+	* iocpDecls.h:
+	* iocpStubInit.c:
+	* iocpsock.decls:
+	* iocpsock.dsp:
+	* makefile.vc:
+	* tclWinError.c:
+		added tclWinError.c to build
+
+	* tclWinError.h:
+		not needed anymore
+
+	* man.html:
+		more better docs
+
+	* iocpsock_lolevel.c:
+		Fixed proper stat collection in FreeSocketInfo()
+
+	* tclWinError.c:
+		Changed Tcl_Win32ErrMsg to include
+		FORMAT_MESSAGE_IGNORE_INSERTS in the call to FormatMessage()
+
+2006-09-14  davygrvy
+	* iocpDecls.h:
+	* iocpStubInit.c:
+	* iocpsock.decls:
+	* tests/socket2.test:
+	* ws2tcp.c:
+		Iocp_MakeTcp4ClientChannel() and Iocp_MakeTcp6ClientChannel()
+		added as exports.  Rather untested..  good luck
+
+2006-09-13  davygrvy
+	* makefile.vc:
+		changed dist target to use $(TAG) for the output name
+
+	* linkedlist.c:
+		small sig change for IocpLLCreate() that really is meaningless
+
+	* win32err.c:
+		not used
+
+	* iocpsockInt.h:
+		removed some useless prototypes
+
+	* dllmain.c:
+	* iocpIntDecls.h:
+	* iocpStubInit.c:
+	* iocpsock.decls:
+	* iocpsock.dsp:
+	* iocpsockInt.h:
+	* iocpsock_lolevel.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+		internal Stubs table now working
+
 2006-09-12  davygrvy
 	* iocpDecls.h:
 	* iocpIntDecls.h:
