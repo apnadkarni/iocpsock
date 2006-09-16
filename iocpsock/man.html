@@ -67,7 +67,7 @@ The <b>IOCPSOCK</b> extension contains two (2) commands provided to the interpre
 		WSARecv call so it is only used as an alert for when
 		the socket becomes readable.  When the call to read the
 		socket comes in to the Tcl_DriverInputProc, a
-		non-blocking, non-posting WSARecv call is made using
+		non-blocking, non-overlapped WSARecv call is made using
 		the actual channel buffer as the write space.  This
 		mode is best used with applications that have a high
 		concurrent socket count (possibly over 50K), move small
@@ -119,10 +119,14 @@ function:
 <pre>
 #ifdef STATIC_BUILD
     Tcl_StaticPackage(interp, "Iocpsock", Iocpsock_Init, Iocpsock_SafeInit);
-#endif
-    if (Iocpsock_InitStubs(interp, "3.0", 0 /*exact*/)) {
+    if (Iocpsock_Init(interp) == TCL_ERROR) {
 	return TCL_ERROR;
     }
+#else
+    if (Iocpsock_InitStubs(interp, "3.0", 0 /*exact*/) == TCL_ERROR) {
+	return TCL_ERROR;
+    }
+#endif
 </pre>
 <dl>
     <dt><span class=proto><span class=type>int</span> <span class=name>Iocpsock_Init</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>)</span></span></dt>
