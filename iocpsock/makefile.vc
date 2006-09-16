@@ -24,8 +24,9 @@ the environment.  Jump to this line to read the new instructions.
 
 !if "$(MSSDK)" == ""
 MSG = ^
-You'll need to run "SetEnv.bat /RETAIL" from the "Platform SDK", first, to setup^
-the environment.  Jump to this line to read the new instructions.
+You'll need to run "SetEnv.bat /XP32 /RETAIL" from the "Platform SDK",^
+first, to setup the environment.  Jump to this line to read the new^
+instructions.
 !error $(MSG)
 !endif
 
@@ -247,11 +248,6 @@ DOCDIR		= $(ROOT)\doc
 GENERICDIR	= $(ROOT)\generic
 TOOLSDIR	= $(ROOT)\tools
 WINDIR		= $(ROOT)\win
-
-!if !defined(ZIP)
-ZIP = "c:\Program Files\zlib1.23\dll32\minizip"
-!endif
-
 
 #---------------------------------------------------------------------
 # Compile flags
@@ -518,11 +514,17 @@ install-docs:
 TAG = "3.0a1"
 !endif
 
+!if !defined(ZIP)
+ZIP = "c:\Program Files\zlib1.23\dll32\minizip"
+!endif
+
 MAKECMD	= nmake.exe -nologo /$(MAKEFLAGS) -f makefile.vc
 
 dist:
 	$(MAKECMD) release OPTS=static
+	$(MAKECMD) install OPTS=static INSTALLDIR="$(_INSTALLDIR)"
 	$(MAKECMD) release
+	$(MAKECMD) install INSTALLDIR="$(_INSTALLDIR)"
 	@cd "$(_INSTALLDIR)"
 	-@$(ZIP) -o -9 $(MAKEDIR)\iocpsock-$(TAG).zip \
 	    lib\iocpsock$(DOTVERSION)\iocpsock$(VERSION).dll \
