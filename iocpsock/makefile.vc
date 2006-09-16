@@ -518,7 +518,11 @@ install-docs:
 TAG = "3.0a1"
 !endif
 
+MAKECMD	= nmake.exe -nologo /$(MAKEFLAGS) -f makefile.vc
+
 dist:
+	$(MAKECMD) release OPTS=static
+	$(MAKECMD) release
 	@cd "$(_INSTALLDIR)"
 	-@$(ZIP) -o -9 $(MAKEDIR)\iocpsock-$(TAG).zip \
 	    lib\iocpsock$(DOTVERSION)\iocpsock$(VERSION).dll \
