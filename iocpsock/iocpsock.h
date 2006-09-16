@@ -83,9 +83,12 @@
 #include "iocpDecls.h"
 
 #ifdef USE_IOCP_STUBS
-TCL_EXTERNC CONST char *
-    Iocpsock_InitStubs _ANSI_ARGS_((Tcl_Interp *interp, CONST char *version,
-			  int exact));
+    TCL_EXTERNC CONST char *
+	Iocpsock_InitStubs _ANSI_ARGS_((Tcl_Interp *interp,
+		CONST char *version, int exact));
+#else
+#   define Iocpsock_InitStubs(interp, version, exact) \
+	Tcl_PkgRequire(interp, "Iocpsock", version, exact)
 #endif
 
 
