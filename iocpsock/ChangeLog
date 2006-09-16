@@ -1,3 +1,19 @@
+2006-09-16  davygrvy
+	* iocpDecls.h:
+	* iocpStubInit.c:
+	* iocpsock.decls:
+	* iocpsock_hilevel.c:
+	* iocpsock_thrdpool.c:
+	* man.html:
+	* tclWinError.c:
+	* ws2irda.c:
+	* ws2tcp.c:
+		Tcl_Win32ErrId() and Tcl_Win32ErrMsg now look at the result of
+		GetLastError() and don't take args.  Iocp_MakeTcp4.. and
+		IocpMakeTcp6.. merged into a single Iocp_MakeTcpClientChannel
+		and use getpeername() to decide what address family the given
+		socket belongs to.  man page took lots of new prose.
+
 2006-09-15  davygrvy
 	* dllmain.c:
 	* iocpDecls.h:
