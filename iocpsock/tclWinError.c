@@ -3431,8 +3431,10 @@ static Tcl_ThreadDataKey dataKey;
  */
 
 CONST char *
-Tcl_Win32ErrId (unsigned long errorCode)
+Tcl_Win32ErrId (void)
 {
+    DWORD errorCode = GetLastError();
+
     switch (errorCode) {
 	case ERROR_SUCCESS :		    return "ERROR_SUCCESS";
 	case ERROR_INVALID_FUNCTION :	    return "ERROR_INVALID_FUNCTION";
@@ -5277,10 +5279,11 @@ Tcl_Win32ErrId (unsigned long errorCode)
  */
 
 CONST char *
-Tcl_Win32ErrMsg (unsigned long errorCode)
+Tcl_Win32ErrMsg (void)
 {
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
     DWORD result;
+    DWORD errorCode = GetLastError();
 
     /*
      * If the "customer" bit is set, this function was called
@@ -5326,10 +5329,9 @@ CONST char *
 Tcl_Win32Error (Tcl_Interp *interp)
 {
     CONST char *id, *msg;
-    DWORD err = GetLastError();
 
-    id = Tcl_Win32ErrId(err);
-    msg = Tcl_Win32ErrMsg(err);
+    id = Tcl_Win32ErrId();
+    msg = Tcl_Win32ErrMsg();
     Tcl_SetErrorCode(interp, "WIN32", id, msg, 0L);
     return msg;
 }

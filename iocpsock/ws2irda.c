@@ -638,10 +638,10 @@ CreateIrdaSocket (
 error2:
     FreeSocketAddress(hostaddr);
 error1:
-    IocpWinConvertWSAError(winSock.WSAGetLastError());
+    SetLastError(winSock.WSAGetLastError());
     if (interp != NULL) {
 	Tcl_AppendResult(interp, "couldn't open socket: ",
-		Tcl_PosixError(interp), NULL);
+		Tcl_Win32Error(interp), NULL);
     }
     FreeSocketInfo(infoPtr);
     return NULL;

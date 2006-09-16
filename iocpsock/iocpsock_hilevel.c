@@ -277,7 +277,7 @@ wrongNumArgs:
         }
     }
     Tcl_RegisterChannel(interp, chan);            
-    Tcl_AppendResult(interp, Tcl_GetChannelName(chan), (char *) NULL);
+    Tcl_AppendResult(interp, Tcl_GetChannelName(chan), NULL);
 
     return TCL_OK;
 }

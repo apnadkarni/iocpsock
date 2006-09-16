@@ -36,15 +36,16 @@ declare 1 generic {
 ###  Some Win32 error stuff the core is missing.
 
 declare 2 generic {
-    CONST char *Tcl_Win32ErrId (unsigned long errorCode)
+    CONST char *Tcl_Win32ErrId (void)
 }
 declare 3 generic {
-    CONST char *Tcl_Win32ErrMsg (unsigned long errorCode)
+    CONST char *Tcl_Win32ErrMsg (void)
 }
 declare 4 generic {
     CONST char *Tcl_Win32Error (Tcl_Interp *interp)
 }
 
+### TCP stuff
 
 declare 5 generic {
     Tcl_Channel Iocp_OpenTcpClient (Tcl_Interp *interp,
@@ -57,34 +58,23 @@ declare 6 generic {
 	Tcl_TcpAcceptProc *acceptProc, ClientData acceptProcData)
 }
 declare 7 generic {
-    Tcl_Channel Iocp_MakeTcp4ClientChannel(ClientData sock)
+    Tcl_Channel Iocp_MakeTcpClientChannel (ClientData sock)
 }
-declare 8 generic {
-    Tcl_Channel Iocp_MakeTcp6ClientChannel(ClientData sock)
-}
-#declare 9 generic {
-#    Tcl_Channel Iocp_OpenUdpSocket (Tcl_Interp *interp,
+
+### UDP stuff
+
+#declare 8 generic {
+#    Tcl_Channel Iocp_OpenUdpClient (Tcl_Interp *interp,
 #	CONST char *port, CONST char *host, CONST char *myaddr,
-#	CONST char *myport)
+#	CONST char *myport, int async)
 #}
-#declare 10 generic {
-#    Tcl_Channel Iocp_MakeUdp4ClientChannel(ClientData cdata)
+#declare 9 generic {
+#    Tcl_Channel Iocp_MakeUdpClientChannel (ClientData sock)
 #}
-#declare 11 generic {
-#    Tcl_Channel Iocp_MakeUdp6ClientChannel(ClientData cdata)
-#}
-#declare 12 generic {
-#    Tcl_Channel Iocp_OpenIrdaClient (Tcl_Interp *interp,
-#	CONST char *ServiceName, CONST char *DeviceId,
-#	CONST char *myDeviceId, CONST char *myServiceName,
-#	int async)
-#}
-#declare 12 generic {
-#    Tcl_Channel Iocp_OpenIrdaServer (Tcl_Interp *interp,
-#	CONST char *serviceName, CONST char *DeviceId,
-#	CONST char *myDeviceId, CONST char *myServiceName,
-#	int async)
-#}
+
+### IrDA stuff
+### IPX/SPX stuff
+
 
 interface iocpInt
 

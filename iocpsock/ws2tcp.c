@@ -214,12 +214,13 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
 /*
  *----------------------------------------------------------------------
  *
- * Iocp_MakeTcp4ClientChannel --
+ * Iocp_MakeTcpClientChannel --
  *
- *	Creates a Tcl_Channel from an existing client TCP4 socket.
+ *	Creates a Tcl_Channel from an existing client TCP socket.
  *
  * Results:
- *	The Tcl_Channel wrapped around the preexisting TCP4 socket.
+ *	The Tcl_Channel wrapped around the preexisting TCP socket.
+ *	Any errors are left available through GetLastError().
  *
  * Side effects:
  *	None.
@@ -228,9 +229,11 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
  */
 
 Tcl_Channel
-Iocp_MakeTcp4ClientChannel (
+Iocp_MakeTcpClientChannel (
     ClientData sock)		/* The socket to wrap up into a channel. */
 {
+    SOCKADDR_STORAGE sockaddr;
+    int sockaddr_size = _SS_MAXSIZE;
     SocketInfo *infoPtr;
     BufferInfo *bufPtr;
     char channelName[16 + TCL_INTEGER_SPACE];
@@ -240,80 +243,23 @@ Iocp_MakeTcp4ClientChannel (
     ThreadSpecificData *tsdPtr = InitSockets();
 
 
-    /* Only IPv4 */
-    pdata = &tcp4ProtoData;
-    IocpInitProtocolData(socket, pdata);
-
-    infoPtr = NewSocketInfo(socket);
-    infoPtr->proto = pdata;
-
-    /* Info needed to get back to this thread. */
-    infoPtr->tsdHome = tsdPtr;
-
-    /* 
-     * Associate the socket and its SocketInfo struct to the
-     * completion port.  This implies an automatic set to
-     * non-blocking.
-     */
-    if (CreateIoCompletionPort((HANDLE)socket, IocpSubSystem.port,
-	    (ULONG_PTR)infoPtr, 0) == NULL) {
-	/* FreeSocketInfo should not close this SOCKET for us. */
-	infoPtr->socket = INVALID_SOCKET;
-	FreeSocketInfo(infoPtr);
+    /* IPv4 or IPv6? */
+    if (winSock.getpeername(socket, (LPSOCKADDR)&sockaddr, &sockaddr_size)
+	    == SOCKET_ERROR) {
+	SetLastError(winSock.WSAGetLastError());
 	return NULL;
     }
 
-    /*
-     * Start watching for read events on the socket.
-     */
-
-    infoPtr->llPendingRecv = IocpLLCreate();
-
-    /* post IOCP_INITIAL_RECV_COUNT recvs. */
-    for(i = 0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
-	bufPtr = GetBufferObj(infoPtr,
-		(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
-	PostOverlappedRecv(infoPtr, bufPtr, 0);
+    switch (sockaddr.ss_family) {
+	case AF_INET:
+	    pdata = &tcp4ProtoData; break;
+	case AF_INET6:
+	    pdata = &tcp6ProtoData; break;
+	default:
+	    SetLastError(WSAEAFNOSUPPORT);
+	    return NULL;
     }
 
-    wsprintf(channelName, "iocp%lu", infoPtr->socket);
-    infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
-	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
-    Tcl_SetChannelOption(NULL, infoPtr->channel, "-translation", "auto crlf");
-    return infoPtr->channel;
-}
-
-/*
- *----------------------------------------------------------------------
- *
- * Iocp_MakeTcp6ClientChannel --
- *
- *	Creates a Tcl_Channel from an existing client TCP6 socket.
- *
- * Results:
- *	The Tcl_Channel wrapped around the preexisting TCP6 socket.
- *
- * Side effects:
- *	None.
- *
- *----------------------------------------------------------------------
- */
-
-Tcl_Channel
-Iocp_MakeTcp6ClientChannel (
-    ClientData sock)		/* The socket to wrap up into a channel. */
-{
-    SocketInfo *infoPtr;
-    BufferInfo *bufPtr;
-    char channelName[16 + TCL_INTEGER_SPACE];
-    SOCKET socket = (SOCKET) sock;
-    WS2ProtocolData *pdata;
-    int i;
-    ThreadSpecificData *tsdPtr = InitSockets();
-
-
-    /* Only IPv6 */
-    pdata = &tcp6ProtoData;
     IocpInitProtocolData(socket, pdata);
 
     infoPtr = NewSocketInfo(socket);
@@ -742,10 +688,10 @@ CreateTcpSocket(
 error2:
     FreeSocketAddress(hostaddr);
 error1:
-    IocpWinConvertWSAError(winSock.WSAGetLastError());
+    SetLastError(winSock.WSAGetLastError());
     if (interp != NULL) {
 	Tcl_AppendResult(interp, "couldn't open socket: ",
-		Tcl_PosixError(interp), NULL);
+		Tcl_Win32Error(interp), NULL);
     }
     FreeSocketInfo(infoPtr);
     return NULL;

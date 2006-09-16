@@ -59,7 +59,7 @@ Iocp_RegisterAsyncWait (
 	timeOutMSecs = (timeOutPtr->sec*1000)+(timeOutPtr->usec/1000);
     }
 
-    /* WinXP only.  TODO: need Win2K/NT/ME/98 compat way, too */
+    /* Win2K/WinXP only.  TODO: need NT/ME/98 compat way, too */
     ok = RegisterWaitForSingleObject(&newWaitHandle,
 	    waitObject, WaitCallback, info, timeOutMSecs,
 	    WT_EXECUTEONLYONCE);

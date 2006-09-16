@@ -69,8 +69,7 @@ IocpStubs iocpStubs = {
     Tcl_Win32Error, /* 4 */
     Iocp_OpenTcpClient, /* 5 */
     Iocp_OpenTcpServer, /* 6 */
-    Iocp_MakeTcp4ClientChannel, /* 7 */
-    Iocp_MakeTcp6ClientChannel, /* 8 */
+    Iocp_MakeTcpClientChannel, /* 7 */
 };
 
 /* !END!: Do not edit above this line. */
