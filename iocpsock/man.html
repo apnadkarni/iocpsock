@@ -2,107 +2,128 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
-<title>IOCPSOCK 3.0 Man page</title>
-<style type="text/css">
-  H1 { font-size: x-large; color: red }
-  H2 { font-size: large; color: blue }
-  DT { color: brown }
-  .proto { white-space: nowrap }
-  .type { color: green }
-  .name { font-weight: bold }
-  .oper { color: red }
-</style>
+    <title>IOCPSOCK 3.0 Man page</title>
+    <style type="text/css">
+	H1	    { font-size: x-large; color: red }
+	H2	    { font-size: large; color: blue }
+	DT	    { color: brown }
+	.proto  { white-space: nowrap }
+	.type   { color: green }
+	.name   { font-weight: bold }
+	.oper   { color: red }
+    </style>
 </head>
 <body>
-<hr/>
 <h1>IOCPSOCK version 3.0</h1>
 <br/>
 The <b>IOCPSOCK</b> extension contains two (2) commands provided to the interpreter:
 <dl>
     <dt>socket2</dt>
     <dd>
-        Has the exact syntax as the core's <a href="http://wiki.tcl.tk/1114"
-        target="_workspot">socket</a> command, but operates under a different
-        I/O model.  An IPv6 address can be used.  The different
-        <a href="http://wiki.tcl.tk/1469">fconfigure</a> options are as
-        follows:<p/>
-        <dl>
-            <dt>-backlog</dt>
-            <dd>
-                Sets (or gets) the pool count of AcceptEx calls on the
-                listening socket.  Keep raising this if you are prone to
-                many "peer disconnected" errors when starting to read
-                from a new connection or when clients trying to connect
-                are getting "connection refused" or "timeout" errors. The
-                sky is the limit on this setting.  The only limit to be
-                concerned about is available memory.  The calculation is
-                ~500 bytes * the backlog size of the non-paged pool will
-                be reserved (ie. ~0.5 * 200 == ~100K of the non-paged
-                pool).  The non-paged pool is a global resource and is
-                limited to about 1/4 of the physical memory.
-            </dd>
-            <dt>-sendcap</dt>
-            <dd>
-                Sets (or gets) the limit in terms of the count of concurrent
-                buffers allowed.  Think of this as a poor-man's throttle.
-                More means speedier, but the per socket resource limit is
-                raised.  Use &quot;1&quot; for lowest resource usage and
-		about &quot;25&quot; for highest performance.
-            </dd>
-            <dt>-recvmode</dt>
-            <dd>
-                Sets (or gets) the receive mode and properties of the mode.
-                Choices are &quot;<i>zero-byte</i>&quot;,
+	Has the exact syntax as the core's <a href="http://wiki.tcl.tk/1114"
+	target="_workspot">socket</a> command, but operates under a different
+	I/O model.  An IPv6 address can be used.  The different
+	<a href="http://wiki.tcl.tk/1469" target="_workspot">fconfigure</a>
+	options are as follows:
+	<p/>
+	<dl>
+	    <dt>-backlog</dt>
+	    <dd>
+		Sets (or gets) the pool count of AcceptEx calls on the
+		listening socket.  Keep raising this if you are prone to
+		many "peer disconnected" errors when starting to read
+		from a new connection or when clients trying to connect
+		are getting "connection refused" or "timeout" errors. The
+		sky is the limit on this setting.  The only limit to be
+		concerned about is available memory.  The calculation is
+		~500 bytes * the backlog size of the non-paged pool will
+		be reserved (ie. ~0.5 * 200 == ~100K of the non-paged
+		pool).  The non-paged pool is a global resource and is
+		limited to about 1/4 of the physical memory.
+	    </dd>
+	    <dt>-sendcap</dt>
+	    <dd>
+		Sets (or gets) the limit in terms of the count of
+		concurrent buffers allowed.  Think of this as a poor-man's
+		throttle.  More means speedier, but the per socket resource
+		limit is raised.  Use &quot;1&quot; for lowest resource
+		usage (HTTPD) and about &quot;25&quot; or greater for
+		highest performance (FTPD).  This option can be set for
+		listening sockets and will be inherited to new connections.
+	    </dd>
+	    <dt>-recvmode</dt>
+	    <dd>
+		Sets (or gets) the receive mode and properties of the mode.
+		Choices are &quot;<i>zero-byte</i>&quot;,
 		&quot;<i>flow-controlled</i>&quot; or
-		&quot;<i>burst-detection &lt;cap&gt;</i>&quot;.
+		&quot;<i>burst-detection &lt;cap&gt;</i>&quot;.  This
+		option can be set for listening sockets and will be
+		inherited to new connections.
 		<p/>
-		<i>zero-byte</i> is the lowest in terms of resource usage
-		per socket and is the default, but is not the speediest.
-		What's going on under-the-hood is a zero-byte receive buffer
-		is used for the overlapped WSARecv call so it is only used
-		as an alert for when the socket becomes readable.  When the
-		call to read the socket comes in to the Tcl_DriverInputProc,
-		a non-blocking, non-posting WSARecv call is made using the
-		actual channel buffer as the write space.  This mode is best
-		used with applications that have a high concurrent socket
-		count (possibly over 50K), move small amounts of data and
-		that will have a long life span.  HTTPD is a good example
-		where this mode would be helpful.
+		<i>zero-byte</i> is the lowest in terms of resource
+		usage per socket and is the default, but is not the
+		speediest.  What's going on under-the-hood is a
+		zero-byte receive buffer is used for the overlapped
+		WSARecv call so it is only used as an alert for when
+		the socket becomes readable.  When the call to read the
+		socket comes in to the Tcl_DriverInputProc, a
+		non-blocking, non-posting WSARecv call is made using
+		the actual channel buffer as the write space.  This
+		mode is best used with applications that have a high
+		concurrent socket count (possibly over 50K), move small
+		amounts of data and that will have a long life span.
+		HTTPD is a good example where this mode would be
+		helpful.
 		<p/>
-		<i>flow-controlled</i> is the &quot;normal&quot; mode that
-		should be used for fast transfers.  Under-the-hood, this is
-		&quot;by-the-book&quot; overlapped-I/O.  To start the
-		socket &quot;listening&quot; for receives, WSARecv is
-		called for overlapped operation with a pre-allocated buffer
-		that is handed to the kernel.  For when the Tcl_DriverInputProc
-		is called, the buffer is memcpy'd into the channel buffer, and
-		a new overlapped WSARecv call is made with a new kernel buffer
-		(same size as the channel buffer) to take the last ones place.
+		<i>flow-controlled</i> is the &quot;normal&quot; mode
+		that should be used for fast transfers.  Under-the-hood,
+		this is &quot;by-the-book&quot; overlapped-I/O.  To
+		start the socket &quot;listening&quot; for receives,
+		WSARecv is called for overlapped operation with a
+		pre-allocated buffer that is handed to the kernel.  For
+		when the Tcl_DriverInputProc is called, the buffer is
+		memcpy'd into the channel buffer, and a new overlapped
+		WSARecv call is made with a new kernel buffer (same
+		size as the channel buffer) to take the last ones place.
 		<p/>
-		<i>burst-detection</i> mode allows for reads behind the scenes
-		and will increase the concurrent pool of outstanding WSARecv
-		calls within the limits specified.  &lt;cap&gt; is the pool
-		size limit. Overlapped-I/O has the
-		ability to post numerous outstanding WSARecv calls to match
-		the (instantanious) in-coming load.  This mode should only
-		be used for problematic networks that are &quot;bursty&quot;
-		with regards to data flow.  One should not use this mode
-		if resource usage is at a premium or if the sockets are
-		long-lived.  <i>flow-controlled</i> is the better option
-		until you know you can improve transfer performance with
-		<i>burst-detection</i>.
+		<i>burst-detection</i> mode allows for additional reads
+		behind the scenes and will increase the concurrent pool
+		of outstanding WSARecv calls within the limits
+		specified.  &lt;cap&gt; is the pool size limit.
+		Overlapped-I/O has the ability to post numerous
+		outstanding WSARecv calls to match the (instantanious)
+		incoming load.  This mode should only be used for
+		problematic networks that are &quot;bursty&quot; with
+		regards to data flow.  One should not use this mode if
+		resource usage is at a premium or if the sockets are
+		long-lived.  The pool count does not reduce once
+		increased by load detection.  <i>flow-controlled</i>
+		is the better option until you know you can improve
+		transfer performance with <i>burst-detection</i>.
 		<p/>
-            </dd>
-        </dl>
+	    </dd>
+	</dl>
     </dd>
 
     <dt>iocp_stats</dt>
     <dd>
-        returns useful info about what's going on under the hood.
+	returns useful info about what's going on under the hood.
     </dd>
 
 </dl>
-The <b>IOCPSOCK</b> extension also exports the following commands through its own Stubs file (iocpstubXX.lib):
+The <b>IOCPSOCK</b> extension also exports the following C functions
+through its own Stubs file (iocpstubXX.lib).  Like other Tcl extensions,
+#include &quot;iocpsock.h&quot; from your code and set -D USE_IOCP_STUBS
+in the compile.  Use a block like the following in your shell's Init()
+function:
+<pre>
+#ifdef STATIC_BUILD
+    Tcl_StaticPackage(interp, "Iocpsock", Iocpsock_Init, Iocpsock_SafeInit);
+#endif
+    if (Iocpsock_InitStubs(interp, "3.0", 0 /*exact*/)) {
+	return TCL_ERROR;
+    }
+</pre>
 <dl>
     <dt><span class=proto><span class=type>int</span> <span class=name>Iocpsock_Init</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>)</span></span></dt>
     <dd>
@@ -112,13 +133,13 @@ The <b>IOCPSOCK</b> extension also exports the following commands through its ow
     <dt><span class=proto><span class=type>int</span> <span class=name>Iocpsock_SafeInit</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>)</span></span></dt>
     <dd>
 	Same as <span class=name>Iocpsock_Init</span> as the use of
-	socket are not considered unsafe.<p/>
+	sockets are not considered unsafe.<p/>
     </dd>
 
     <dt><span class=proto><span class=type>Tcl_Channel</span> <span class=name>Iocp_OpenTcpClient</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>port</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>host</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>myaddr</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>myport</span><span class=oper>,</span> <span class=type>int</span> <span class=name>async</span><span class=oper>)</span></span></dt>
     <dd>
 	Same as the core's
-	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/OpenTcp.htm"><span class=name>Tcl_OpenTcpClient</span></a>,
+	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/OpenTcp.htm" target="_workspot"><span class=name>Tcl_OpenTcpClient</span></a>,
 	but the port and myport arguments are a <span class=type>CONST char *</span>
 	not an <span class=type>int</span> to support service names to getaddrinfo().<p/>
     </dd>
@@ -126,7 +147,7 @@ The <b>IOCPSOCK</b> extension also exports the following commands through its ow
     <dt><span class=proto><span class=type>Tcl_Channel</span> <span class=name>Iocp_OpenTcpServer</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>port</span><span class=oper>,</span> <span class=type>CONST char *</span><span class=name>host</span><span class=oper>,</span> <span class=type>Tcl_TcpAcceptProc *</span><span class=name>acceptProc</span><span class=oper>,</span> <span class=type>ClientData</span> <span class=name>acceptProcData</span><span class=oper>)</span></span></dt>
     <dd>
 	Same as the core's
-	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/OpenTcp.htm"><span class=name>Tcl_OpenTcpServer</span></a>,
+	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/OpenTcp.htm" target="_workspot"><span class=name>Tcl_OpenTcpServer</span></a>,
 	but the port argument is a <span class=type>CONST char *</span>
 	not an <span class=type>int</span> to support service names to getaddrinfo().<p/>
     </dd>
@@ -146,7 +167,7 @@ The <b>IOCPSOCK</b> extension also exports the following commands through its ow
 	<span class=name>Tcl_Win32ErrId</span> returns a machine-readable
 	textual identifier such as "ERROR_DEVICE_DOOR_OPEN" that corresponds
 	to the current return of Win32's GetLastError().  Same as the core's
-	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/SetErrno.htm"><span class=name>Tcl_ErrnoId()</span></a>,
+	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/SetErrno.htm" target="_workspot"><span class=name>Tcl_ErrnoId()</span></a>,
 	but for the Win32 class of errors.<p/>
     </dd>
 
@@ -157,7 +178,7 @@ The <b>IOCPSOCK</b> extension also exports the following commands through its ow
 	return of Win32's GetLastError(). The strings returned by these
 	functions are statically allocated and the caller must not free
 	or modify them. Same as the core's
-	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/SetErrno.htm"><span class=name>Tcl_ErrnoMsg</span></a>,
+	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/SetErrno.htm" target="_workspot"><span class=name>Tcl_ErrnoMsg</span></a>,
 	but for the Win32 class of errors.<p/>
     </dd>
 
@@ -168,7 +189,7 @@ The <b>IOCPSOCK</b> extension also exports the following commands through its ow
 	will appear as the third element in the -errorcode value). It
 	may be convenient to include this string as part of the error
 	message returned to the application in the interpreter's result.
-	Same as the core's <a href="http://www.tcl.tk/man/tcl8.5/TclLib/AddErrInfo.htm"><span class=name>Tcl_PosixError</span></a>,
+	Same as the core's <a href="http://www.tcl.tk/man/tcl8.5/TclLib/AddErrInfo.htm" target="_workspot"><span class=name>Tcl_PosixError</span></a>,
 	but for the Win32 class of errors.<p/>
     </dd>
 </dl>
