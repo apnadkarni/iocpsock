@@ -256,7 +256,7 @@ WINDIR		= $(ROOT)\win
 !if !$(DEBUG)
 !if $(OPTIMIZING)
 ### This cranks the optimization level to maximize speed
-cdebug	= -O2 -Op -Gs
+cdebug	= -O2 $(OPTIMIZATIONS)
 !else
 cdebug	=
 !endif
@@ -298,10 +298,16 @@ crt = -MT
 !endif
 !endif
 
+!if $(TCLINSTALL)
+TCL_INCLUDES	= -I"$(TCLDIR)\include"
+!else
+TCL_INCLUDES	= -I"$(TCLDIR)\generic" -I"$(TCLDIR)\win"
+!endif
+
 IOCP_INCLUDES	= -I"." $(TCL_INCLUDES)
 IOCP_DEFINES	= -DBUILD_iocp -DTCL_THREADS=1
-IOCP_BASE_CFLAGS= $(cflags) $(cdebug) $(crt) $(IOCP_INCLUDES) $(IOCP_DEFINES)
-IOCP_CFLAGS	= $(IOCP_BASE_CFLAGS) $(OPTDEFINES)
+BASE_CFLAGS	= $(cflags) $(cdebug) $(crt) $(IOCP_INCLUDES) $(IOCP_DEFINES)
+IOCP_CFLAGS	= $(BASE_CFLAGS) $(OPTDEFINES)
 
 ### By convention, static builds do not use Stubs.  This is just a practice,
 ### not a technical limitation.
@@ -351,8 +357,14 @@ dlllflags = $(lflags) -dll
 conlflags = $(lflags) -subsystem:console
 guilflags = $(lflags) -subsystem:windows
 
-baselibs   = kernel32.lib user32.lib ws2_32.lib
+# yes, baselibs is empty.
+baselibs   = 
 
+# Avoid 'unresolved external symbol __security_cookie' errors.
+# c.f. http://support.microsoft.com/?id=894573
+!if "$(MACHINE)" == "IA64" || "$(MACHINE)" == "AMD64"
+baselibs   = $(baselibs) bufferoverflowU.lib
+!endif
 
 #---------------------------------------------------------------------
 # TclTest flags
@@ -404,17 +416,20 @@ $(IOCPSTUBLIB) : $(IOCPSTUBOBJS)
 
 
 #---------------------------------------------------------------------
-# Generate the makefile depedancies.
+# Generate the makefile dependencies.
 #---------------------------------------------------------------------
 
 depend:
 !if !exist($(TCLSH))
 	@echo Build tclsh first!
 !else
-	$(TCLSH) $(TOOLSDIR:\=/)/mkdepend.tcl -vc32 -out:"$(OUT_DIR)\depend.mk" \
-		-passthru:"-DBUILD_tcl $(TCL_INCLUDES:"="")" $(GENERICDIR) \
-		$(COMPATDIR) $(WINDIR) @<<
-$(TCLOBJS)
+	$(TCLSH) \
+		$(TOOLSDIR:\=/)/mkdepend.tcl \
+		-vc32 \
+		-out:"$(OUT_DIR)\depend.mk" \
+		-passthru:"-DBUILD_iocp $(TCL_INCLUDES:"="") $(IOCP_INCLUDES:"="")" \
+		$(GENERICDIR) @<<
+$(IOCPOBJS)
 <<
 !endif
 
@@ -453,7 +468,7 @@ genstubs:
 # be built as DLL objects but none of the symbols should be exported
 
 $(TMP_DIR)\iocpStubLib.obj :
-	$(cc32) -DSTATIC_BUILD $(IOCP_BASE_CFLAGS) -Zl -Fo$@ $?
+	$(cc32) -DSTATIC_BUILD $(BASE_CFLAGS) -Zl -Fo$@ $?
 
 #---------------------------------------------------------------------
 # Implicit rules
