@@ -232,6 +232,10 @@ SOURCE=.\makefile.vc
 # End Source File
 # Begin Source File
 
+SOURCE=.\rules.vc
+# End Source File
+# Begin Source File
+
 SOURCE=.\tclWinError.c
 # End Source File
 # Begin Source File
