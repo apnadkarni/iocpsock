@@ -1240,6 +1240,7 @@ IocpOutputProc (
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
     BufferInfo *bufPtr;
+    DWORD result;
 
     *errorCodePtr = 0;
 
@@ -1262,14 +1263,21 @@ IocpOutputProc (
 
     bufPtr = GetBufferObj(infoPtr, toWrite);
     memcpy(bufPtr->buf, buf, toWrite);
-    if (PostOverlappedSend(infoPtr, bufPtr) == WSAENOBUFS) {
+    result = PostOverlappedSend(infoPtr, bufPtr);
+    if (result == WSAENOBUFS) {
 	/* Would have been over the sendcap restriction. */
 	FreeBufferObj(bufPtr);
 	*errorCodePtr = EWOULDBLOCK;
 	return -1;
+    } else if (result != NO_ERROR) {
+	infoPtr->lastError = result;
+	IocpWinConvertWSAError(result);
+	infoPtr->flags |= IOCP_EOF;
+	goto error;
     }
 
     /*
+     * +++++++  This comment is NOT true anymore, see above! +++++++++
      * Let errors come back through the completion port or else we risk
      * a time problem where readable data is ignored before the error
      * actually happened.
@@ -2282,7 +2290,7 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 
 	    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
 		(ULONG_PTR) infoPtr, &bufPtr->ol);
-	    return NO_ERROR;
+	    return WSAerr;
 	}
     } else {
 	/*
