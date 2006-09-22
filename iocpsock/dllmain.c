@@ -25,7 +25,6 @@ HMODULE iocpModule = NULL;
 #   endif
 #   pragma comment (lib, "user32.lib")
 #   pragma comment (lib, "kernel32.lib")
-#   pragma comment (lib, "ws2_32.lib")
 #endif
 
 
