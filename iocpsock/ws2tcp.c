@@ -219,8 +219,9 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
  *	Creates a Tcl_Channel from an existing client TCP socket.
  *
  * Results:
- *	The Tcl_Channel wrapped around the preexisting TCP socket.
- *	Any errors are left available through GetLastError().
+ *	The Tcl_Channel wrapped around the preexisting TCP socket
+ *	or NULL when an error occurs.  Any errors are left
+ *	available through GetLastError().
  *
  * Side effects:
  *	None.
@@ -230,7 +231,7 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
 
 Tcl_Channel
 Iocp_MakeTcpClientChannel (
-    ClientData sock)		/* The socket to wrap up into a channel. */
+    ClientData sock)	/* The socket to wrap up into a channel. */
 {
     SOCKADDR_STORAGE sockaddr;
     int sockaddr_size = _SS_MAXSIZE;
@@ -243,13 +244,13 @@ Iocp_MakeTcpClientChannel (
     ThreadSpecificData *tsdPtr = InitSockets();
 
 
-    /* IPv4 or IPv6? */
-    if (winSock.getpeername(socket, (LPSOCKADDR)&sockaddr, &sockaddr_size)
-	    == SOCKET_ERROR) {
+    if (winSock.getpeername(socket, (LPSOCKADDR)&sockaddr,
+	    &sockaddr_size) == SOCKET_ERROR) {
 	SetLastError(winSock.WSAGetLastError());
 	return NULL;
     }
 
+    /* IPv4 or IPv6? */
     switch (sockaddr.ss_family) {
 	case AF_INET:
 	    pdata = &tcp4ProtoData; break;
@@ -298,6 +299,7 @@ Iocp_MakeTcpClientChannel (
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     Tcl_SetChannelOption(NULL, infoPtr->channel, "-translation", "auto crlf");
+    SetLastError(ERROR_SUCCESS);
     return infoPtr->channel;
 }
 
