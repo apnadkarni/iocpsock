@@ -208,6 +208,7 @@ STUBPREFIX	= iocpstub
 
 IOCPLIBNAME	= $(PROJECT)$(VERSION)$(SUFX).$(EXT)
 IOCPLIB		= "$(OUT_DIR)\$(IOCPLIBNAME)"
+
 IOCPSTUBLIBNAME	= $(STUBPREFIX)$(VERSION).lib
 IOCPSTUBLIB	= "$(OUT_DIR)\$(IOCPSTUBLIBNAME)"
 
@@ -217,6 +218,7 @@ BIN_INSTALL_DIR		= $(_INSTALLDIR)\bin
 DOC_INSTALL_DIR		= $(_INSTALLDIR)\doc
 SCRIPT_INSTALL_DIR	= $(_INSTALLDIR)\lib\iocpsock$(DOTVERSION)
 INCLUDE_INSTALL_DIR	= $(_INSTALLDIR)\include
+
 
 IOCPOBJS = \
 	$(TMP_DIR)\dllmain.obj \
@@ -306,8 +308,8 @@ TCL_INCLUDES	= -I"$(TCLDIR)\generic" -I"$(TCLDIR)\win"
 
 IOCP_INCLUDES	= -I"." $(TCL_INCLUDES)
 IOCP_DEFINES	= -DBUILD_iocp -DTCL_THREADS=1
-BASE_CFLAGS	= $(cflags) $(cdebug) $(crt) $(IOCP_INCLUDES) $(IOCP_DEFINES)
-IOCP_CFLAGS	= $(BASE_CFLAGS) $(OPTDEFINES)
+STUB_CFLAGS	= $(cflags) $(cdebug) $(IOCP_INCLUDES) $(IOCP_DEFINES)
+IOCP_CFLAGS	= $(cflags) $(cdebug) $(crt) $(IOCP_INCLUDES) $(IOCP_DEFINES) $(OPTDEFINES)
 
 ### By convention, static builds do not use Stubs.  This is just a practice,
 ### not a technical limitation.
@@ -357,7 +359,7 @@ dlllflags = $(lflags) -dll
 conlflags = $(lflags) -subsystem:console
 guilflags = $(lflags) -subsystem:windows
 
-# yes, baselibs is empty.
+# yes, baselibs is empty.  None are required.
 baselibs   = 
 
 # Avoid 'unresolved external symbol __security_cookie' errors.
@@ -424,11 +426,11 @@ depend:
 	@echo Build tclsh first!
 !else
 	$(TCLSH) \
-		$(TOOLSDIR:\=/)/mkdepend.tcl \
+		$(TCLTOOLSDIR)\mkdepend.tcl \
 		-vc32 \
 		-out:"$(OUT_DIR)\depend.mk" \
-		-passthru:"-DBUILD_iocp $(TCL_INCLUDES:"="") $(IOCP_INCLUDES:"="")" \
-		$(GENERICDIR) @<<
+		-passthru:"-DBUILD_iocp $(IOCP_INCLUDES:"="""")" \
+		$(ROOT) @<<
 $(IOCPOBJS)
 <<
 !endif
@@ -468,7 +470,7 @@ genstubs:
 # be built as DLL objects but none of the symbols should be exported
 
 $(TMP_DIR)\iocpStubLib.obj :
-	$(cc32) -DSTATIC_BUILD $(BASE_CFLAGS) -Zl -Fo$@ $?
+	$(cc32) $(STUB_CFLAGS) -DSTATIC_BUILD -Zl -Fo$@ $?
 
 #---------------------------------------------------------------------
 # Implicit rules
@@ -482,7 +484,7 @@ $<
 {.}.rc{$(TMP_DIR)}.res:
 	$(rc32) -fo $@ -r $(TCL_INCLUDES) \
 	    -d DEBUG=$(DEBUG) -d UNCHECKED=$(UNCHECKED) \
-	    -d TCL_THREADS=$(TCL_THREADS) \
+	    -d TCL_THREADS=0 \
 	    -d STATIC_BUILD=$(STATIC_BUILD) \
 	    $<
 
@@ -526,7 +528,7 @@ install-docs:
 #---------------------------------------------------------------------
 
 !if !defined(TAG)
-TAG = "3.0a1"
+TAG = "3.0a2"
 !endif
 
 !if !defined(ZIP)
