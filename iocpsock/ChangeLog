@@ -1,4 +1,27 @@
+2006-09-22  davygrvy
+	* dllmain.c:
+		Removed link statement for ws2_32.lib as we are loading it
+		dynamically, not statically
+
+	* iocpsock_lolevel.c:
+		Found and fixed a logic bug in DoRecvBufMerge().  When the
+		socket is in zero-byte recvmode and EOF came in, a replacement
+		zero-byte WSARecv call had beed posted.  Tcl did correctly get
+		EOF, but that replacement WSARecv wasn't needed.  It now sets
+		the correct flag in the SocketInfo struct so it won't happen.
+
+2006-09-17  davygrvy
+	* rules.vc:
+		updated from Tcl HEAD
+
+	* makefile.vc:
+		bug found in $(baselibs).  no need for ws2_32 as I dynamically
+		load it at run-time.  No need for any libs, actually.
+
 2006-09-16  davygrvy
+	* man.html:
+		yet more new prose
+
 	* iocpDecls.h:
 	* iocpStubInit.c:
 	* iocpsock.decls:
@@ -13,6 +36,17 @@
 		IocpMakeTcp6.. merged into a single Iocp_MakeTcpClientChannel
 		and use getpeername() to decide what address family the given
 		socket belongs to.  man page took lots of new prose.
+
+	* makefile.vc:
+	* makefile.vc:
+		dist target improved
+
+	* iocpsock.h:
+		Iocpsock_InitStubs needed the Tcl_PkgRequire fallback when
+		USE_IOCP_STUBS was not defined
+
+	* man.html:
+		yet more better new prose
 
 2006-09-15  davygrvy
 	* dllmain.c:
