@@ -1175,14 +1175,18 @@ DoRecvBufMerge (
 		buffer.len = toRead;
 		buffer.buf = *bufPos;
 		Flags = 0;
+
 		if (winSock.WSARecv(infoPtr->socket, &buffer, 1,
 			&NumberOfBytesRecvd, &Flags, 0L, 0L)) {
 		    IocpWinConvertWSAError(winSock.WSAGetLastError());
 		    *gotError = 1;
-		    FreeBufferObj(bufPtr);
 		    return 1;
 		}
 		*bytesRead += NumberOfBytesRecvd;
+		if (NumberOfBytesRecvd == 0) {
+		    /* got EOF */
+		    infoPtr->flags |= IOCP_EOF;
+		}
 	    }
 	} else {
 	    BYTE *buffer;
