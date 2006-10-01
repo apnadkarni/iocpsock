@@ -1182,7 +1182,7 @@ DoRecvBufMerge (
 		    *gotError = 1;
 		    return 1;
 		}
-		*bytesRead += NumberOfBytesRecvd;
+		*bytesRead = NumberOfBytesRecvd;
 		if (NumberOfBytesRecvd == 0) {
 		    /* got EOF */
 		    infoPtr->flags |= IOCP_EOF;
@@ -1215,16 +1215,27 @@ RepostRecvs (SocketInfo *infoPtr, int chanBufSize)
 	    || infoPtr->recvMode == IOCP_RECVMODE_FLOW_CTRL) {
 	newBufPtr = GetBufferObj(infoPtr,
 		(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : chanBufSize));
-	/* if an error occurs, it does not return an error code
-	 * from here, it will come through the completion port. */
+	/*
+	 * If an immediate error occurs, we can not return it to Tcl now
+	 * as this is essentailly the "next" packet of delivery. We have
+	 * to force post it to the completion port to "read" it later.
+	 */
 	if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != NO_ERROR) {
-	    FreeBufferObj(newBufPtr);
+	    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
+		(ULONG_PTR) infoPtr, &newBufPtr->ol);
 	}
     } else if (infoPtr->recvMode == IOCP_RECVMODE_BURST_DETECT && infoPtr->needRecvRestart
 	    && IocpLLGetCount(infoPtr->llPendingRecv) < infoPtr->outstandingRecvBufferCap) {
 	newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
+
+	/*
+	 * If an immediate error occurs, we can not return it to Tcl now
+	 * as this is essentailly the "next" packet of delivery. We have
+	 * to force post it to the completion port to "read" it later.
+	 */
 	if (PostOverlappedRecv(infoPtr, newBufPtr, 1 /*useBurst*/) != NO_ERROR) {
-	    FreeBufferObj(newBufPtr);
+	    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
+		(ULONG_PTR) infoPtr, &newBufPtr->ol);
 	}
 	infoPtr->needRecvRestart = 0;
     }
@@ -1756,8 +1767,7 @@ IocpWatchProc (
 	     * ready list. */
 	    IocpZapTclNotifier(infoPtr);
 	} else if (mask & TCL_WRITABLE && infoPtr->llPendingRecv
-		&& infoPtr->outstandingSends <
-		infoPtr->outstandingSendCap) {
+		&& infoPtr->outstandingSends < infoPtr->outstandingSendCap) {
 	    /* Instance is writable, validate the instance is on the
 	     * ready list. */
 	    IocpZapTclNotifier(infoPtr);
@@ -2577,10 +2587,13 @@ HandleIo (
 			(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
 		if ((WSAerr = PostOverlappedRecv(newInfoPtr, newBufPtr, 0))
 			!= NO_ERROR) {
-		    /* The new connection is not valid. */
+		    /*
+		     * The new connection is not valid.  Do not alert
+		     * Tcl about this new dud connection.
+		     */
 		    newInfoPtr->flags |= IOCP_CLOSING;
 		    PostOverlappedDisconnect(newInfoPtr, newBufPtr);
-		    goto recycle;
+		    goto replace;
 		}
 	    }
 
@@ -2626,7 +2639,7 @@ HandleIo (
 	    FreeBufferObj(bufPtr);
 	}
 
-recycle:
+replace:
 	/*
 	 * Post another new AcceptEx() to replace this one that just
 	 * completed.
