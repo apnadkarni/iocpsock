@@ -144,12 +144,18 @@ extern WinsockProcs winSock;
 #undef getservbyport
 #undef gethostbyaddr
 
-/* 1) Required for the POSIX error constants (that should be public) */
-/* 2) Require for the definition of the TCL_TSD_INIT macro */
+/* ISO hack for dumb VC++ */
+#ifdef _MSC_VER
+#define   snprintf	_snprintf
+#endif
+
+
+/* 1) Required for the POSIX error constants (that should be public!) */
+/* 2) Required for the definition of the TCL_TSD_INIT macro */
 #define __WIN32__
 #include "tclInt.h"
 
-/* tclWinPort.h sets these -- remove them */
+/* tclWinPort.h sets these -- remove them. */
 #undef getservbyname
 #undef getsockopt
 #undef ntohs
