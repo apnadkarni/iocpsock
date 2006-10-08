@@ -745,15 +745,16 @@ IocpEventCheckProc (
     int evCount;
 
     if (!(flags & TCL_FILE_EVENTS)) {
+	/* Don't be greedy. */
 	return;
     }
 
     /*
      * Sockets that are EOF, but not yet closed, are considered readable.
      * Because Tcl historically requires that EOF channels shall still
-     * fire readable events until closed and our alert semantics are 
-     * such that we'll never get repeat notifications after EOF, we
-     * place this poll condition here.
+     * fire readable and writable events until closed and our alert
+     * semantics are such that we'll never get repeat notifications after
+     * EOF, we place this poll condition here.
      */
 
     /* TODO: evCount = IocpLLGetCount(tsdPtr->deadSockets); */
@@ -776,15 +777,23 @@ IocpEventCheckProc (
 	 */
 	if (infoPtr) InterlockedExchange(&infoPtr->markedReady, 0);
 	LeaveCriticalSection(&tsdPtr->readySockets->lock);
-	/* Safety check. */
-	if (!infoPtr) break;
+
 	/*
-	 * Not ready. accept in the Tcl layer hasn't happened yet or
-	 * socket is in the middle of doing an async close.
+	 * Safety check. Somehow the count of what is and what actually
+	 * is, is less (!?)..  whatever...  
+	 */
+	if (!infoPtr) continue;
+
+	/*
+	 * The socket isn't ready to be serviced.  accept() in the Tcl
+	 * layer hasn't happened yet while reads on the new socket are
+	 * coming in or the socket is in the middle of doing an async
+	 * close.
 	 */
 	if (infoPtr->channel == NULL) {
 	    continue;
 	}
+
 	evPtr = (SocketEvent *) ckalloc(sizeof(SocketEvent));
 	evPtr->header.proc = IocpEventProc;
 	evPtr->infoPtr = infoPtr;
@@ -810,13 +819,14 @@ IocpEventProc (
     int readyMask = 0;
 
     if (!(flags & TCL_FILE_EVENTS)) {
+	/* Don't be greedy. */
 	return 0;
     }
 
     /*
-     * If an accept is ready, pop one only.
+     * If an accept is ready, pop one only.  There might be more,
+     * but this would be greedy with regards to the event loop.
      */
-
     if (infoPtr->readyAccepts != NULL) {
 	IocpAcceptOne(infoPtr);
 	return 1;
@@ -824,21 +834,19 @@ IocpEventProc (
 
     /*
      * If there is at least one entry on the infoPtr->llPendingRecv list,
-     * and the watch mask is set to notify for readable, the channel is
-     * readable.
+     * and the watch mask is set to notify for readable events, the channel
+     * is readable.
      */
-
     if (infoPtr->watchMask & TCL_READABLE &&
 	    IocpLLIsNotEmpty(infoPtr->llPendingRecv)) {
 	readyMask |= TCL_READABLE;
     }
 
     /*
-     * If the watch mask is set to notify for writable events, the
-     * socket is connected, and outstanding sends are less than the
-     * resource cap allowed for this socket, the channel is writable.
+     * If the watch mask is set to notify for writable events, and
+     * outstanding sends are less than the resource cap allowed for
+     * this socket, the channel is writable.
      */
-
     if (infoPtr->watchMask & TCL_WRITABLE && infoPtr->llPendingRecv
 	    && infoPtr->outstandingSends < infoPtr->outstandingSendCap) {
 	readyMask |= TCL_WRITABLE;
@@ -866,7 +874,7 @@ IocpEventProc (
 static void
 IocpAcceptOne (SocketInfo *infoPtr)
 {
-    char channelName[16 + TCL_INTEGER_SPACE];
+    char channelName[4 + TCL_INTEGER_SPACE];
     AcceptInfo *acptInfo;
     int objc, port;
     Tcl_Obj **objv, *AddrInfo;
@@ -878,7 +886,7 @@ IocpAcceptOne (SocketInfo *infoPtr)
 	return;
     }
 
-    wsprintf(channelName, "iocp%lu", acptInfo->clientInfo->socket);
+    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", acptInfo->clientInfo->socket);
     acptInfo->clientInfo->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) acptInfo->clientInfo, (TCL_READABLE | TCL_WRITABLE));
     if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-translation",
@@ -1013,6 +1021,7 @@ IocpCloseProc (
 	    InterlockedDecrement(&infoPtr->outstandingOps);
 	    temp = infoPtr->socket;
 	    infoPtr->socket = INVALID_SOCKET;
+	    /* Cause all pending AcceptEx calls to return with WSA_OPERATION_ABORTED */
 	    winSock.closesocket(temp);
 	}
     }
@@ -1039,16 +1048,6 @@ IocpInputProc (
     if (infoPtr->flags & IOCP_EOF) {
 	*errorCodePtr = ENOTCONN;
 	return -1;
-    }
-
-    /*
-     * Check for a background error on the last operations.
-     */
-
-    if (infoPtr->lastError) {
-	IocpWinConvertWSAError(infoPtr->lastError);
-	infoPtr->flags |= IOCP_EOF;
-	goto error;
     }
 
     /* If we are async, don't block on the queue. */
@@ -1105,8 +1104,13 @@ FilterPartialRecvBufMerge (
     SIZE_T howMuch = toRead - *bytesRead;
 
     if ((*bytesRead + (int) bufPtr->used) > toRead) {
-	/* We need to do a partial copy to the channel buffer and
-	 * repost ourselves. */
+
+	/*
+	 * Socket WSABUF is larger than the channel buffer space.  We need
+	 * to do a partial copy to the channel buffer and repost the
+	 * BufferInfo* back onto the linkedlist for the next read()
+	 * operation.
+	 */
 	if (bufPtr->last) {
 	    buffer = bufPtr->last;
 	} else {
@@ -1127,8 +1131,13 @@ static int
 FilterSingleOpRecvBuf (SocketInfo *infoPtr, BufferInfo *bufPtr, int bytesRead)
 {
     if (bufPtr->used == 0 && bufPtr->buflen != 0 && bytesRead) {
-	/* Have EOF or error, yet bytes were written to the channel buffer.
-	   Push it back on for later. We need EOF as a single operation. */
+	
+	/*
+	 * We have a new EOF or error, yet some bytes have already been
+	 * written to the channel buffer within this read() operation.
+	 * Push the bufPtr back onto the linkedlist for later. We need
+	 * the EOF (or error) as a single operation.
+	 */
 	IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
 		&bufPtr->node, 0);
 	return 1;
@@ -1148,44 +1157,59 @@ DoRecvBufMerge (
     *gotError = 0;
 
     if (bufPtr->WSAerr != NO_ERROR) {
-	infoPtr->lastError = bufPtr->WSAerr;
-	IocpWinConvertWSAError(infoPtr->lastError);
+	IocpWinConvertWSAError(bufPtr->WSAerr);
 	FreeBufferObj(bufPtr);
 	*gotError = 1;
 	return 1;
     } else {
 	if (bufPtr->used == 0) {
 	    if (bufPtr->buflen != 0) {
-		/* got EOF */
+		/* got official EOF */
 		infoPtr->flags |= IOCP_EOF;
 		/* A read value of zero indicates EOF to the generic layer. */
 		*bytesRead = 0;
 		FreeBufferObj(bufPtr);
 		return 1;
 	    } else {
+		WSABUF buffer;
+		DWORD NumberOfBytesRecvd, Flags;
+
 		/*
 		 * Got the zero-byte recv alert. Do a non-blocking
 		 * and non-posting WSARecv using the channel buffer
 		 * directly.
 		 */
 
-		WSABUF buffer;
-		DWORD NumberOfBytesRecvd, Flags;
+		if (infoPtr->lastError != NO_ERROR) {
 
-		buffer.len = toRead;
-		buffer.buf = *bufPos;
-		Flags = 0;
-
-		if (winSock.WSARecv(infoPtr->socket, &buffer, 1,
-			&NumberOfBytesRecvd, &Flags, 0L, 0L)) {
-		    IocpWinConvertWSAError(winSock.WSAGetLastError());
-		    *gotError = 1;
-		    return 1;
-		}
-		*bytesRead = NumberOfBytesRecvd;
-		if (NumberOfBytesRecvd == 0) {
-		    /* got EOF */
+		    /*
+		     * A write-side error occured.  Just return EOF,
+		     * ignore this bufPtr error and don't call WSARecv.
+		     */
+		    *bytesRead = 0;
 		    infoPtr->flags |= IOCP_EOF;
+		    FreeBufferObj(bufPtr);
+		    return 1;
+
+		} else {
+		    buffer.len = toRead;
+		    buffer.buf = *bufPos;
+		    Flags = 0;
+
+		    if (winSock.WSARecv(infoPtr->socket, &buffer, 1,
+			    &NumberOfBytesRecvd, &Flags, 0L, 0L)) {
+			IocpWinConvertWSAError(winSock.WSAGetLastError());
+			*gotError = 1;
+			FreeBufferObj(bufPtr);
+			return 1;
+		    }
+		    *bytesRead = NumberOfBytesRecvd;
+		    if (NumberOfBytesRecvd == 0) {
+			/* got official EOF */
+			infoPtr->flags |= IOCP_EOF;
+			FreeBufferObj(bufPtr);
+			return 1;
+		    }
 		}
 	    }
 	} else {
@@ -1209,20 +1233,22 @@ RepostRecvs (SocketInfo *infoPtr, int chanBufSize)
 {
     BufferInfo *newBufPtr;
 
+    /* No more overlapped WSARecv calls needed? */
     if (infoPtr->flags & IOCP_EOF) return;
 
     if (infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE
 	    || infoPtr->recvMode == IOCP_RECVMODE_FLOW_CTRL) {
 	newBufPtr = GetBufferObj(infoPtr,
 		(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : chanBufSize));
+
 	/*
 	 * If an immediate error occurs, we can not return it to Tcl now
-	 * as this is essentailly the "next" packet of delivery. We have
+	 * as this is essentially the "next" packet of delivery. We have
 	 * to force post it to the completion port to "read" it later.
 	 */
-	if (PostOverlappedRecv(infoPtr, newBufPtr, 0) != NO_ERROR) {
-	    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
-		(ULONG_PTR) infoPtr, &newBufPtr->ol);
+	if (PostOverlappedRecv(infoPtr, newBufPtr, 0 /*useBurst*/,
+		1 /*forcepost*/) != NO_ERROR) {
+	    FreeBufferObj(newBufPtr);
 	}
     } else if (infoPtr->recvMode == IOCP_RECVMODE_BURST_DETECT && infoPtr->needRecvRestart
 	    && IocpLLGetCount(infoPtr->llPendingRecv) < infoPtr->outstandingRecvBufferCap) {
@@ -1230,12 +1256,12 @@ RepostRecvs (SocketInfo *infoPtr, int chanBufSize)
 
 	/*
 	 * If an immediate error occurs, we can not return it to Tcl now
-	 * as this is essentailly the "next" packet of delivery. We have
+	 * as this is essentially the "next" packet of delivery. We have
 	 * to force post it to the completion port to "read" it later.
 	 */
-	if (PostOverlappedRecv(infoPtr, newBufPtr, 1 /*useBurst*/) != NO_ERROR) {
-	    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
-		(ULONG_PTR) infoPtr, &newBufPtr->ol);
+	if (PostOverlappedRecv(infoPtr, newBufPtr, 1 /*useBurst*/,
+		1 /*forcepost*/) != NO_ERROR) {
+	    FreeBufferObj(newBufPtr);
 	}
 	infoPtr->needRecvRestart = 0;
     }
@@ -1268,7 +1294,6 @@ IocpOutputProc (
 
     if (infoPtr->lastError) {
 	IocpWinConvertWSAError(infoPtr->lastError);
-	infoPtr->flags |= IOCP_EOF;
 	goto error;
     }
 
@@ -1281,18 +1306,11 @@ IocpOutputProc (
 	*errorCodePtr = EWOULDBLOCK;
 	return -1;
     } else if (result != NO_ERROR) {
+	/* Don't FreeBufferObj(), as it is already queued to the cp, too */
 	infoPtr->lastError = result;
 	IocpWinConvertWSAError(result);
-	infoPtr->flags |= IOCP_EOF;
 	goto error;
     }
-
-    /*
-     * +++++++  This comment is NOT true anymore, see above! +++++++++
-     * Let errors come back through the completion port or else we risk
-     * a time problem where readable data is ignored before the error
-     * actually happened.
-     */
 
     return toWrite;
 
@@ -1502,7 +1520,6 @@ IocpGetOptionProc (
 	    if (infoPtr->lastError != NO_ERROR) {
 		IocpWinConvertWSAError(infoPtr->lastError);
 		Tcl_DStringAppend(dsPtr, Tcl_ErrnoMsg(Tcl_GetErrno()), -1);
-		infoPtr->flags |= IOCP_EOF;
 	    }
 	    return TCL_OK;
 #if _DEBUG   /* for debugging only */
@@ -1960,7 +1977,7 @@ NewAcceptSockInfo (SOCKET socket, SocketInfo *infoPtr)
 	return NULL;
     }
 
-    /* Initialize some members (partial cloning to the parent). */
+    /* Initialize some members (partial cloning of the parent). */
     newInfoPtr->proto = infoPtr->proto;
     newInfoPtr->tsdHome = infoPtr->tsdHome;
     newInfoPtr->llPendingRecv = IocpLLCreate();
@@ -2134,7 +2151,7 @@ PostOverlappedAccept (
 	/*
 	 * Tested under extreme listening socket abuse it was found that
 	 * this logic condition is never met.  AcceptEx _never_ completes
-	 * immediatly.  It always returns WSA_IO_PENDING.  Too bad,
+	 * immediately.  It always returns WSA_IO_PENDING.  Too bad,
 	 * as this was looking like a good way to detect and handle burst
 	 * conditions.
 	 */
@@ -2159,11 +2176,16 @@ PostOverlappedAccept (
     return NO_ERROR;
 }
 
+/*
+ * A NO_ERROR return indicates the WSARecv operation is pending, or 
+ * if an error occurs that the bufPtr was posted to the port.
+ */
 DWORD
 PostOverlappedRecv (
     SocketInfo *infoPtr,
     BufferInfo *bufPtr,
-    int useBurst)
+    int useBurst,
+    int ForcePostOnError)
 {
     WSABUF wbuf;
     DWORD bytes = 0, flags, WSAerr;
@@ -2171,7 +2193,8 @@ PostOverlappedRecv (
 
     bufPtr->WSAerr = NO_ERROR;
 
-    if (infoPtr->flags & IOCP_CLOSING) return WSAENOTCONN;
+    if (infoPtr->flags & IOCP_EOF || infoPtr->flags & IOCP_CLOSING)
+	    return WSAENOTCONN;
 
     /* Recursion limit */
     if (InterlockedIncrement(&infoPtr->outstandingRecvs)
@@ -2212,22 +2235,30 @@ PostOverlappedRecv (
      *	  initiated and will complete at a later time (and possibly
      *	  complete with an error or not).
      * 3) WSARecv returns SOCKET_ERROR with WSAGetLastError() returning
-     *	  any other WSAGetLastError() code indicates the operation was
-     *	  NOT succesfully initiated and completion will NOT occur.  We
-     *	  must feed this error up to Tcl, or it will be lost.
+     *	  any other WSAGetLastError() code to indicate the operation was
+     *	  NOT succesfully initiated and completion will NOT occur.
      */
 
     if (rc == SOCKET_ERROR) {
 	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
-	    InterlockedDecrement(&infoPtr->outstandingRecvs);
 	    bufPtr->WSAerr = WSAerr;
-	    return WSAerr;
+	    if (ForcePostOnError) {
+		PostQueuedCompletionStatus(IocpSubSystem.port, 0,
+			(ULONG_PTR) infoPtr, &bufPtr->ol);
+		/* We can not process the error now, but is posted, so don't return an error. */
+		return NO_ERROR;
+	    } else {
+		InterlockedDecrement(&infoPtr->outstandingOps);
+		InterlockedDecrement(&infoPtr->outstandingRecvs);
+		/* return the error. */
+		return WSAerr;
+	    }
 	}
     } else if (bytes > 0 && useBurst) {
 	BufferInfo *newBufPtr;
 
 	/*
-	 * The WSARecv(From) has completed now, and is posted to the
+	 * The WSARecv(From) has completed now, *AND* is posted to the
 	 * port.  Keep giving more WSARecv(From) calls to drain the
 	 * internal buffer (AFD.sys).  Why should we wait for the time
 	 * when the completion routine is run if we know the connected
@@ -2242,8 +2273,11 @@ PostOverlappedRecv (
 	 */
 
 	newBufPtr = GetBufferObj(infoPtr, wbuf.len);
-	if (PostOverlappedRecv(infoPtr, newBufPtr, 1 /*useBurst */)
-		!= NO_ERROR) {
+	if (PostOverlappedRecv(infoPtr, newBufPtr, 1 /*useBurst */, 1 /*forcepost*/)) {
+	    /*
+	     * simple states for burstCap and !connected shall be
+	     * ignored and the buffer recycled.
+	     */
 	    FreeBufferObj(newBufPtr);
 	}
     }
@@ -2258,7 +2292,8 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
     DWORD bytes = 0, WSAerr;
     int rc;
 
-    if (infoPtr->flags & IOCP_CLOSING) return WSAENOTCONN;
+    if (infoPtr->flags & IOCP_EOF || infoPtr->flags & IOCP_CLOSING)
+	    return WSAENOTCONN;
 
     bufPtr->operation = OP_WRITE;
     wbuf.buf = bufPtr->buf;
@@ -2290,12 +2325,13 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
     if (rc == SOCKET_ERROR) {
 	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
 	    bufPtr->WSAerr = WSAerr;
+
 	    /*
-	     * Eventhough we know about the error now, post this to the port
-	     * manually, too.  We need to force EOF as the generic layer
-	     * needs a little help to know that both sides of our
-	     * bidirectional channel are now dead because of this write
-	     * side error.
+	     * Eventhough we know about the error now, post this to the
+	     * port manually, too.  We need to force EOF on the read side
+	     * as the generic layer needs a little help to know that both
+	     * sides of our bidirectional channel are now dead because of
+	     * this write side error.
 	     */
 
 	    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
@@ -2584,12 +2620,14 @@ HandleIo (
 	    /* post IOCP_INITIAL_RECV_COUNT recvs. */
 	    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
 		newBufPtr = GetBufferObj(newInfoPtr,
-			(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
-		if ((WSAerr = PostOverlappedRecv(newInfoPtr, newBufPtr, 0))
-			!= NO_ERROR) {
+			(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0
+			: IOCP_RECV_BUFSIZE));
+		if ((WSAerr = PostOverlappedRecv(newInfoPtr, newBufPtr,
+			0 /*useburst*/, 0 /*forcepost*/)) != NO_ERROR) {
 		    /*
 		     * The new connection is not valid.  Do not alert
-		     * Tcl about this new dud connection.
+		     * Tcl about this new dud connection.  Clean it
+		     * up ourselves.
 		     */
 		    newInfoPtr->flags |= IOCP_CLOSING;
 		    PostOverlappedDisconnect(newInfoPtr, newBufPtr);
@@ -2647,10 +2685,11 @@ replace:
 
 	newBufPtr = GetBufferObj(infoPtr, 0);
 	if (PostOverlappedAccept(infoPtr, newBufPtr, 0) != NO_ERROR) {
+
 	    /*
 	     * Oh no, the AcceptEx failed.  There is no way to return an
 	     * error for this condition.  Tcl has no failure aspect for
-	     * listening sockets.
+	     * listening sockets.  This Just shouldn't have happened.
 	     */
 	    FreeBufferObj(newBufPtr);
 	    InterlockedIncrement(&StatFailedReplacementAcceptExCalls);
@@ -2671,29 +2710,17 @@ replace:
 	    if (infoPtr->recvMode == IOCP_RECVMODE_BURST_DETECT) {
 		if (IocpLLGetCount(infoPtr->llPendingRecv)
 			< infoPtr->outstandingRecvBufferCap) {
+
 		    /*
-		     * Create a new buffer object to replace the one that just
-		     * came in, but use the hard-coded size of
+		     * Create a new buffer object to replace the one that
+		     * just came in, but use the hard-coded size of
 		     * IOCP_RECV_BUFSIZE.
 		     */
 
 		    newBufPtr = GetBufferObj(infoPtr, IOCP_RECV_BUFSIZE);
-		    if ((WSAerr = PostOverlappedRecv(infoPtr, newBufPtr, 1))
-			    != NO_ERROR) {
-			if (newBufPtr->WSAerr != NO_ERROR) {
-			    /*
-			     * Eventhough we know about the error now, post
-			     * this to the port manually.  If we sent this
-			     * to the revc'd linklist now, we run the risk
-			     * of placing this error ahead of good data
-			     * waiting in the port behind us (this thread).
-			     */
-			    InterlockedIncrement(&infoPtr->outstandingOps);
-			    PostQueuedCompletionStatus(IocpSubSystem.port, 0,
-				(ULONG_PTR) infoPtr, &newBufPtr->ol);
-			} else {
-			    FreeBufferObj(newBufPtr);
-			}
+		    if (PostOverlappedRecv(infoPtr, newBufPtr,
+			    1 /*useburst*/, 1 /*forcepost*/) != NO_ERROR) {
+			FreeBufferObj(newBufPtr);
 		    }
 		} else {
 		    infoPtr->needRecvRestart = 1;
@@ -2736,10 +2763,12 @@ replace:
 
 	if (bufPtr->WSAerr != NO_ERROR && bufPtr->WSAerr != WSAENOBUFS
 		&& infoPtr->llPendingRecv) {
-	    newBufPtr = GetBufferObj(infoPtr, 0);
-	    newBufPtr->WSAerr = bufPtr->WSAerr;
-	    /* Force EOF on the read side, too, for a write side error. */
-	    IocpPushRecvAlertToTcl(infoPtr, newBufPtr);
+
+	    infoPtr->lastError = bufPtr->WSAerr;
+
+	    /* Errors are writable events too. */
+	    IocpZapTclNotifier(infoPtr);
+
 
 	} else if (infoPtr->watchMask & TCL_WRITABLE &&
 		infoPtr->outstandingSends < infoPtr->outstandingSendCap) {
@@ -2765,7 +2794,7 @@ replace:
 
 	if (bufPtr->WSAerr != NO_ERROR) {
 	    infoPtr->lastError = bufPtr->WSAerr;
-	    newBufPtr = GetBufferObj(infoPtr, 0);
+	    newBufPtr = GetBufferObj(infoPtr, 1);
 	    newBufPtr->WSAerr = bufPtr->WSAerr;
 	    /* Force EOF. */
 	    IocpPushRecvAlertToTcl(infoPtr, newBufPtr);
@@ -2778,9 +2807,9 @@ replace:
 		newBufPtr = GetBufferObj(infoPtr,
 			(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0
 			: IOCP_RECV_BUFSIZE));
-		if (PostOverlappedRecv(infoPtr, newBufPtr, 0)
-			!= NO_ERROR) {
-		    FreeBufferObj(bufPtr);
+		if (PostOverlappedRecv(infoPtr, newBufPtr, 0 /*useburst*/,
+			1 /*forcepost*/) != NO_ERROR) {
+		    FreeBufferObj(newBufPtr);
 		    break;
 		}
 	    }
