@@ -83,7 +83,8 @@ TCL_EXTERN(DWORD)	PostOverlappedAccept _ANSI_ARGS_((
 #define PostOverlappedRecv_TCL_DECLARED
 /* 9 */
 TCL_EXTERN(DWORD)	PostOverlappedRecv _ANSI_ARGS_((SocketInfo * infoPtr, 
-				BufferInfo * recvobj, int useBurst));
+				BufferInfo * recvobj, int useBurst, 
+				int ForcePostOnError));
 #endif
 #ifndef PostOverlappedQOS_TCL_DECLARED
 #define PostOverlappedQOS_TCL_DECLARED
@@ -211,7 +212,7 @@ typedef struct IocpIntStubs {
     void (*freeSocketAddress) _ANSI_ARGS_((LPADDRINFO addrinfo)); /* 6 */
     BOOL (*findProtocolInfo) _ANSI_ARGS_((int af, int type, int protocol, DWORD flags, WSAPROTOCOL_INFO * pinfo)); /* 7 */
     DWORD (*postOverlappedAccept) _ANSI_ARGS_((SocketInfo * infoPtr, BufferInfo * acceptobj, int useBurst)); /* 8 */
-    DWORD (*postOverlappedRecv) _ANSI_ARGS_((SocketInfo * infoPtr, BufferInfo * recvobj, int useBurst)); /* 9 */
+    DWORD (*postOverlappedRecv) _ANSI_ARGS_((SocketInfo * infoPtr, BufferInfo * recvobj, int useBurst, int ForcePostOnError)); /* 9 */
     DWORD (*postOverlappedQOS) _ANSI_ARGS_((SocketInfo * infoPtr, BufferInfo * bufPtr)); /* 10 */
     void (*iocpWinConvertWSAError) _ANSI_ARGS_((DWORD errCode)); /* 11 */
     void (*freeBufferObj) _ANSI_ARGS_((BufferInfo * obj)); /* 12 */

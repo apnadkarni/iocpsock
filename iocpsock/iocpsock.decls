@@ -110,7 +110,7 @@ declare 8 generic {
 }
 declare 9 generic {
     DWORD PostOverlappedRecv (SocketInfo *infoPtr,
-	BufferInfo *recvobj, int useBurst)
+	BufferInfo *recvobj, int useBurst, int ForcePostOnError)
 }
 declare 10 generic {
     DWORD PostOverlappedQOS (SocketInfo *infoPtr, BufferInfo *bufPtr)
