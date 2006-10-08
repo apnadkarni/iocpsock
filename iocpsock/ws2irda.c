@@ -291,7 +291,7 @@ Iocp_OpenIrdaClient (
 				 * client socket asynchronously. */
 {
     SocketInfo *infoPtr;
-    char channelName[16 + TCL_INTEGER_SPACE];
+    char channelName[4 + TCL_INTEGER_SPACE];
 
     /*
      * Create a new client socket and wrap it in a channel.
@@ -302,7 +302,7 @@ Iocp_OpenIrdaClient (
     if (infoPtr == NULL) {
 	return NULL;
     }
-    wsprintf(channelName, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-translation",
@@ -330,7 +330,7 @@ Iocp_OpenIrdaServer (
 				 * client socket asynchronously. */
 {
     SocketInfo *infoPtr;
-    char channelName[16 + TCL_INTEGER_SPACE];
+    char channelName[4 + TCL_INTEGER_SPACE];
 
     /*
      * Create a new client socket and wrap it in a channel.
@@ -341,7 +341,7 @@ Iocp_OpenIrdaServer (
     if (infoPtr == NULL) {
 	return NULL;
     }
-    wsprintf(channelName, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-translation",

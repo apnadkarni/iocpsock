@@ -82,7 +82,7 @@ DecodeIpxSockaddr (SocketInfo *info, LPSOCKADDR addr)
 {
     static char dest[128];
     LPSOCKADDR_IPX ipxadddr = (LPSOCKADDR_IPX) addr;
-    wsprintf(dest, "%02X%02X%02X%02X.%02X%02X%02X%02X%02X%02X:%04X", 
+    snprintf(dest, 128, "%02X%02X%02X%02X.%02X%02X%02X%02X%02X%02X:%04X", 
         (unsigned char)ipxadddr->sa_netnum[0],
         (unsigned char)ipxadddr->sa_netnum[1],
         (unsigned char)ipxadddr->sa_netnum[2],

@@ -292,10 +292,13 @@ Iocp_MakeTcpClientChannel (
     for(i = 0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
 	bufPtr = GetBufferObj(infoPtr,
 		(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
-	PostOverlappedRecv(infoPtr, bufPtr, 0);
+	if (PostOverlappedRecv(infoPtr, bufPtr, 0, 1)) {
+	    FreeBufferObj(bufPtr);
+	    break;
+	}
     }
 
-    wsprintf(channelName, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     Tcl_SetChannelOption(NULL, infoPtr->channel, "-translation", "auto crlf");
@@ -331,7 +334,7 @@ Iocp_OpenTcpClient(
 				 * client socket asynchronously. */
 {
     SocketInfo *infoPtr;
-    char channelName[16 + TCL_INTEGER_SPACE];
+    char channelName[4 + TCL_INTEGER_SPACE];
 
     /*
      * Create a new client socket and wrap it in a channel.
@@ -341,7 +344,7 @@ Iocp_OpenTcpClient(
     if (infoPtr == NULL) {
 	return NULL;
     }
-    wsprintf(channelName, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-translation",
@@ -386,7 +389,7 @@ Iocp_OpenTcpServer(
     ClientData acceptProcData)	/* Data for the callback. */
 {
     SocketInfo *infoPtr;
-    char channelName[16 + TCL_INTEGER_SPACE];
+    char channelName[4 + TCL_INTEGER_SPACE];
 
     /*
      * Create a new client socket and wrap it in a channel.
@@ -399,7 +402,7 @@ Iocp_OpenTcpServer(
 
     infoPtr->acceptProc = acceptProc;
     infoPtr->acceptProcData = acceptProcData;
-    wsprintf(channelName, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, 0);
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-eofchar", "")
@@ -657,7 +660,10 @@ CreateTcpSocket(
 	    for(i=0; i < IOCP_INITIAL_RECV_COUNT ;i++) {
 		bufPtr = GetBufferObj(infoPtr,
 			(infoPtr->recvMode == IOCP_RECVMODE_ZERO_BYTE ? 0 : IOCP_RECV_BUFSIZE));
-		PostOverlappedRecv(infoPtr, bufPtr, 0);
+		if (PostOverlappedRecv(infoPtr, bufPtr, 0, 0)) {
+		    FreeBufferObj(bufPtr);
+		    goto error1;
+		}
 	    }
 #if 0
 	    {

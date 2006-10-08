@@ -60,7 +60,7 @@ Iocp_OpenUdpSocket (
     CONST char *myport)		/* Client-side port (number|service).*/
 {
     SocketInfo *infoPtr;
-    char channelName[16 + TCL_INTEGER_SPACE];
+    char channelName[4 + TCL_INTEGER_SPACE];
 
     /*
      * Create a new client socket and wrap it in a channel.
@@ -71,7 +71,7 @@ Iocp_OpenUdpSocket (
 	return NULL;
     }
 
-    wsprintfA(channelName, "iocp%d", infoPtr->socket);
+    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%d", infoPtr->socket);
 
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
