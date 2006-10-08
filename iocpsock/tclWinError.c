@@ -10,6 +10,12 @@
 #   define TCL_TSD_INIT(keyPtr)	(ThreadSpecificData *)Tcl_GetThreadData((keyPtr), sizeof(ThreadSpecificData))
 #endif
 
+/* ISO hack for dumb VC++ */
+#ifdef _MSC_VER
+#define   snprintf	_snprintf
+#endif
+
+
 /* Fix the error in winnt.h */
 #if (_MSC_VER == 1200)
 #   undef DEFAULT_UNREACHABLE
@@ -5300,7 +5306,7 @@ Tcl_Win32ErrMsg (void)
 	    FORMAT_MESSAGE_MAX_WIDTH_MASK,
 	    0L,
 	    errorCode,
-	    0,			    /* use best guess localization */
+	    0,		    /* use best guess localization */
 	    tsdPtr->sysMsgSpace,
 	    ERR_BUF_SIZE,
 	    NULL);
@@ -5329,9 +5335,11 @@ CONST char *
 Tcl_Win32Error (Tcl_Interp *interp)
 {
     CONST char *id, *msg;
+    char num[TCL_INTEGER_SPACE];
 
     id = Tcl_Win32ErrId();
     msg = Tcl_Win32ErrMsg();
-    Tcl_SetErrorCode(interp, "WIN32", id, msg, 0L);
+    snprintf(num, TCL_INTEGER_SPACE, "%lu", GetLastError());
+    Tcl_SetErrorCode(interp, "WIN32", num, id, msg, 0L);
     return msg;
 }
