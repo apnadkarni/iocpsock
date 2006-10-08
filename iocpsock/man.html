@@ -7,10 +7,10 @@
 	H1	    { font-size: x-large; color: red }
 	H2	    { font-size: large; color: blue }
 	DT	    { color: brown }
-	.proto  { white-space: nowrap }
-	.type   { color: green }
-	.name   { font-weight: bold }
-	.oper   { color: red }
+	.proto	    { white-space: nowrap }
+	.type	    { color: green }
+	.name	    { font-weight: bold }
+	.oper	    { color: red }
     </style>
 </head>
 <body>
@@ -43,13 +43,14 @@ The <b>IOCPSOCK</b> extension contains two (2) commands provided to the interpre
 	    </dd>
 	    <dt>-sendcap</dt>
 	    <dd>
-		Sets (or gets) the limit in terms of the count of
-		concurrent buffers allowed.  Think of this as a poor-man's
-		throttle.  More means speedier, but the per socket resource
-		limit is raised.  Use &quot;1&quot; for lowest resource
-		usage (HTTPD) and about &quot;25&quot; or greater for
-		highest performance (FTPD).  This option can be set for
-		listening sockets and will be inherited to new connections.
+		Sets (or gets) the sending limit in terms of the count of
+		concurrent WSASend operations allowed.  Think of this as a
+		poor-man's throttle.  More means speedier, but the per
+		socket resource limit is raised.  Use &quot;1&quot; for
+		lowest resource usage (HTTPD) and about &quot;25&quot; or
+		greater for highest performance (FTPD).  This option can be
+		set for listening sockets and will be inherited to new
+		connections.
 	    </dd>
 	    <dt>-recvmode</dt>
 	    <dd>
@@ -95,11 +96,11 @@ The <b>IOCPSOCK</b> extension contains two (2) commands provided to the interpre
 		incoming load.  This mode should only be used for
 		problematic networks that are &quot;bursty&quot; with
 		regards to data flow.  One should not use this mode if
-		resource usage is at a premium or if the sockets are
-		long-lived.  The pool count does not reduce once
-		increased by load detection.  <i>flow-controlled</i>
-		is the better option until you know you can improve
-		transfer performance with <i>burst-detection</i>.
+		resource usage is at a premium.  The pool count does
+		not reduce once increased by load detection.
+		<i>flow-controlled</i> is the better option until you
+		know you can improve transfer performance with
+		<i>burst-detection</i>.
 		<p/>
 	    </dd>
 	</dl>
