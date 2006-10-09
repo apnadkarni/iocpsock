@@ -522,6 +522,8 @@ install-libraries:
 install-docs:
 	@echo installing man.html
 	@$(CPY) "$(ROOT)\man.html" "$(SCRIPT_INSTALL_DIR)"
+	@echo installing pb_iocpsock.png
+	@$(CPY) "$(ROOT)\pb_iocpsock.png" "$(SCRIPT_INSTALL_DIR)"
 
 #---------------------------------------------------------------------
 # Distribution.
@@ -553,6 +555,36 @@ dist:
 	    include\iocpDecls.h
 	@cd "$(MAKEDIR)"
 
+#---------------------------------------------------------------------
+# Upload to sourceforge.
+#---------------------------------------------------------------------
+
+upload:
+!if !exist($(TCLSH))
+	@echo Build tclsh first!
+!else
+	$(TCLSH) @<<
+package require Expect
+exp_spawn ftp
+expect "ftp>"
+exp_send "open upload.sourceforge.net\r"
+expect "User (*):"
+exp_send "anonymous\r"
+expect "Password:"
+exp_send "\r"
+expect "ftp>"
+exp_send "binary\r"
+expect "ftp>"
+exp_send "cd incoming\r"
+expect "ftp>"
+exp_send "send iocpsock-$(TAG).zip\r"
+exp_send_user "uploading iocpsock-$(TAG).zip now... please wait.."
+expect "ftp>"
+exp_send_user "DONE!"
+exp_send "bye\r"
+exp_close
+<<
+!endif
 
 #---------------------------------------------------------------------
 # Clean up
