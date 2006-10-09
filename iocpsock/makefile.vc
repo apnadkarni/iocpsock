@@ -549,6 +549,7 @@ dist:
 	    lib\iocpsock$(DOTVERSION)\iocpsock$(VERSION).dll \
 	    lib\iocpsock$(DOTVERSION)\pkgIndex.tcl \
 	    lib\iocpsock$(DOTVERSION)\man.html \
+	    lib\iocpsock$(DOTVERSION)\pb_iocpsock.png \
 	    lib\iocpstub$(VERSION).lib \
 	    lib\iocpsock$(VERSION)s.lib \
 	    include\iocpsock.h \
