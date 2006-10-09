@@ -36,13 +36,13 @@ declare 1 generic {
 ###  Some Win32 error stuff the core is missing.
 
 declare 2 generic {
-    CONST char *Tcl_Win32ErrId (void)
+    CONST char *Tcl_WinErrId (void)
 }
 declare 3 generic {
-    CONST char *Tcl_Win32ErrMsg (void)
+    CONST char *Tcl_WinErrMsg (void)
 }
 declare 4 generic {
-    CONST char *Tcl_Win32Error (Tcl_Interp *interp)
+    CONST char *Tcl_WinError (Tcl_Interp *interp)
 }
 
 ### TCP stuff

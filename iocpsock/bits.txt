@@ -25,7 +25,7 @@ proc gotWrite {s} {
     fileevent $s writable {}
 }
 
-load iocpsock.dll
+load iocpsock30g.dll
 set s [socket2 -server accept -myaddr [info hostname] 1234]
 
 

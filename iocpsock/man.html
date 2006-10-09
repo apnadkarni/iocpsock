@@ -167,35 +167,35 @@ function:
 	sockets are allowed.<p/>
     </dd>
 
-    <dt><span class=proto><span class=type>CONST char *</span><span class=name>Tcl_Win32ErrId</span> <span class=oper>(</span><span class=type>void</span><span class=oper>)</span></span></dt>
+    <dt><span class=proto><span class=type>CONST char *</span><span class=name>Tcl_WinErrId</span> <span class=oper>(</span><span class=type>void</span><span class=oper>)</span></span></dt>
     <dd>
-	<span class=name>Tcl_Win32ErrId</span> returns a machine-readable
+	<span class=name>Tcl_WinErrId</span> returns a machine-readable
 	textual identifier such as "ERROR_DEVICE_DOOR_OPEN" that corresponds
 	to the current return of Win32's GetLastError().  Same as the core's
 	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/SetErrno.htm" target="_workspot"><span class=name>Tcl_ErrnoId()</span></a>,
-	but for the Win32 class of errors.<p/>
+	but for the WINDOWS class of errors.<p/>
     </dd>
 
-    <dt><span class=proto><span class=type>CONST char *</span><span class=name>Tcl_Win32ErrMsg</span> <span class=oper>(</span><span class=type>void</span><span class=oper>)</span></span></dt>
+    <dt><span class=proto><span class=type>CONST char *</span><span class=name>Tcl_WinErrMsg</span> <span class=oper>(</span><span class=type>void</span><span class=oper>)</span></span></dt>
     <dd>
-	<span class=name>Tcl_Win32ErrMsg</span> returns a human-readable
+	<span class=name>Tcl_WinErrMsg</span> returns a human-readable
 	string such as "permission denied" that corresponds to the current
 	return of Win32's GetLastError(). The strings returned by these
 	functions are statically allocated and the caller must not free
 	or modify them. Same as the core's
 	<a href="http://www.tcl.tk/man/tcl8.5/TclLib/SetErrno.htm" target="_workspot"><span class=name>Tcl_ErrnoMsg</span></a>,
-	but for the Win32 class of errors.<p/>
+	but for the WINDOWS class of errors.<p/>
     </dd>
 
-    <dt><span class=proto><span class=type>CONST char *</span><span class=name>Tcl_Win32Error</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>)</span></span></dt>
+    <dt><span class=proto><span class=type>CONST char *</span><span class=name>Tcl_WinError</span> <span class=oper>(</span><span class=type>Tcl_Interp *</span><span class=name>interp</span><span class=oper>)</span></span></dt>
     <dd>
-	<span class=name>Tcl_Win32Error</span> returns a human-readable
+	<span class=name>Tcl_WinError</span> returns a human-readable
 	diagnostic message for the error (this is the same value that
-	will appear as the third element in the -errorcode value). It
+	will appear as the fourth element in the -errorcode value). It
 	may be convenient to include this string as part of the error
 	message returned to the application in the interpreter's result.
 	Same as the core's <a href="http://www.tcl.tk/man/tcl8.5/TclLib/AddErrInfo.htm" target="_workspot"><span class=name>Tcl_PosixError</span></a>,
-	but for the Win32 class of errors.<p/>
+	but for the WINDOWS class of errors.<p/>
     </dd>
 </dl>
 <body>

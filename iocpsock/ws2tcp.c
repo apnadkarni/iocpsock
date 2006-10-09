@@ -699,7 +699,7 @@ error1:
     SetLastError(winSock.WSAGetLastError());
     if (interp != NULL) {
 	Tcl_AppendResult(interp, "couldn't open socket: ",
-		Tcl_Win32Error(interp), NULL);
+		Tcl_WinError(interp), NULL);
     }
     FreeSocketInfo(infoPtr);
     return NULL;

@@ -585,7 +585,7 @@ HasSockets(Tcl_Interp *interp)
 	    default:
 		SetLastError(winsockLoadErr);
 		Tcl_AppendResult(interp, "can't start Iocpsock: ",
-			Tcl_Win32Error(interp), NULL);
+			Tcl_WinError(interp), NULL);
 		break;
 	}
     }
@@ -1345,7 +1345,7 @@ IocpSetOptionProc (
 	    if (interp) {
 		SetLastError(winSock.WSAGetLastError());
 		Tcl_AppendResult(interp, "couldn't set keepalive socket option: ",
-			Tcl_Win32Error(interp),	NULL);
+			Tcl_WinError(interp), NULL);
 	    }
 	    return TCL_ERROR;
 	}
@@ -1362,7 +1362,7 @@ IocpSetOptionProc (
 	    if (interp) {
 		SetLastError(winSock.WSAGetLastError());
 		Tcl_AppendResult(interp, "couldn't set nagle socket option: ",
-			Tcl_Win32Error(interp),	NULL);
+			Tcl_WinError(interp),	NULL);
 	    }
 	    return TCL_ERROR;
 	}
@@ -1585,7 +1585,7 @@ IocpGetOptionProc (
 		    if (interp) {
 			SetLastError(winSock.WSAGetLastError());
 			Tcl_AppendResult(interp, "getpeername() failed: ",
-				Tcl_Win32Error(interp), NULL);
+				Tcl_WinError(interp), NULL);
 		    }
 		    return TCL_ERROR;
 		}
@@ -1623,7 +1623,7 @@ IocpGetOptionProc (
 		if (interp) {
 		    SetLastError(winSock.WSAGetLastError());
 		    Tcl_AppendResult(interp, "getsockname() failed: ",
-			    Tcl_Win32Error(interp), NULL);
+			    Tcl_WinError(interp), NULL);
 		}
 		return TCL_ERROR;
 	    }
