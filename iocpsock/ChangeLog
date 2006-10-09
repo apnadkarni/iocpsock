@@ -1,7 +1,80 @@
+2006-10-09  davygrvy
+	* makefile.vc:
+		new upload rule using Expect on FTP (I'm just sooo kewl!)
+
+	* tclWinError.c:
+		renamed the ITEM macro to CASE
+
+	* tclWinError.c:
+		Big cleanup using Tcl's STINGIFY macro.
+
+	* bits.txt:
+	* iocpDecls.h:
+	* iocpStubInit.c:
+	* iocpsock.decls:
+	* iocpsock.h:
+	* iocpsock_lolevel.c:
+	* makefile.vc:
+	* man.html:
+	* tclWinError.c:
+	* ws2tcp.c:
+		Tagged for 3.0a3 release.  Renamed the error commands and
+		removed the "32" from them.
+
+2006-10-08  davygrvy
+	* man.html:
+		more prose
+
+	* iocpIntDecls.h:
+	* iocpsock.decls:
+		Changed sig of PostOverlappedRecv() to optionally post the
+		buffer if WSARecv failed
+
+	* iocpsockInt.h:
+		defined snprintf in an ISO compatible manner
+
+	* iocpsock_lolevel.c:
+		Modified all calls to PostOverlappedRecv() to use the new
+		signature.  Fixed numerous small issues regarding errors
+		getting lost.  Fixed a problem with write errors not alerting
+		to Tcl.
+
+	* tclWinError.c:
+	* ws2ipx.c:
+	* ws2irda.c:
+	* ws2tcp.c:
+	* ws2udp.c:
+		Changed unsafe wsprintf with safer snprintf
+
+2006-10-02  davygrvy
+	* pb_iocpsock.png:
+		everyone has to have a "powered by" banner :)
+
+2006-10-01  davygrvy
+	* iocpsock_lolevel.c:
+		Huge bug in RepostRecvs() fixed.  Immediate errors returned by
+		PostOverlappedRecv() were being lost!
+
 2006-09-22  davygrvy
+	* iocpsock.h:
+	* makefile.vc:
+		Bumped up version number to 3.0a2
+
+	* iocpsock_lolevel.c:
+		Close detection bug fixed!  When a socket does not have a
+		readable watch mask, and is in zero-byte recvmode, EOF is never
+		 ever read in.  Unfortunetly, writes weren't returning errors
+		directly.  They are now, thus close detection is now working.
+
+	* ws2tcp.c:
+		comments edited
+
 	* dllmain.c:
 		Removed link statement for ws2_32.lib as we are loading it
 		dynamically, not statically
+
+	* iocpsock.dsp:
+		source list changes
 
 	* iocpsock_lolevel.c:
 		Found and fixed a logic bug in DoRecvBufMerge().  When the
