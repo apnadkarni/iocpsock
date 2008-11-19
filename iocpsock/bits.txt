@@ -41,5 +41,5 @@ set t [thread::create {package require Iocpsock; set s [socket2 -server asd 1234
 thread::send -async $t {thread::unwind}
 
 set s [socket2 3ffe:b80:185d:1::29 ftp]
-set s [socket2 FEDCBA98:1A2B3C5D7E9F 0453]
+set s [socket2 FEDCBA98.1A2B3C5D7E9F 0453]
 
