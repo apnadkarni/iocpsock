@@ -95,8 +95,8 @@ Here's a more detailed description of the memory limitation as it exists
 for you.  If one runs this in a tclsh shell:
 
 C:\WINNT\system32>tclsh84
-% for {set i 0} {$i < 10000} {incr i} {socket localhost 80}
-% foreach s [file channels] {if {[string match sock* $s]} {close $s}; after 5}
+% for {set i 0} {$i < 10000} {incr i} {socket2 localhost 80}
+% foreach s [file channels] {if {[string match iocp* $s]} {close $s}; after 5}
 % exit
 
 With those 10,000 sockets connected (no data transfer), you'll see on the

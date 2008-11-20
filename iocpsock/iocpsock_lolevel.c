@@ -2,7 +2,7 @@
  *
  * iocpsock_lolevel.c --
  *
- *	Think of this file as being win/tclWinSock.c
+ *	Think of this file as being win/tclc
  *
  *  See http://support.microsoft.com/default.aspx?scid=kb;en-us;Q192800
  *  for some help on the design aspects.
@@ -26,7 +26,6 @@
 static DWORD winsockLoadErr	= 0;
 
 /* some globals defined. */
-WinsockProcs winSock;
 int initialized			= 0;
 CompletionPortInfo IocpSubSystem;
 
@@ -171,131 +170,6 @@ InitSockets(void)
 	iocpModule = TclWinGetTclInstance();
 #endif
 
-	ZeroMemory(&winSock, sizeof(WinsockProcs));
-
-	/*
-	 * Try ws2_32.dll first, if available.
-	 */
-
-	if ((winSock.hModule = LoadLibraryA("ws2_32.dll")) != 0L);
-	else if ((winSock.hModule = LoadLibraryA("wsock32.dll")) != 0L);
-	else if ((winSock.hModule = LoadLibraryA("winsock.dll")) != 0L);
-	else {
-	    winsockLoadErr = TCL_WSE_NOTFOUND;
-	    return NULL;
-	}
-
-	/*
-	 * Initialize the 1.1 half of the function table.
-	 */
-
-	winSock.accept = (LPFN_ACCEPT)
-		GetProcAddress(winSock.hModule, "accept");
-	winSock.bind = (LPFN_BIND)
-		GetProcAddress(winSock.hModule, "bind");
-	winSock.closesocket = (LPFN_CLOSESOCKET)
-		GetProcAddress(winSock.hModule, "closesocket");
-	winSock.connect = (LPFN_CONNECT)
-		GetProcAddress(winSock.hModule, "connect");
-	winSock.gethostbyaddr = (LPFN_GETHOSTBYADDR)
-		GetProcAddress(winSock.hModule, "gethostbyaddr");
-	winSock.gethostbyname = (LPFN_GETHOSTBYNAME)
-		GetProcAddress(winSock.hModule, "gethostbyname");
-	winSock.gethostname = (LPFN_GETHOSTNAME)
-		GetProcAddress(winSock.hModule, "gethostname");
-	winSock.getpeername = (LPFN_GETPEERNAME)
-		GetProcAddress(winSock.hModule, "getpeername");
-	winSock.getservbyname = (LPFN_GETSERVBYNAME)
-		GetProcAddress(winSock.hModule, "getservbyname");
-	winSock.getservbyport = (LPFN_GETSERVBYPORT)
-		GetProcAddress(winSock.hModule, "getservbyport");
-	winSock.getsockname = (LPFN_GETSOCKNAME)
-		GetProcAddress(winSock.hModule, "getsockname");
-	winSock.getsockopt = (LPFN_GETSOCKOPT)
-		GetProcAddress(winSock.hModule, "getsockopt");
-	winSock.htonl = (LPFN_HTONL)
-		GetProcAddress(winSock.hModule, "htonl");
-	winSock.htons = (LPFN_HTONS)
-		GetProcAddress(winSock.hModule, "htons");
-	winSock.inet_addr = (LPFN_INET_ADDR)
-		GetProcAddress(winSock.hModule, "inet_addr");
-	winSock.inet_ntoa = (LPFN_INET_NTOA)
-		GetProcAddress(winSock.hModule, "inet_ntoa");
-	winSock.ioctlsocket = (LPFN_IOCTLSOCKET)
-		GetProcAddress(winSock.hModule, "ioctlsocket");
-	winSock.listen = (LPFN_LISTEN)
-		GetProcAddress(winSock.hModule, "listen");
-	winSock.ntohs = (LPFN_NTOHS)
-		GetProcAddress(winSock.hModule, "ntohs");
-	winSock.recv = (LPFN_RECV)
-		GetProcAddress(winSock.hModule, "recv");
-	winSock.recvfrom = (LPFN_RECVFROM)
-		GetProcAddress(winSock.hModule, "recvfrom");
-	winSock.select = (LPFN_SELECT)
-		GetProcAddress(winSock.hModule, "select");
-	winSock.send = (LPFN_SEND)
-		GetProcAddress(winSock.hModule, "send");
-	winSock.sendto = (LPFN_SENDTO)
-		GetProcAddress(winSock.hModule, "sendto");
-	winSock.setsockopt = (LPFN_SETSOCKOPT)
-		GetProcAddress(winSock.hModule, "setsockopt");
-	winSock.shutdown = (LPFN_SHUTDOWN)
-		GetProcAddress(winSock.hModule, "shutdown");
-	winSock.socket = (LPFN_SOCKET)
-		GetProcAddress(winSock.hModule, "socket");
-	winSock.WSAAsyncSelect = (LPFN_WSAASYNCSELECT)
-		GetProcAddress(winSock.hModule, "WSAAsyncSelect");
-	winSock.WSACleanup = (LPFN_WSACLEANUP)
-		GetProcAddress(winSock.hModule, "WSACleanup");
-	winSock.WSAGetLastError = (LPFN_WSAGETLASTERROR)
-		GetProcAddress(winSock.hModule, "WSAGetLastError");
-	winSock.WSASetLastError = (LPFN_WSASETLASTERROR)
-		GetProcAddress(winSock.hModule, "WSASetLastError");
-	winSock.WSAStartup = (LPFN_WSASTARTUP)
-		GetProcAddress(winSock.hModule, "WSAStartup");
-    
-	/*
-	 * Now check that all fields are properly initialized. If not,
-	 * return zero to indicate that we failed to initialize
-	 * properly.
-	 */
-    
-	if ((winSock.accept == NULL) ||
-		(winSock.bind == NULL) ||
-		(winSock.closesocket == NULL) ||
-		(winSock.connect == NULL) ||
-		(winSock.gethostbyname == NULL) ||
-		(winSock.gethostbyaddr == NULL) ||
-		(winSock.gethostname == NULL) ||
-		(winSock.getpeername == NULL) ||
-		(winSock.getservbyname == NULL) ||
-		(winSock.getservbyport == NULL) ||
-		(winSock.getsockname == NULL) ||
-		(winSock.getsockopt == NULL) ||
-		(winSock.htonl == NULL) ||
-		(winSock.htons == NULL) ||
-		(winSock.inet_addr == NULL) ||
-		(winSock.inet_ntoa == NULL) ||
-		(winSock.ioctlsocket == NULL) ||
-		(winSock.listen == NULL) ||
-		(winSock.ntohs == NULL) ||
-		(winSock.recv == NULL) ||
-		(winSock.recvfrom == NULL) ||
-		(winSock.select == NULL) ||
-		(winSock.send == NULL) ||
-		(winSock.sendto == NULL) ||
-		(winSock.setsockopt == NULL) ||
-		(winSock.shutdown == NULL) ||
-		(winSock.socket == NULL) ||
-		(winSock.WSAAsyncSelect == NULL) ||
-		(winSock.WSACleanup == NULL) ||
-		(winSock.WSAGetLastError == NULL) ||
-		(winSock.WSASetLastError == NULL) ||
-		(winSock.WSAStartup == NULL)) {
-	    winsockLoadErr = TCL_WSE_NOTALL11FUNCS;
-	    goto unloadLibrary;
-	}
-	
 	/*
 	 * Initialize the winsock library and check the interface
 	 * version number.  We ask for the 2.2 interface, but
@@ -306,12 +180,12 @@ InitSockets(void)
 #define WSA_VER_MIN_MINOR   1
 #define WSA_VERSION_REQUESTED    MAKEWORD(2,2)
 
-	if ((winsockLoadErr = winSock.WSAStartup(WSA_VERSION_REQUESTED,
+	if ((winsockLoadErr = WSAStartup(WSA_VERSION_REQUESTED,
 		&wsaData)) != 0) {
 	    goto unloadLibrary;
 	}
 
-	winSock.wVersionLoaded = wsaData.wVersion;
+//	wVersionLoaded = wsaData.wVersion;
 
 	/*
 	 * Note the byte positions are swapped for the comparison, so
@@ -321,7 +195,7 @@ InitSockets(void)
 	if (MAKEWORD(HIBYTE(wsaData.wVersion), LOBYTE(wsaData.wVersion))
 		< MAKEWORD(WSA_VER_MIN_MINOR, WSA_VER_MIN_MAJOR)) {
 	    winsockLoadErr = TCL_WSE_CANTDOONEPOINTZERO;
-	    winSock.WSACleanup();
+	    WSACleanup();
 	    goto unloadLibrary;
 	}
 
@@ -329,138 +203,6 @@ InitSockets(void)
 #undef WSA_VER_MIN_MAJOR
 #undef WSA_VER_MIN_MINOR
 
-	/*
-	 * Has winsock version 2.x been loaded?
-	 */
-
-	if (LOBYTE(winSock.wVersionLoaded) == 2) {
-
-	    /*
-	     *  Initialize the 2.x function entries.
-	     */
-
-	    winSock.WSAAccept = (LPFN_WSAACCEPT)
-		    GetProcAddress(winSock.hModule, "WSAAccept");
-	    winSock.WSAAddressToString = (LPFN_WSAADDRESSTOSTRINGA)
-		    GetProcAddress(winSock.hModule, "WSAAddressToStringA");
-	    winSock.WSACloseEvent = (LPFN_WSACLOSEEVENT)
-		    GetProcAddress(winSock.hModule, "WSACloseEvent");
-	    winSock.WSAConnect = (LPFN_WSACONNECT)
-		    GetProcAddress(winSock.hModule, "WSAConnect");
-	    winSock.WSACreateEvent = (LPFN_WSACREATEEVENT)
-		    GetProcAddress(winSock.hModule, "WSACreateEvent");
-	    winSock.WSADuplicateSocket = (LPFN_WSADUPLICATESOCKETA)
-		    GetProcAddress(winSock.hModule, "WSADuplicateSocketA");
-	    winSock.WSAEnumNameSpaceProviders = (LPFN_WSAENUMNAMESPACEPROVIDERSA)
-		    GetProcAddress(winSock.hModule, "WSAEnumNameSpaceProvidersA");
-	    winSock.WSAEnumNetworkEvents = (LPFN_WSAENUMNETWORKEVENTS)
-		    GetProcAddress(winSock.hModule, "WSAEnumNetworkEvents");
-	    winSock.WSAEnumProtocols = (LPFN_WSAENUMPROTOCOLSA)
-		    GetProcAddress(winSock.hModule, "WSAEnumProtocolsA");
-	    winSock.WSAEventSelect = (LPFN_WSAEVENTSELECT)
-		    GetProcAddress(winSock.hModule, "WSAEventSelect");
-	    winSock.WSAGetOverlappedResult = (LPFN_WSAGETOVERLAPPEDRESULT)
-		    GetProcAddress(winSock.hModule, "WSAGetOverlappedResult");
-	    winSock.WSAGetQOSByName = (LPFN_WSAGETQOSBYNAME)
-		    GetProcAddress(winSock.hModule, "WSAGetQOSByName");
-	    winSock.WSAGetServiceClassInfo = (LPFN_WSAGETSERVICECLASSINFO)
-		    GetProcAddress(winSock.hModule, "WSAGetServiceClassInfoA");
-	    winSock.WSAGetServiceClassNameByClassId = (LPFN_WSAGETSERVICECLASSNAMEBYCLASSIDA)
-		    GetProcAddress(winSock.hModule, "WSAGetServiceClassNameByClassIdA");
-	    winSock.WSAHtonl = (LPFN_WSAHTONL)
-		    GetProcAddress(winSock.hModule, "WSAHtonl");
-	    winSock.WSAHtons = (LPFN_WSAHTONS)
-		    GetProcAddress(winSock.hModule, "WSAHtons");
-	    winSock.WSAInstallServiceClass = (LPFN_WSAINSTALLSERVICECLASSA)
-		    GetProcAddress(winSock.hModule, "WSAInstallServiceClassA");
-	    winSock.WSAIoctl = (LPFN_WSAIOCTL)
-		    GetProcAddress(winSock.hModule, "WSAIoctl");
-	    winSock.WSAJoinLeaf = (LPFN_WSAJOINLEAF)
-		    GetProcAddress(winSock.hModule, "WSAJoinLeaf");
-	    winSock.WSALookupServiceBegin = (LPFN_WSALOOKUPSERVICEBEGINA)
-		    GetProcAddress(winSock.hModule, "WSALookupServiceBeginA");
-	    winSock.WSALookupServiceEnd = (LPFN_WSALOOKUPSERVICEEND)
-		    GetProcAddress(winSock.hModule, "WSALookupServiceEnd");
-	    winSock.WSALookupServiceNext = (LPFN_WSALOOKUPSERVICENEXTA)
-		    GetProcAddress(winSock.hModule, "WSALookupServiceNextA");
-	    winSock.WSANSPIoctl = (LPFN_WSANSPIOCTL)
-		    GetProcAddress(winSock.hModule, "WSANSPIoctl");
-	    winSock.WSANtohl = (LPFN_WSANTOHL)
-		    GetProcAddress(winSock.hModule, "WSANtohl");
-	    winSock.WSANtohs = (LPFN_WSANTOHS)
-		    GetProcAddress(winSock.hModule, "WSANtohs");
-	    winSock.WSAProviderConfigChange = (LPFN_WSAPROVIDERCONFIGCHANGE)
-		    GetProcAddress(winSock.hModule, "WSAProviderConfigChange");
-	    winSock.WSARecv = (LPFN_WSARECV)
-		    GetProcAddress(winSock.hModule, "WSARecv");
-	    winSock.WSARecvDisconnect = (LPFN_WSARECVDISCONNECT)
-		    GetProcAddress(winSock.hModule, "WSARecvDisconnect");
-	    winSock.WSARecvFrom = (LPFN_WSARECVFROM)
-		    GetProcAddress(winSock.hModule, "WSARecvFrom");
-	    winSock.WSARemoveServiceClass = (LPFN_WSAREMOVESERVICECLASS)
-		    GetProcAddress(winSock.hModule, "WSARemoveServiceClass");
-	    winSock.WSAResetEvent = (LPFN_WSARESETEVENT)
-		    GetProcAddress(winSock.hModule, "WSAResetEvent");
-	    winSock.WSASend = (LPFN_WSASEND)
-		    GetProcAddress(winSock.hModule, "WSASend");
-	    winSock.WSASendDisconnect = (LPFN_WSASENDDISCONNECT)
-		    GetProcAddress(winSock.hModule, "WSASendDisconnect");
-	    winSock.WSASendTo = (LPFN_WSASENDTO)
-		    GetProcAddress(winSock.hModule, "WSASendTo");
-	    winSock.WSASetEvent = (LPFN_WSASETEVENT)
-		    GetProcAddress(winSock.hModule, "WSASetEvent");
-	    winSock.WSASetService = (LPFN_WSASETSERVICEA)
-		    GetProcAddress(winSock.hModule, "WSASetServiceA");
-	    winSock.WSASocket = (LPFN_WSASOCKETA)
-		    GetProcAddress(winSock.hModule, "WSASocketA");
-	    winSock.WSAStringToAddress = (LPFN_WSASTRINGTOADDRESSA)
-		    GetProcAddress(winSock.hModule, "WSAStringToAddressA");
-	    winSock.WSAWaitForMultipleEvents= (LPFN_WSAWAITFORMULTIPLEEVENTS)
-		    GetProcAddress(winSock.hModule, "WSAWaitForMultipleEvents");
-
-	    if ((winSock.WSAAccept == NULL) ||
-		    (winSock.WSAAddressToString == NULL) ||
-		    (winSock.WSACloseEvent == NULL) ||
-		    (winSock.WSAConnect == NULL) ||
-		    (winSock.WSACreateEvent == NULL) ||
-		    (winSock.WSADuplicateSocket == NULL) ||
-		    (winSock.WSAEnumNameSpaceProviders == NULL) ||
-		    (winSock.WSAEnumNetworkEvents == NULL) ||
-		    (winSock.WSAEnumProtocols == NULL) ||
-		    (winSock.WSAEventSelect == NULL) ||
-		    (winSock.WSAGetOverlappedResult == NULL) ||
-		    (winSock.WSAGetQOSByName == NULL) ||
-		    (winSock.WSAGetServiceClassInfo == NULL) ||
-		    (winSock.WSAGetServiceClassNameByClassId == NULL) ||
-		    (winSock.WSAHtonl == NULL) ||
-		    (winSock.WSAHtons == NULL) ||
-		    (winSock.WSAInstallServiceClass == NULL) ||
-		    (winSock.WSAIoctl == NULL) ||
-		    (winSock.WSAJoinLeaf == NULL) ||
-		    (winSock.WSALookupServiceBegin == NULL) ||
-		    (winSock.WSALookupServiceEnd == NULL) ||
-		    (winSock.WSALookupServiceNext == NULL) ||
-/* WinXP only, don't force a failure  (winSock.WSANSPIoctl == NULL) || */
-		    (winSock.WSANtohl == NULL) ||
-		    (winSock.WSANtohs == NULL) ||
-		    (winSock.WSAProviderConfigChange == NULL) ||
-		    (winSock.WSARecv == NULL) ||
-		    (winSock.WSARecvDisconnect == NULL) ||
-		    (winSock.WSARecvFrom == NULL) ||
-		    (winSock.WSARemoveServiceClass == NULL) ||
-		    (winSock.WSAResetEvent == NULL) ||
-		    (winSock.WSASend == NULL) ||
-		    (winSock.WSASendDisconnect == NULL) ||
-		    (winSock.WSASendTo == NULL) ||
-		    (winSock.WSASetEvent == NULL) ||
-		    (winSock.WSASetService == NULL) ||
-		    (winSock.WSASocket == NULL) ||
-		    (winSock.WSAStringToAddress == NULL) ||
-		    (winSock.WSAWaitForMultipleEvents == NULL)) {
-		winsockLoadErr = TCL_WSE_NOTALL2XFUNCS;
-		goto unloadLibrary;
-	    }
-	}
 
 	/*
 	 * Assert our Tcl_ChannelType struct to the true version this core
@@ -490,14 +232,7 @@ InitSockets(void)
 	os.dwOSVersionInfoSize = sizeof(OSVERSIONINFO);
 	GetVersionEx(&os);
 
-	if (os.dwPlatformId == VER_PLATFORM_WIN32_NT) {
-	    winsockLoadErr = InitializeIocpSubSystem();
-	} else {
-	    // TODO (long-term): put the old WSAAsyncSelect channel driver code in here too.
-	    /* winsockLoadErr = InitializeOldSubSystem(); */
-	    Tcl_Panic("Barf! Can't run IOCP on non-NT systems, sorry.");
-	}
-	if (winsockLoadErr != NO_ERROR) {
+	if (InitializeIocpSubSystem() != NO_ERROR) {
 	    goto unloadLibrary;
 	}
     }
@@ -514,8 +249,6 @@ InitSockets(void)
 
 unloadLibrary:
     initialized = 0;
-    FreeLibrary(winSock.hModule);
-    winSock.hModule = NULL;
     return NULL;
 }
 
@@ -548,9 +281,11 @@ IocpGetTclMaxChannelVer (Tcl_ChannelTypeVersion maxAllowed)
 int
 HasSockets(Tcl_Interp *interp)
 {
-    InitSockets();
+    ThreadSpecificData *blob;
 
-    if (winSock.hModule != NULL) {
+    blob = InitSockets();
+
+    if (blob != NULL) {
 	return TCL_OK;
     }
     if (interp != NULL) {
@@ -671,9 +406,7 @@ IocpExitHandler (ClientData clientData)
 	HeapDestroy(IocpSubSystem.NPPheap);
 
 	initialized = 0;
-	winSock.WSACleanup();
-	FreeLibrary(winSock.hModule);
-	winSock.hModule = NULL;
+	WSACleanup();
     }
 }
 
@@ -1022,7 +755,7 @@ IocpCloseProc (
 	    temp = infoPtr->socket;
 	    infoPtr->socket = INVALID_SOCKET;
 	    /* Cause all pending AcceptEx calls to return with WSA_OPERATION_ABORTED */
-	    winSock.closesocket(temp);
+	    closesocket(temp);
 	}
     }
 
@@ -1196,9 +929,9 @@ DoRecvBufMerge (
 		    buffer.buf = *bufPos;
 		    Flags = 0;
 
-		    if (winSock.WSARecv(infoPtr->socket, &buffer, 1,
+		    if (WSARecv(infoPtr->socket, &buffer, 1,
 			    &NumberOfBytesRecvd, &Flags, 0L, 0L)) {
-			IocpWinConvertWSAError(winSock.WSAGetLastError());
+			IocpWinConvertWSAError(WSAGetLastError());
 			*gotError = 1;
 			FreeBufferObj(bufPtr);
 			return 1;
@@ -1339,11 +1072,11 @@ IocpSetOptionProc (
 	    return TCL_ERROR;
 	}
 	if (Integer) val = TRUE;
-	rtn = winSock.setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE,
+	rtn = setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE,
 		(const char *) &val, sizeof(BOOL));
 	if (rtn != 0) {
 	    if (interp) {
-		SetLastError(winSock.WSAGetLastError());
+		SetLastError(WSAGetLastError());
 		Tcl_AppendResult(interp, "couldn't set keepalive socket option: ",
 			Tcl_WinError(interp), NULL);
 	    }
@@ -1356,11 +1089,11 @@ IocpSetOptionProc (
 	    return TCL_ERROR;
 	}
 	if (!Integer) val = TRUE;
-	rtn = winSock.setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
+	rtn = setsockopt(sock, IPPROTO_TCP, TCP_NODELAY,
 		(const char *) &val, sizeof(BOOL));
 	if (rtn != 0) {
 	    if (interp) {
-		SetLastError(winSock.WSAGetLastError());
+		SetLastError(WSAGetLastError());
 		Tcl_AppendResult(interp, "couldn't set nagle socket option: ",
 			Tcl_WinError(interp),	NULL);
 	    }
@@ -1572,7 +1305,7 @@ IocpGetOptionProc (
         if (infoPtr->remoteAddr == NULL) {
 	    size = infoPtr->proto->addrLen;
 	    infoPtr->remoteAddr = IocpAlloc(size);
-	    if (winSock.getpeername(sock, infoPtr->remoteAddr, &size)
+	    if (getpeername(sock, infoPtr->remoteAddr, &size)
 		    == SOCKET_ERROR) {
 		/*
 		 * getpeername failed - but if we were asked for all the
@@ -1583,7 +1316,7 @@ IocpGetOptionProc (
 		 */
 		if (len) {
 		    if (interp) {
-			SetLastError(winSock.WSAGetLastError());
+			SetLastError(WSAGetLastError());
 			Tcl_AppendResult(interp, "getpeername() failed: ",
 				Tcl_WinError(interp), NULL);
 		    }
@@ -1618,10 +1351,10 @@ IocpGetOptionProc (
         if (infoPtr->localAddr == NULL) {
 	    size = infoPtr->proto->addrLen;
 	    infoPtr->localAddr = IocpAlloc(size);
-	    if (winSock.getsockname(sock, infoPtr->localAddr, &size)
+	    if (getsockname(sock, infoPtr->localAddr, &size)
 		    == SOCKET_ERROR) {
 		if (interp) {
-		    SetLastError(winSock.WSAGetLastError());
+		    SetLastError(WSAGetLastError());
 		    Tcl_AppendResult(interp, "getsockname() failed: ",
 			    Tcl_WinError(interp), NULL);
 		}
@@ -1657,7 +1390,7 @@ IocpGetOptionProc (
             Tcl_DStringAppendElement(dsPtr, "-keepalive");
         }
 	optlen = sizeof(BOOL);
-	winSock.getsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char *)&opt,
+	getsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char *)&opt,
 		&optlen);
 	if (opt) {
 	    Tcl_DStringAppendElement(dsPtr, "1");
@@ -1675,7 +1408,7 @@ IocpGetOptionProc (
             Tcl_DStringAppendElement(dsPtr, "-nagle");
         }
 	optlen = sizeof(BOOL);
-	winSock.getsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&opt,
+	getsockopt(sock, IPPROTO_TCP, TCP_NODELAY, (char *)&opt,
 		&optlen);
 	if (opt) {
 	    Tcl_DStringAppendElement(dsPtr, "0");
@@ -1893,7 +1626,7 @@ FreeSocketInfo (SocketInfo *infoPtr)
 
     /* Just in case... */
     if (infoPtr->socket != INVALID_SOCKET) {
-	winSock.closesocket(infoPtr->socket);
+	closesocket(infoPtr->socket);
     }
 
     /* collect stats */
@@ -1961,7 +1694,7 @@ FreeBufferObj (BufferInfo *bufPtr)
     IocpLLPop(&bufPtr->node, IOCP_LL_NODESTROY);
     /* If we have a socket for AcceptEx(), close it. */
     if (bufPtr->socket != INVALID_SOCKET) {
-	winSock.closesocket(bufPtr->socket);
+	closesocket(bufPtr->socket);
     }
     IocpNPPFree(bufPtr->buf);
     IocpNPPFree(bufPtr);
@@ -2108,7 +1841,7 @@ PostOverlappedAccept (
      * incoming connection.
      */
 
-    bufPtr->socket = winSock.WSASocket(infoPtr->proto->af,
+    bufPtr->socket = WSASocket(infoPtr->proto->af,
 	    infoPtr->proto->type, infoPtr->proto->protocol, NULL, 0,
 	    WSA_FLAG_OVERLAPPED);
 
@@ -2136,12 +1869,12 @@ PostOverlappedAccept (
      * by the LSP of this socket type.
      */
 
-    rc = infoPtr->proto->AcceptEx(infoPtr->socket, bufPtr->socket,
+    rc = infoPtr->proto->_AcceptEx(infoPtr->socket, bufPtr->socket,
 	    bufPtr->buf, bufPtr->buflen - (addr_storage * 2),
 	    addr_storage, addr_storage, &bytes, &bufPtr->ol);
 
     if (rc == FALSE) {
-	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
+	if ((WSAerr = WSAGetLastError()) != WSA_IO_PENDING) {
 	    InterlockedDecrement(&infoPtr->outstandingOps);
 	    InterlockedDecrement(&infoPtr->outstandingAccepts);
 	    bufPtr->WSAerr = WSAerr;
@@ -2216,10 +1949,10 @@ PostOverlappedRecv (
     InterlockedIncrement(&infoPtr->outstandingOps);
 
     if (infoPtr->proto->type == SOCK_STREAM) {
-	rc = winSock.WSARecv(infoPtr->socket, &wbuf, 1, &bytes, &flags,
+	rc = WSARecv(infoPtr->socket, &wbuf, 1, &bytes, &flags,
 		&bufPtr->ol, NULL);
     } else {
-	rc = winSock.WSARecvFrom(infoPtr->socket, &wbuf, 1, &bytes,
+	rc = WSARecvFrom(infoPtr->socket, &wbuf, 1, &bytes,
 		&flags, bufPtr->addr, &infoPtr->proto->addrLen,
 		&bufPtr->ol, NULL);
     }
@@ -2240,7 +1973,7 @@ PostOverlappedRecv (
      */
 
     if (rc == SOCKET_ERROR) {
-	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
+	if ((WSAerr = WSAGetLastError()) != WSA_IO_PENDING) {
 	    bufPtr->WSAerr = WSAerr;
 	    if (ForcePostOnError) {
 		PostQueuedCompletionStatus(IocpSubSystem.port, 0,
@@ -2314,16 +2047,16 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
     InterlockedIncrement(&infoPtr->outstandingOps);
 
     if (infoPtr->proto->type == SOCK_STREAM) {
-	rc = winSock.WSASend(infoPtr->socket, &wbuf, 1, &bytes, 0,
+	rc = WSASend(infoPtr->socket, &wbuf, 1, &bytes, 0,
 		&bufPtr->ol, NULL);
     } else {
-	rc = winSock.WSASendTo(infoPtr->socket, &wbuf, 1, &bytes, 0,
+	rc = WSASendTo(infoPtr->socket, &wbuf, 1, &bytes, 0,
                 bufPtr->addr, infoPtr->proto->addrLen,
 		&bufPtr->ol, NULL);
     }
 
     if (rc == SOCKET_ERROR) {
-	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
+	if ((WSAerr = WSAGetLastError()) != WSA_IO_PENDING) {
 	    bufPtr->WSAerr = WSAerr;
 
 	    /*
@@ -2361,11 +2094,11 @@ PostOverlappedDisconnect (SocketInfo *infoPtr, BufferInfo *bufPtr)
 
     bufPtr->operation = OP_DISCONNECT;
 
-    rc = infoPtr->proto->DisconnectEx(infoPtr->socket, &bufPtr->ol,
+    rc = infoPtr->proto->_DisconnectEx(infoPtr->socket, &bufPtr->ol,
 	    0 /*TF_REUSE_SOCKET*/, 0);
 
     if (rc == FALSE) {
-	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
+	if ((WSAerr = WSAGetLastError()) != WSA_IO_PENDING) {
 	    bufPtr->WSAerr = WSAerr;
 
 	    /*
@@ -2399,11 +2132,11 @@ PostOverlappedQOS (SocketInfo *infoPtr, BufferInfo *bufPtr)
     InterlockedIncrement(&infoPtr->outstandingOps);
     bufPtr->operation = OP_QOS;
 
-    rc = winSock.WSAIoctl(infoPtr->socket, SIO_GET_QOS, NULL, 0,
+    rc = WSAIoctl(infoPtr->socket, SIO_GET_QOS, NULL, 0,
 	    bufPtr->buf, bufPtr->buflen, &bytes, &bufPtr->ol, NULL);
 
     if (rc == SOCKET_ERROR) {
-	if ((WSAerr = winSock.WSAGetLastError()) != WSA_IO_PENDING) {
+	if ((WSAerr = WSAGetLastError()) != WSA_IO_PENDING) {
 	    /*
 	     * Eventhough we know about the error now, post this to the
 	     * port manually, anyways.
@@ -2497,11 +2230,11 @@ again:
 	     * translate the error into a Winsock error code.
 	     */
 
-	    ok = winSock.WSAGetOverlappedResult(infoPtr->socket,
+	    ok = WSAGetOverlappedResult(infoPtr->socket,
 		    ol, &bytes, FALSE, &flags);
 
 	    if (!ok) {
-		WSAerr = winSock.WSAGetLastError();
+		WSAerr = WSAGetLastError();
 	    }
 	}
 
@@ -2581,12 +2314,12 @@ HandleIo (
 	     * specific to this socket's LSP.
 	     */
 
-	    infoPtr->proto->GetAcceptExSockaddrs(bufPtr->buf,
+	    infoPtr->proto->_GetAcceptExSockaddrs(bufPtr->buf,
 		    bufPtr->buflen - (addr_storage * 2), addr_storage,
 		    addr_storage, &local, &localLen, &remote,
 		    &remoteLen);
 
-	    winSock.setsockopt(bufPtr->socket, SOL_SOCKET,
+	    setsockopt(bufPtr->socket, SOL_SOCKET,
 		    SO_UPDATE_ACCEPT_CONTEXT, (char *)&infoPtr->socket,
 		    sizeof(SOCKET));
 
@@ -2799,7 +2532,7 @@ replace:
 	    /* Force EOF. */
 	    IocpPushRecvAlertToTcl(infoPtr, newBufPtr);
 	} else {
-	    winSock.setsockopt(infoPtr->socket, SOL_SOCKET,
+	    setsockopt(infoPtr->socket, SOL_SOCKET,
 		    SO_UPDATE_CONNECT_CONTEXT, NULL, 0);
 
 	    /* post IOCP_INITIAL_RECV_COUNT recvs. */
@@ -2943,58 +2676,58 @@ IocpInitProtocolData (SOCKET sock, WS2ProtocolData *pdata)
     DWORD bytes;
 
     /* is it already cached? */
-    if (pdata->AcceptEx == NULL) {
+    if (pdata->_AcceptEx == NULL) {
 	/* Get the LSP specific functions. */
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&AcceptExGuid, sizeof(GUID),
-		&pdata->AcceptEx,
-		sizeof(pdata->AcceptEx),
+		&pdata->_AcceptEx,
+		sizeof(pdata->_AcceptEx),
 		&bytes, NULL, NULL);
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&GetAcceptExSockaddrsGuid, sizeof(GUID),
-		&pdata->GetAcceptExSockaddrs,
-		sizeof(pdata->GetAcceptExSockaddrs),
+		&pdata->_GetAcceptExSockaddrs,
+		sizeof(pdata->_GetAcceptExSockaddrs),
 		&bytes, NULL, NULL);
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&ConnectExGuid, sizeof(GUID),
-		&pdata->ConnectEx,
-		sizeof(pdata->ConnectEx),
+		&pdata->_ConnectEx,
+		sizeof(pdata->_ConnectEx),
 		&bytes, NULL, NULL);
-	if (pdata->ConnectEx == NULL) {
+	if (pdata->_ConnectEx == NULL) {
 	    /* Use our lame Win2K/NT4 emulation for this. */
-	    pdata->ConnectEx = OurConnectEx;
+	    pdata->_ConnectEx = OurConnectEx;
 	}
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&DisconnectExGuid, sizeof(GUID),
-		&pdata->DisconnectEx,
-		sizeof(pdata->DisconnectEx),
+		&pdata->_DisconnectEx,
+		sizeof(pdata->_DisconnectEx),
 		&bytes, NULL, NULL);
-	if (pdata->DisconnectEx == NULL) {
+	if (pdata->_DisconnectEx == NULL) {
 	    /* Use our lame Win2K/NT4 emulation for this. */
-	    pdata->DisconnectEx = OurDisconnectEx;
+	    pdata->_DisconnectEx = OurDisconnectEx;
 	}
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&TransmitFileGuid, sizeof(GUID),
-		&pdata->TransmitFile,
-		sizeof(pdata->TransmitFile),
+		&pdata->_TransmitFile,
+		sizeof(pdata->_TransmitFile),
 		&bytes, NULL, NULL);
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&TransmitPacketsGuid, sizeof(GUID),
-		&pdata->TransmitPackets,
-		sizeof(pdata->TransmitPackets),
+		&pdata->_TransmitPackets,
+		sizeof(pdata->_TransmitPackets),
 		&bytes, NULL, NULL);
-	if (pdata->TransmitPackets == NULL) {
+	if (pdata->_TransmitPackets == NULL) {
 	    /* There is no Win2K/NT4 emulation for this. */
-	    pdata->TransmitPackets = NULL;
+	    pdata->_TransmitPackets = NULL;
 	}
-        winSock.WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
+        WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER,
 		&WSARecvMsgGuid, sizeof(GUID),
-		&pdata->WSARecvMsg,
-		sizeof(pdata->WSARecvMsg),
+		&pdata->_WSARecvMsg,
+		sizeof(pdata->_WSARecvMsg),
 		&bytes, NULL, NULL);
-	if (pdata->WSARecvMsg == NULL) {
+	if (pdata->_WSARecvMsg == NULL) {
 	    /* There is no Win2K/NT4 emulation for this. */
-	    pdata->WSARecvMsg = NULL;
+	    pdata->_WSARecvMsg = NULL;
 	}
     }
 }
@@ -3043,7 +2776,7 @@ CreateSocketAddress (
 
     if (result != 0) {
 	/* an older platSDK needed this; the current doesn't.
-	winSock.WSASetLastError(result); */
+	WSASetLastError(result); */
 	return 0;
     }
     return 1;
@@ -3086,7 +2819,7 @@ BOOL FindProtocolInfo(int af, int type,
      * Find out the size of the buffer needed to enumerate
      * all entries.
      */
-    ret = winSock.WSAEnumProtocols(NULL, NULL, &protosz);
+    ret = WSAEnumProtocols(NULL, NULL, &protosz);
     if (ret != SOCKET_ERROR) {
         return FALSE;  
     }
@@ -3097,7 +2830,7 @@ BOOL FindProtocolInfo(int af, int type,
     }
     nprotos = protosz / sizeof(WSAPROTOCOL_INFO);
     /* Make the real call */
-    ret = winSock.WSAEnumProtocols(NULL, buf, &protosz);
+    ret = WSAEnumProtocols(NULL, buf, &protosz);
     if (ret == SOCKET_ERROR) {
         IocpFree(buf);
         return FALSE;
@@ -3118,7 +2851,7 @@ BOOL FindProtocolInfo(int af, int type,
         }
     }
     /* LSP with flag combination not found.. */
-    winSock.WSASetLastError(WSAEOPNOTSUPP);
+    WSASetLastError(WSAEOPNOTSUPP);
     IocpFree(buf);
     return FALSE;
 }
@@ -3298,9 +3031,9 @@ ConnectThread (LPVOID lpParam)
     BufferInfo *bufPtr;
 
     bufPtr = CONTAINING_RECORD(job->lpOverlapped, BufferInfo, ol);
-    code = winSock.connect(job->s, job->name, job->namelen);
+    code = connect(job->s, job->name, job->namelen);
     if (code == SOCKET_ERROR) {
-	bufPtr->WSAerr = winSock.WSAGetLastError();
+	bufPtr->WSAerr = WSAGetLastError();
     }
     PostQueuedCompletionStatus(IocpSubSystem.port, 0,
 	    (ULONG_PTR) bufPtr->parent, job->lpOverlapped);
@@ -3346,9 +3079,9 @@ OurConnectEx (
     if (thread) {
 	/* remove local reference so the thread cleans up after it exits. */
 	CloseHandle(thread);
-	winSock.WSASetLastError(WSA_IO_PENDING);
+	WSASetLastError(WSA_IO_PENDING);
     } else {
-	winSock.WSASetLastError(GetLastError());
+	WSASetLastError(GetLastError());
     }
     return FALSE;
 }
@@ -3362,10 +3095,10 @@ OurDisconnectEx (
 {
     BufferInfo *bufPtr;
     bufPtr = CONTAINING_RECORD(lpOverlapped, BufferInfo, ol);
-    winSock.WSASendDisconnect(hSocket, NULL);
+    WSASendDisconnect(hSocket, NULL);
     PostQueuedCompletionStatus(IocpSubSystem.port, 0,
 	    (ULONG_PTR) bufPtr->parent, lpOverlapped);
-    winSock.WSASetLastError(WSA_IO_PENDING);
+    WSASetLastError(WSA_IO_PENDING);
     return FALSE;
 }
 

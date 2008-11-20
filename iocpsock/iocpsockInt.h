@@ -2,28 +2,22 @@
 #define INCL_iocpsockInt_h_
 
 /* Enables NT5 special features. */
-#define _WIN32_WINNT 0x0500
-
-/* Turn on function typedefs. */
-#define INCL_WINSOCK_API_TYPEDEFS   1
-
-/* Turn off prototypes. */
-#define INCL_WINSOCK_API_PROTOTYPES 0
+#define _WIN32_WINNT 0x0501
 
 /* winsock2.h should check for the intrinsic _WIN32, but doesn't. */
 #ifndef WIN32
 #define WIN32
 #endif
 
-/* wspiapi.h can't handle ws2 typedefs only, so we'll exclude it
- * from the include chain. */
-#define _WSPIAPI_H_
+/* ask for typedefs also */
+#define INCL_WINSOCK_API_TYPEDEFS   1
 
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#ifndef IPPROTO_IPV6
-#include <tpipv6.h> /* For IPv6 Tech Preview. */
-#endif
+#include <wspiapi.h>
+//#ifndef IPPROTO_IPV6
+//#include <tpipv6.h> /* For IPv6 Tech Preview. */
+//#endif
 
 /* probably not needed */
 //#include <iphlpapi.h>
@@ -35,120 +29,10 @@
 #include <svcguid.h>
 #include <nspapi.h>
 
-typedef struct {
-    HMODULE	hModule;	/* Handle to the WinSock DLL. */
-    WORD	wVersionLoaded;	/* Winsock API interface loaded. */
-
-    /* Winsock 1.1 functions */
-    LPFN_ACCEPT		    accept;
-    LPFN_BIND		    bind;
-    LPFN_CLOSESOCKET	    closesocket;
-    LPFN_CONNECT	    connect;
-    LPFN_GETHOSTBYADDR	    gethostbyaddr;
-    LPFN_GETHOSTBYNAME	    gethostbyname;
-    LPFN_GETHOSTNAME	    gethostname;
-    LPFN_GETPEERNAME	    getpeername;
-    LPFN_GETSERVBYNAME	    getservbyname;
-    LPFN_GETSERVBYPORT	    getservbyport;
-    LPFN_GETSOCKNAME	    getsockname;
-    LPFN_GETSOCKOPT	    getsockopt;
-    LPFN_HTONL		    htonl;
-    LPFN_HTONS		    htons;
-    LPFN_INET_ADDR	    inet_addr;
-    LPFN_INET_NTOA	    inet_ntoa;
-    LPFN_IOCTLSOCKET	    ioctlsocket;
-    LPFN_LISTEN		    listen;
-    LPFN_NTOHS		    ntohs;
-    LPFN_RECV		    recv;
-    LPFN_RECVFROM	    recvfrom;
-    LPFN_SELECT		    select;
-    LPFN_SEND		    send;
-    LPFN_SENDTO		    sendto;
-    LPFN_SETSOCKOPT	    setsockopt;
-    LPFN_SHUTDOWN	    shutdown;
-    LPFN_SOCKET		    socket;
-    LPFN_WSAASYNCSELECT	    WSAAsyncSelect;
-    LPFN_WSACLEANUP	    WSACleanup;
-    LPFN_WSAGETLASTERROR    WSAGetLastError;
-    LPFN_WSASETLASTERROR    WSASetLastError;
-    LPFN_WSASTARTUP	    WSAStartup;
-
-    /* Winsock 2.2 functions */
-    LPFN_WSAACCEPT	    WSAAccept;
-    LPFN_WSAADDRESSTOSTRINGA	WSAAddressToString;
-    LPFN_WSACLOSEEVENT	    WSACloseEvent;
-    LPFN_WSACONNECT	    WSAConnect;
-    LPFN_WSACREATEEVENT	    WSACreateEvent;
-    LPFN_WSADUPLICATESOCKETA	WSADuplicateSocket;
-    LPFN_WSAENUMNAMESPACEPROVIDERSA WSAEnumNameSpaceProviders;
-    LPFN_WSAENUMNETWORKEVENTS	WSAEnumNetworkEvents;
-    LPFN_WSAENUMPROTOCOLSA   WSAEnumProtocols;
-    LPFN_WSAEVENTSELECT	    WSAEventSelect;
-    LPFN_WSAGETOVERLAPPEDRESULT	WSAGetOverlappedResult;
-    LPFN_WSAGETQOSBYNAME    WSAGetQOSByName;
-    LPFN_WSAGETSERVICECLASSINFO	WSAGetServiceClassInfo;
-    LPFN_WSAGETSERVICECLASSNAMEBYCLASSIDA WSAGetServiceClassNameByClassId;
-    LPFN_WSAHTONL	    WSAHtonl;
-    LPFN_WSAHTONS	    WSAHtons;
-    LPFN_WSAINSTALLSERVICECLASSA WSAInstallServiceClass;
-    LPFN_WSAIOCTL	    WSAIoctl;
-    LPFN_WSAJOINLEAF	    WSAJoinLeaf;
-    LPFN_WSALOOKUPSERVICEBEGINA	WSALookupServiceBegin;
-    LPFN_WSALOOKUPSERVICEEND	WSALookupServiceEnd;
-    LPFN_WSALOOKUPSERVICENEXTA	WSALookupServiceNext;
-    LPFN_WSANSPIOCTL	    WSANSPIoctl;
-    LPFN_WSANTOHL	    WSANtohl;
-    LPFN_WSANTOHS	    WSANtohs;
-    LPFN_WSAPROVIDERCONFIGCHANGE WSAProviderConfigChange;
-    LPFN_WSARECV	    WSARecv;
-    LPFN_WSARECVDISCONNECT  WSARecvDisconnect;
-    LPFN_WSARECVFROM	    WSARecvFrom;
-    LPFN_WSAREMOVESERVICECLASS	WSARemoveServiceClass;
-    LPFN_WSARESETEVENT	    WSAResetEvent;
-    LPFN_WSASEND	    WSASend;
-    LPFN_WSASENDDISCONNECT  WSASendDisconnect;
-    LPFN_WSASENDTO	    WSASendTo;
-    LPFN_WSASETEVENT	    WSASetEvent;
-    LPFN_WSASETSERVICEA	    WSASetService;
-    LPFN_WSASOCKETA	    WSASocket;
-    LPFN_WSASTRINGTOADDRESSA	WSAStringToAddress;
-    LPFN_WSAWAITFORMULTIPLEEVENTS WSAWaitForMultipleEvents;
-
-} WinsockProcs;
-
-extern WinsockProcs winSock;
-
-/* wspiapi.h doesn't like typedefs, so fix it. */
-#define inet_addr	winSock.inet_addr
-#define gethostbyname   winSock.gethostbyname
-#define WSAGetLastError winSock.WSAGetLastError
-#define WSASetLastError winSock.WSASetLastError
-#define htons		winSock.htons
-#define getservbyname   winSock.getservbyname
-#define htonl		winSock.htonl
-#define inet_ntoa	winSock.inet_ntoa
-#define ntohs		winSock.ntohs
-#define getservbyport	winSock.getservbyport
-#define gethostbyaddr	winSock.gethostbyaddr
-#undef _WSPIAPI_H_
-#include <wspiapi.h>
-#undef inet_addr
-#undef gethostbyname
-#undef WSAGetLastError
-#undef WSASetLastError
-#undef htons
-#undef getservbyname
-#undef htonl
-#undef inet_ntoa
-#undef ntohs
-#undef getservbyport
-#undef gethostbyaddr
-
 /* ISO hack for dumb VC++ */
 #ifdef _MSC_VER
 #define   snprintf	_snprintf
 #endif
-
 
 /* 1) Required for the POSIX error constants (that should be public!) */
 /* 2) Required for the definition of the TCL_TSD_INIT macro */
@@ -329,19 +213,19 @@ typedef struct WS2ProtocolData {
     FN_DECODEADDR		*DecodeSockAddr;
 
     /* LSP specific extension functions */
-    LPFN_ACCEPTEX		AcceptEx;
-    LPFN_GETACCEPTEXSOCKADDRS	GetAcceptExSockaddrs;
-    LPFN_CONNECTEX		ConnectEx;
-    LPFN_DISCONNECTEX		DisconnectEx;
-    LPFN_TRANSMITFILE		TransmitFile;
+    LPFN_ACCEPTEX		_AcceptEx;
+    LPFN_GETACCEPTEXSOCKADDRS	_GetAcceptExSockaddrs;
+    LPFN_CONNECTEX		_ConnectEx;
+    LPFN_DISCONNECTEX		_DisconnectEx;
+    LPFN_TRANSMITFILE		_TransmitFile;
     /* The only caveat of using this TransmitFile extension API is that
        on Windows NT Workstation or Windows 2000 Professional only two
        requests will be processed at a time. You must be running on
        Windows NT or Windows 2000 Server, Windows 2000 Advanced Server,
        or Windows 2000 Data Center to get full usage of this specialized
        API. */
-    LPFN_TRANSMITPACKETS	TransmitPackets;
-    LPFN_WSARECVMSG		WSARecvMsg;
+    LPFN_TRANSMITPACKETS	_TransmitPackets;
+    LPFN_WSARECVMSG		_WSARecvMsg;
 } WS2ProtocolData;
 
 

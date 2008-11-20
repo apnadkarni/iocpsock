@@ -93,6 +93,6 @@ DecodeIpxSockaddr (SocketInfo *info, LPSOCKADDR addr)
         (unsigned char)ipxadddr->sa_nodenum[3],
         (unsigned char)ipxadddr->sa_nodenum[4],
         (unsigned char)ipxadddr->sa_nodenum[5],
-        winSock.ntohs(ipxadddr->sa_socket));
+        ntohs(ipxadddr->sa_socket));
     return Tcl_NewStringObj(dest, -1);
 }

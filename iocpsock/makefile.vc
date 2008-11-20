@@ -15,20 +15,20 @@
 # RCS: @(#) $Id$
 #------------------------------------------------------------------------------
 
-!if !defined(MSDEVDIR) && !defined(MSVCDIR) && !defined(VCToolkitInstallDir)
+!if !defined(MSDEVDIR) && !defined(MSVCDIR) && !defined(MSSDK) && !defined(VCINSTALLDIR)
 MSG = ^
 You'll need to run vcvars32.bat from Developer Studio, first, to setup^
 the environment.  Jump to this line to read the new instructions.
 !error $(MSG)
 !endif
 
-!if "$(MSSDK)" == ""
-MSG = ^
-You'll need to run "SetEnv.bat /XP32 /RETAIL" from the "Platform SDK",^
-first, to setup the environment.  Jump to this line to read the new^
-instructions.
-!error $(MSG)
-!endif
+#!if "$(MSSDK)" == ""
+#MSG = ^
+#You'll need to run "SetEnv.bat /XP32 /RETAIL" from the "Platform SDK",^
+#first, to setup the environment.  Jump to this line to read the new^
+#instructions.
+#!error $(MSG)
+#!endif
 
 #------------------------------------------------------------------------------
 # HOW TO USE this makefile:
@@ -260,31 +260,21 @@ WINDIR		= $(ROOT)\win
 ### This cranks the optimization level to maximize speed
 cdebug	= -O2 $(OPTIMIZATIONS)
 !else
-cdebug	=
+cdebug	= 
 !endif
-!else if "$(MACHINE)" == "IA64"
+!if $(SYMBOLS)
+cdebug	= $(cdebug) -Zi
+!endif
+!else if "$(MACHINE)" == "IA64" || "$(MACHINE)" == "AMD64"
 ### Warnings are too many, can't support warnings into errors.
-cdebug	= -Z7 -Od -GZ
+cdebug	= -Zi -Od $(DEBUGFLAGS)
 !else
-cdebug	= -Z7 -WX -Od -GZ
+cdebug	= -Zi -WX $(DEBUGFLAGS)
 !endif
 
 ### Declarations common to all compiler options
-cflags = -nologo -c -YX -Fp$(TMP_DIR)^\
-
-!if $(FULLWARNINGS)
-cflags = $(cflags) -W4
-!else
-cflags = $(cflags) -W3
-!endif
-
-!if $(PENT_0F_ERRATA)
-cflags = $(cflags) -QI0f
-!endif
-
-!if $(ITAN_B_ERRATA)
-cflags = $(cflags) -QIA64_Bx
-!endif
+cwarn = $(WARNINGS) -D _CRT_SECURE_NO_DEPRECATE -D _CRT_NONSTDC_NO_DEPRECATE
+cflags = -nologo -c $(COMPILERFLAGS) $(cwarn) -Fp$(TMP_DIR)^\
 
 !if $(MSVCRT)
 !if $(DEBUG) && !$(UNCHECKED)
@@ -299,6 +289,7 @@ crt = -MTd
 crt = -MT
 !endif
 !endif
+
 
 !if $(TCLINSTALL)
 TCL_INCLUDES	= -I"$(TCLDIR)\include"
@@ -330,14 +321,13 @@ IOCP_CFLAGS	= $(IOCP_CFLAGS)
 ldebug	= -debug:full -debugtype:cv
 !else
 ldebug	= -release -opt:ref -opt:icf,3
+!if $(SYMBOLS)
+ldebug	= $(ldebug) -debug:full -debugtype:cv
+!endif
 !endif
 
 ### Declarations common to all linker options
-lflags	= -nologo -machine:$(MACHINE) $(ldebug)
-
-!if $(FULLWARNINGS)
-lflags = $(lflags) -warn:3
-!endif
+lflags	= -nologo -machine:$(MACHINE) $(LINKERFLAGS) $(ldebug)
 
 !if $(PROFILE)
 lflags	= $(lflags) -profile
@@ -359,9 +349,7 @@ dlllflags = $(lflags) -dll
 conlflags = $(lflags) -subsystem:console
 guilflags = $(lflags) -subsystem:windows
 
-# yes, baselibs is empty.  None are required.
-baselibs   = 
-
+baselibs  = ws2_32.lib
 # Avoid 'unresolved external symbol __security_cookie' errors.
 # c.f. http://support.microsoft.com/?id=894573
 !if "$(MACHINE)" == "IA64" || "$(MACHINE)" == "AMD64"

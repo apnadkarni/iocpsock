@@ -90,8 +90,6 @@ Iocp_StatsObjCmd (
 int
 Iocpsock_Init (Tcl_Interp *interp)
 {
-    Tcl_Obj *result;
-
 #ifdef USE_TCL_STUBS
     if (Tcl_InitStubs(interp, "8.3", 0) == NULL) {
 	return TCL_ERROR;
@@ -99,26 +97,9 @@ Iocpsock_Init (Tcl_Interp *interp)
 #endif
 
     Tcl_MutexLock(&initLock);
-
-    if (HasSockets(interp) == TCL_ERROR) {
-	Tcl_MutexUnlock(&initLock);
+    if (HasSockets(interp) != TCL_OK) {
 	return TCL_ERROR;
     }
-    result = Tcl_GetObjResult(interp);
-    if (LOBYTE(winSock.wVersionLoaded) != 2) {
-	Tcl_AppendObjToObj(result,
-		Tcl_NewStringObj("Bad Winsock interface.  Need 2.x, but got ", -1));
-	Tcl_AppendObjToObj(result, Tcl_NewDoubleObj(LOBYTE(winSock.wVersionLoaded)
-		+ ((double)HIBYTE(winSock.wVersionLoaded)/10)));
-	Tcl_AppendResult(interp, " instead.", NULL);
-	winSock.WSACleanup();
-	FreeLibrary(winSock.hModule);
-	winSock.hModule = NULL;
-	initialized = 0;
-	Tcl_MutexUnlock(&initLock);
-	return TCL_ERROR;
-    }
-
     Tcl_MutexUnlock(&initLock);
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);

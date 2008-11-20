@@ -244,9 +244,9 @@ Iocp_MakeTcpClientChannel (
     ThreadSpecificData *tsdPtr = InitSockets();
 
 
-    if (winSock.getpeername(socket, (LPSOCKADDR)&sockaddr,
+    if (getpeername(socket, (LPSOCKADDR)&sockaddr,
 	    &sockaddr_size) == SOCKET_ERROR) {
-	SetLastError(winSock.WSAGetLastError());
+	SetLastError(WSAGetLastError());
 	return NULL;
     }
 
@@ -510,7 +510,7 @@ CreateTcpSocket(
 	goto error2;
     }
 
-    sock = winSock.WSASocket(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO,
+    sock = WSASocket(FROM_PROTOCOL_INFO, FROM_PROTOCOL_INFO,
 	    FROM_PROTOCOL_INFO, &wpi, 0, WSA_FLAG_OVERLAPPED);
     if (sock == INVALID_SOCKET) {
 	goto error2;
@@ -532,7 +532,7 @@ CreateTcpSocket(
      */
 
     i = 0;
-    if (winSock.setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
+    if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
 	    (const char *) &i, sizeof(int)) == SOCKET_ERROR) {
 	goto error2;
     }
@@ -549,7 +549,7 @@ CreateTcpSocket(
 	 * port.  Implies an automatic set to non-blocking. */
 	if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
 		(ULONG_PTR)infoPtr, 0) == NULL) {
-	    winSock.WSASetLastError(GetLastError());
+	    WSASetLastError(GetLastError());
 	    goto error2;
 	}
 
@@ -563,7 +563,7 @@ CreateTcpSocket(
 	 * place to look for bugs.
 	 */
     
-	if (winSock.bind(sock, addr->ai_addr,
+	if (bind(sock, addr->ai_addr,
 		addr->ai_addrlen) == SOCKET_ERROR) {
             goto error2;
         }
@@ -576,7 +576,7 @@ CreateTcpSocket(
          * different, and there may be differences between TCP/IP stacks).
          */
         
-	if (winSock.listen(sock, SOMAXCONN) == SOCKET_ERROR) {
+	if (listen(sock, SOMAXCONN) == SOCKET_ERROR) {
 	    goto error1;
 	}
 
@@ -600,7 +600,7 @@ CreateTcpSocket(
          * bind to a local address.  ConnectEx needs this.
          */
 
-	if (winSock.bind(sock, mysockaddr->ai_addr,
+	if (bind(sock, mysockaddr->ai_addr,
 		mysockaddr->ai_addrlen) == SOCKET_ERROR) {
 	    FreeSocketAddress(mysockaddr);
 	    goto error2;
@@ -620,26 +620,26 @@ CreateTcpSocket(
 	     * non-blocking. */
 	    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
 		    (ULONG_PTR)infoPtr, 0) == NULL) {
-		winSock.WSASetLastError(GetLastError());
+		WSASetLastError(GetLastError());
 		goto error2;
 	    }
 
 	    InterlockedIncrement(&infoPtr->outstandingOps);
 
-	    code = pdata->ConnectEx(sock, addr->ai_addr,
+	    code = pdata->_ConnectEx(sock, addr->ai_addr,
 		    addr->ai_addrlen, NULL, 0, &bytes, &bufPtr->ol);
 
 	    FreeSocketAddress(hostaddr);
 
 	    if (code == FALSE) {
-		if (winSock.WSAGetLastError() != WSA_IO_PENDING) {
+		if (WSAGetLastError() != WSA_IO_PENDING) {
 		    InterlockedDecrement(&infoPtr->outstandingOps);
 		    FreeBufferObj(bufPtr);
 		    goto error1;
 		}
 	    }
 	} else {
-	    code = winSock.connect(sock, addr->ai_addr, addr->ai_addrlen);
+	    code = connect(sock, addr->ai_addr, addr->ai_addrlen);
 	    FreeSocketAddress(hostaddr);
 	    if (code == SOCKET_ERROR) {
 		goto error1;
@@ -650,7 +650,7 @@ CreateTcpSocket(
 	     * non-blocking. */
 	    if (CreateIoCompletionPort((HANDLE)sock, IocpSubSystem.port,
 		    (ULONG_PTR)infoPtr, 0) == NULL) {
-		winSock.WSASetLastError(GetLastError());
+		WSASetLastError(GetLastError());
 		goto error1;
 	    }
 
@@ -682,7 +682,7 @@ CreateTcpSocket(
 		clientQos.ReceivingFlowspec.ServiceType |= 
 			SERVICE_NO_QOS_SIGNALING;*/
 
-		ret = winSock.WSAIoctl(sock, SIO_SET_QOS, &clientQos, 
+		ret = WSAIoctl(sock, SIO_SET_QOS, &clientQos, 
 		    sizeof(clientQos), NULL, 0, &dwBytes, NULL, NULL);
 	    }
 		bufPtr = GetBufferObj(infoPtr, QOS_BUFFER_SZ);
@@ -696,7 +696,7 @@ CreateTcpSocket(
 error2:
     FreeSocketAddress(hostaddr);
 error1:
-    SetLastError(winSock.WSAGetLastError());
+    SetLastError(WSAGetLastError());
     if (interp != NULL) {
 	Tcl_AppendResult(interp, "couldn't open socket: ",
 		Tcl_WinError(interp), NULL);
