@@ -1,4 +1,4 @@
-#include "iocpsock.h"
+#include "tcl.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -3438,12 +3438,10 @@ static Tcl_ThreadDataKey dataKey;
  */
 
 CONST char *
-Tcl_WinErrId (void)
+Tcl_WinErrId (unsigned int errorCode)
 {
-    DWORD errorCode = GetLastError();
-
-    /* Use Tcl's STRINGIFY macro to simplify this mess */
-#   define CASE(i) case i: return STRINGIFY(i);
+    /* Use special macro magic to simplify this mess */
+#   define CASE(i) case i: return #i;
 
     switch (errorCode) {
 	CASE(ERROR_SUCCESS)
@@ -5289,11 +5287,10 @@ Tcl_WinErrId (void)
  */
 
 CONST char *
-Tcl_WinErrMsg (void)
+Tcl_WinErrMsg (unsigned int errorCode, va_list *extra)
 {
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
     DWORD result;
-    DWORD errorCode = GetLastError();
 
     /*
      * If the "customer" bit is set, this function was called
@@ -5306,14 +5303,13 @@ Tcl_WinErrMsg (void)
 
     result = FormatMessage (
 	    FORMAT_MESSAGE_FROM_SYSTEM |
-	    FORMAT_MESSAGE_IGNORE_INSERTS |
 	    FORMAT_MESSAGE_MAX_WIDTH_MASK,
 	    0L,
 	    errorCode,
 	    0,		    /* use best guess localization */
 	    tsdPtr->sysMsgSpace,
 	    ERR_BUF_SIZE,
-	    NULL);
+	    extra);
 
     return (result ? tsdPtr->sysMsgSpace : NULL);
 }
@@ -5336,14 +5332,14 @@ Tcl_WinErrMsg (void)
  */
 
 CONST char *
-Tcl_WinError (Tcl_Interp *interp)
+Tcl_WinError (Tcl_Interp *interp, unsigned int errorCode, va_list *extra)
 {
     CONST char *id, *msg;
     char num[TCL_INTEGER_SPACE];
 
-    id = Tcl_WinErrId();
-    msg = Tcl_WinErrMsg();
-    snprintf(num, TCL_INTEGER_SPACE, "%lu", GetLastError());
+    id = Tcl_WinErrId(errorCode);
+    msg = Tcl_WinErrMsg(errorCode, extra);
+    snprintf(num, TCL_INTEGER_SPACE, "%lu", errorCode);
     Tcl_SetErrorCode(interp, "WINDOWS", num, id, msg, 0L);
     return msg;
 }

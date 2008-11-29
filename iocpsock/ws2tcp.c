@@ -189,7 +189,8 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
 
     /*
      * Get the reverse resolved name through DNS from the IP.
-     * This may block for an unknown amount of time.
+     * This may block for an unknown amount of time.  Defaults
+     * to a numeric if DNS can not resolve to a name.
      */
     if (getnameinfo(addr, info->proto->addrLen, name, NI_MAXHOST, NULL,
 	    0, 0) == NO_ERROR) {
@@ -199,7 +200,8 @@ DecodeIpSockaddr (SocketInfo *info, LPSOCKADDR addr)
     }
 
     /*
-     * Get port numeric string.
+     * Get port numeric string.  Defaults to the port number if the
+     * service name is unknown.
      */
     if (getnameinfo(addr, info->proto->addrLen, NULL, 0, name,
 	    NI_MAXSERV, NI_NUMERICSERV) == NO_ERROR) {

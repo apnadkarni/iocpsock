@@ -1,26 +1,27 @@
 #include "tcl.h"
 #include <errno.h>
+#include <stdlib.h>
 
 #ifdef __WIN32__
 #   define WIN32_LEAN_AND_MEAN
     /* Enables NT5 special features. */
-#   define _WIN32_WINNT 0x0500
-#   include <windows.h>
-#   include "tclWinError.h"
+#   define _WIN32_WINNT 0x0501
 #   include <winsock2.h>
 #   include <ws2tcpip.h>
+#   include <wspiapi.h>
+#   include "tclWinError.h"
 #   pragma comment (lib, "ws2_32.lib")
 #   ifdef _DEBUG
-#	pragma comment (lib, "tcl85g.lib")
+#	pragma comment (lib, "tcl86g.lib")
 #   else
-#	pragma comment (lib, "tcl85.lib")
+#	pragma comment (lib, "tcl86.lib")
 #   endif
 #endif
 
 
 /* types */
-enum Command {NAME_QUERY, NAME_REGISTER, NAME_UNREGISTER};
-enum NameSpace {NAME_IP, NAME_IP4, NAME_IP6, NAME_IRDA};
+enum Command {NAME_QUERY=0, NAME_REGISTER, NAME_UNREGISTER};
+enum NameSpace {NAME_IP=0, NAME_IP4, NAME_IP6, NAME_IRDA};
 
 /* protos */
 int Init (CONST char *appName);
@@ -74,8 +75,6 @@ Init (CONST char *appName)
     Tcl_CreateChannelHandler(inChan, TCL_READABLE, StdinReadable, inChan);
     Tcl_SetChannelOption(NULL, inChan, "-buffering", "line");
     Tcl_SetChannelOption(NULL, inChan, "-blocking", "no");
-    /* Use UTF-8 to avoid data loss */
-    Tcl_SetChannelOption(NULL, inChan, "-encoding", "utf-8");
 
     isIpRE_IPv4 = Tcl_NewStringObj("^((25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)(\\.(25[0-5]|2[0-4]\\d|[0-1]?\\d?\\d)){3})$", -1);
     Tcl_IncrRefCount(isIpRE_IPv4);
@@ -139,14 +138,14 @@ ParseNameProtocol (Tcl_Obj *line)
 {
     int objc;
     Tcl_Obj **objv;
-    char *cmdStings[] = {
+    char *cmdStrings[] = {
 	"query", "register", "unregister", NULL
     };
     enum Command command;
-    char *nsStings[] = {
+    char *nsStrings[] = {
 	"ip", "ip4", "ip6", "irda", NULL
     };
-    enum NameSpace nameSpace;
+    enum Namespace nameSpace;
     Tcl_Obj *arg1, *arg2 = NULL;
 
     /* form is "<command> <namespace> <arg1> [<arg2>]" using Tcl list rules. */
@@ -156,14 +155,14 @@ ParseNameProtocol (Tcl_Obj *line)
 	    return;
 	}
 	/* get command */
-	if (Tcl_GetIndexFromObj(NULL, objv[0], cmdStings, "", TCL_EXACT,
-		&command) != TCL_OK) {
+	if (Tcl_GetIndexFromObj(NULL, objv[0], cmdStrings, "", TCL_EXACT,
+		(int *)&command) != TCL_OK) {
 	    SendProtocolError(600, "no such command");
 	    return;
 	}
 	/* get namespace */
-	if (Tcl_GetIndexFromObj(NULL, objv[1], nsStings, "", TCL_EXACT,
-		&nameSpace) != TCL_OK) {
+	if (Tcl_GetIndexFromObj(NULL, objv[1], nsStrings, "", TCL_EXACT,
+		(int *)&nameSpace) != TCL_OK) {
 	    SendProtocolError(600, "no such namespace");
 	    return;
 	}
@@ -239,8 +238,8 @@ SendPosixErrorData (int protocolCode, CONST char *msg, int errorCode)
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(protocolCode));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(msg, -1));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj("POSIX", -1));
-    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(Tcl_ErrnoId(), -1));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(errorCode));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(Tcl_ErrnoId(), -1));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(Tcl_ErrnoMsg(errorCode), -1));
     Tcl_WriteObj(outChan, output);
     Tcl_DecrRefCount(output);
@@ -255,10 +254,10 @@ SendWinErrorData (int protocolCode, CONST char *msg, DWORD errorCode)
 
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(protocolCode));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(msg, -1));
-    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj("WIN32", -1));
-    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(Tcl_Win32ErrId(errorCode), -1));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj("WINDOWS", -1));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(errorCode));
-    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(Tcl_Win32ErrMsg(errorCode, NULL), -1));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(Tcl_WinErrId(errorCode), -1));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(Tcl_WinErrMsg(errorCode, NULL), -1));
     Tcl_WriteObj(outChan, output);
     Tcl_DecrRefCount(output);
     Tcl_WriteChars(outChan, "\n", -1);
@@ -330,7 +329,7 @@ Do_IP_Work (int addressFamily, Tcl_Obj *question)
     utf8Chars = Tcl_GetStringFromObj(question, &len);
     Tcl_UtfToExternalDString(dnsEnc, utf8Chars, len, &dnsTxt);
 
-    if ((result = getaddrinfo(Tcl_DStringValue(&dnsTxt), "", &hints,
+    if ((result = getaddrinfo(Tcl_DStringValue(&dnsTxt), NULL, &hints,
 	    &hostaddr)) != 0) {
 #ifdef __WIN32__
 	Tcl_DStringAppend(&dnsTxt, " failed to resolve.", -1);
@@ -345,7 +344,7 @@ Do_IP_Work (int addressFamily, Tcl_Obj *question)
 
     if (isIp(question)) {
 	/* question was a numeric IP, return a hostname. */
-	type = 0;
+	type = NI_NAMEREQD;
     } else {
 	/* question was a hostname, return a numeric IP. */
 	type = NI_NUMERICHOST;
