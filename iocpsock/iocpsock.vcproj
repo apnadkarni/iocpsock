@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8.00"
+	Version="9.00"
 	Name="iocpsock"
 	ProjectGUID="{CCFD3FF6-A11D-4935-912E-2F8B1897C5AE}"
+	RootNamespace="iocpsock"
+	TargetFrameworkVersion="131072"
 	>
 	<Platforms>
 		<Platform
@@ -46,7 +48,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="c:\programming\tcl_workspace\tcl_head_stock\generic"
+				AdditionalIncludeDirectories="&quot;C:\Documents and Settings\davygrvy\My Documents\tcl_workspace\tcl\generic&quot;;&quot;C:\Documents and Settings\davygrvy\My Documents\tcl_workspace\tcl\win&quot;"
 				PreprocessorDefinitions="WIN32;_DEBUG;TCL_THREADS;USE_TCL_STUBS;BUILD_iocp"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -80,6 +82,8 @@
 				AdditionalLibraryDirectories="c:\programming\tcl_workspace\tcl_head_stock\win\Release"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Debug/iocpsock30g.pdb"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
 				ImportLibrary=".\Debug/iocpsock30g.lib"
 				TargetMachine="1"
 			/>
@@ -102,9 +106,6 @@
 			/>
 			<Tool
 				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCWebDeploymentTool"
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
@@ -144,7 +145,7 @@
 				Name="VCCLCompilerTool"
 				Optimization="2"
 				InlineFunctionExpansion="1"
-				AdditionalIncludeDirectories="c:\programming\tcl_workspace\tcl_head_stock\generic"
+				AdditionalIncludeDirectories="&quot;C:\Documents and Settings\davygrvy\My Documents\tcl_workspace\tcl\generic&quot;;&quot;C:\Documents and Settings\davygrvy\My Documents\tcl_workspace\tcl\win&quot;"
 				PreprocessorDefinitions="WIN32;NDEBUG;TCL_THREADS;USE_TCL_STUBS;BUILD_iocp"
 				StringPooling="true"
 				RuntimeLibrary="0"
@@ -176,6 +177,8 @@
 				AdditionalLibraryDirectories="c:\programming\tcl_workspace\tcl_head_stock\win\Release"
 				ProgramDatabaseFile=".\Release/iocpsock30.pdb"
 				OptimizeForWindows98="1"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
 				ImportLibrary=".\Release/iocpsock30.lib"
 				TargetMachine="1"
 			/>
@@ -198,9 +201,6 @@
 			/>
 			<Tool
 				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCWebDeploymentTool"
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
@@ -291,8 +291,8 @@
 				<Tool
 					Name="VCCustomBuildTool"
 					Description="Rebuilding the Stubs table..."
-					CommandLine="c:\progra~1\tcl\bin\tclsh85 ./tools/genStubs.tcl $(InputDir) $(InputPath)&#x0D;&#x0A;"
-					Outputs="$(InputDir)iocpDecls.h;$(InputDir)iocpIntDecls.h;$(InputDir)iocpStubInit.c"
+					CommandLine=""
+					Outputs=""
 				/>
 			</FileConfiguration>
 			<FileConfiguration
@@ -301,8 +301,8 @@
 				<Tool
 					Name="VCCustomBuildTool"
 					Description="Rebuilding the Stubs table..."
-					CommandLine="c:\progra~1\tcl\bin\tclsh85 ./tools/genStubs.tcl $(InputDir) $(InputPath)&#x0D;&#x0A;"
-					Outputs="$(InputDir)iocpDecls.h;$(InputDir)iocpIntDecls.h;$(InputDir)iocpStubInit.c"
+					CommandLine=""
+					Outputs=""
 				/>
 			</FileConfiguration>
 		</File>

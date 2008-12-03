@@ -247,7 +247,7 @@ IOCPSTUBOBJS = \
 ### The following paths CANNOT have spaces in them.
 COMPATDIR	= $(ROOT)\compat
 DOCDIR		= $(ROOT)\doc
-GENERICDIR	= $(ROOT)\generic
+GENERICDIR	= $(ROOT)
 TOOLSDIR	= $(ROOT)\tools
 WINDIR		= $(ROOT)\win
 

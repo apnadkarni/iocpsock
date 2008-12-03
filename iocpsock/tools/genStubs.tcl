@@ -933,6 +933,7 @@ proc genStubs::init {} {
 	puts stderr "usage: $argv0 outDir declFile ?declFile...?"
 	exit 1
     }
+    puts $argv
 
     set outDir [lindex $argv 0]
 

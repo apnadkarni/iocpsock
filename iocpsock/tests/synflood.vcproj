@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="8.00"
+	Version="9.00"
 	Name="synflood"
 	ProjectGUID="{D68009A8-45CE-44FB-A618-CD2A40EAD9C3}"
+	TargetFrameworkVersion="131072"
 	>
 	<Platforms>
 		<Platform
@@ -74,6 +75,8 @@
 				SuppressStartupBanner="true"
 				ProgramDatabaseFile=".\Release/synflood.pdb"
 				SubSystem="1"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -95,9 +98,6 @@
 			/>
 			<Tool
 				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCWebDeploymentTool"
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"
@@ -165,6 +165,8 @@
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Debug/synflood.pdb"
 				SubSystem="1"
+				RandomizedBaseAddress="1"
+				DataExecutionPrevention="0"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -186,9 +188,6 @@
 			/>
 			<Tool
 				Name="VCAppVerifierTool"
-			/>
-			<Tool
-				Name="VCWebDeploymentTool"
 			/>
 			<Tool
 				Name="VCPostBuildEventTool"

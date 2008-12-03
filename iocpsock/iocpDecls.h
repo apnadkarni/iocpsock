@@ -47,7 +47,7 @@ TCL_EXTERN(CONST char *) Tcl_WinErrMsg _ANSI_ARGS_((unsigned int errorCode));
 #ifndef Tcl_WinError_TCL_DECLARED
 #define Tcl_WinError_TCL_DECLARED
 /* 4 */
-TCL_EXTERN(CONST char *) Tcl_WinError _ANSI_ARGS_((unsigned int errorCode,
+TCL_EXTERN(CONST char *) Tcl_WinError _ANSI_ARGS_((unsigned int errorCode, 
 				Tcl_Interp * interp));
 #endif
 #ifndef Iocp_OpenTcpClient_TCL_DECLARED
@@ -83,9 +83,9 @@ typedef struct IocpStubs {
 
     int (*iocpsock_Init) _ANSI_ARGS_((Tcl_Interp * interp)); /* 0 */
     int (*iocpsock_SafeInit) _ANSI_ARGS_((Tcl_Interp * interp)); /* 1 */
-    CONST char * (*tcl_WinErrId) _ANSI_ARGS_((void)); /* 2 */
-    CONST char * (*tcl_WinErrMsg) _ANSI_ARGS_((void)); /* 3 */
-    CONST char * (*tcl_WinError) _ANSI_ARGS_((Tcl_Interp * interp)); /* 4 */
+    CONST char * (*tcl_WinErrId) _ANSI_ARGS_((unsigned int errorCode)); /* 2 */
+    CONST char * (*tcl_WinErrMsg) _ANSI_ARGS_((unsigned int errorCode)); /* 3 */
+    CONST char * (*tcl_WinError) _ANSI_ARGS_((unsigned int errorCode, Tcl_Interp * interp)); /* 4 */
     Tcl_Channel (*iocp_OpenTcpClient) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, CONST char * myaddr, CONST char * myport, int async)); /* 5 */
     Tcl_Channel (*iocp_OpenTcpServer) _ANSI_ARGS_((Tcl_Interp * interp, CONST char * port, CONST char * host, Tcl_TcpAcceptProc * acceptProc, ClientData acceptProcData)); /* 6 */
     Tcl_Channel (*iocp_MakeTcpClientChannel) _ANSI_ARGS_((ClientData sock)); /* 7 */
