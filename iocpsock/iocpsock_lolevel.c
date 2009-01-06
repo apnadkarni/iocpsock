@@ -778,11 +778,6 @@ IocpInputProc (
 
     *errorCodePtr = 0;
 
-    if (infoPtr->flags & IOCP_EOF) {
-	*errorCodePtr = ENOTCONN;
-	return -1;
-    }
-
     /* If we are async, don't block on the queue. */
     timeout = (infoPtr->flags & IOCP_ASYNC ? 0 : INFINITE);
 
@@ -1015,19 +1010,9 @@ IocpOutputProc (
     *errorCodePtr = 0;
 
 
-    if (TclInExit() || infoPtr->flags & IOCP_EOF
-	    || infoPtr->flags & IOCP_CLOSING) {
+    if (TclInExit() || infoPtr->flags & IOCP_CLOSING) {
 	*errorCodePtr = ENOTCONN;
 	return -1;
-    }
-
-    /*
-     * Check for a background error on the last operations.
-     */
-
-    if (infoPtr->lastError) {
-	IocpWinConvertWSAError(infoPtr->lastError);
-	goto error;
     }
 
     bufPtr = GetBufferObj(infoPtr, toWrite);
@@ -1039,8 +1024,6 @@ IocpOutputProc (
 	*errorCodePtr = EWOULDBLOCK;
 	return -1;
     } else if (result != NO_ERROR) {
-	/* Don't FreeBufferObj(), as it is already queued to the cp, too */
-	infoPtr->lastError = result;
 	IocpWinConvertWSAError(result);
 	goto error;
     }
@@ -1561,20 +1544,22 @@ IocpThreadActionProc (ClientData instanceData, int action)
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
 
-    /* This lock is to prevent IocpZapTclNotifier() from accessing
-     * infoPtr->tsdHome */
-    EnterCriticalSection(&infoPtr->tsdLock);
-    switch (action) {
-    case TCL_CHANNEL_THREAD_INSERT:
-	infoPtr->tsdHome = InitSockets();
-	break;
-    case TCL_CHANNEL_THREAD_REMOVE:
-	/* Unable to turn off reading, therefore don't notify
-	 * anyone during the move. */
-	infoPtr->tsdHome = NULL;
-	break;
+    if (initialized) {
+	/* This lock is to prevent IocpZapTclNotifier() from accessing
+	* infoPtr->tsdHome */
+	EnterCriticalSection(&infoPtr->tsdLock);
+	switch (action) {
+	case TCL_CHANNEL_THREAD_INSERT:
+	    infoPtr->tsdHome = InitSockets();
+	    break;
+	case TCL_CHANNEL_THREAD_REMOVE:
+	    /* Unable to turn off reading, therefore don't notify
+	     * anyone during the move. */
+	    infoPtr->tsdHome = NULL;
+	    break;
+	}
+	LeaveCriticalSection(&infoPtr->tsdLock);
     }
-    LeaveCriticalSection(&infoPtr->tsdLock);
 }
 #endif
 
