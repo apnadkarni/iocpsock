@@ -20,8 +20,19 @@
 
 
 /* types */
-enum Command {NAME_QUERY=0, NAME_REGISTER, NAME_UNREGISTER};
-enum NameSpace {NAME_IP=0, NAME_IP4, NAME_IP6, NAME_IRDA};
+enum Command {
+    CMD_QUERY,	    /* resolve */
+    CMD_REGISTER,   /* register a service */
+    CMD_UNREGISTER, /* remove a service */
+};
+enum NameSpace {
+    NS_INET,	/* IP unspecified, any (DNS) */
+    NS_INET4,	/* IPv4 only (DNS) */
+    NS_INET6,	/* IPv6 only (DNS) */
+    NS_IRDA,	/* IrDA (IAS) */
+    NS_BTH,	/* Bluetooth (SDP) */
+    NS_IPX,	/* IPX/SPX (SAP) */
+};
 
 /* protos */
 int Init (CONST char *appName);
@@ -143,7 +154,7 @@ ParseNameProtocol (Tcl_Obj *line)
     };
     enum Command command;
     char *nsStrings[] = {
-	"ip", "ip4", "ip6", "irda", NULL
+	"inet", "inet4", "inet6", "irda", "bth", "ipx", NULL
     };
     enum Namespace nameSpace;
     Tcl_Obj *arg1, *arg2 = NULL;
@@ -266,12 +277,15 @@ SendWinErrorData (int protocolCode, CONST char *msg, DWORD errorCode)
 
 /***********************************************************************/
 
-void Do_IP_Work(int addressFamily, Tcl_Obj *question);
+void Do_IP_Work (int addressFamily, Tcl_Obj *question);
 int isIp (Tcl_Obj *name);
-void Do_IrDA_Work(enum Command command, Tcl_Obj *question, Tcl_Obj *argument);
+void Do_IrDA_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument);
 int Do_IrDA_Discovery (Tcl_Obj **answers);
 int Do_IrDA_Query (Tcl_Obj *deviceId, Tcl_Obj *serviceName,
 	Tcl_Obj *attribName, Tcl_Obj **answers);
+void Do_Bth_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument);
+void Do_Bth_Query (Tcl_Obj *serviceName, Tcl_Obj **answers);
+void Do_Ipx_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument);
 
 void
 DoNameWork (enum Command command, enum NameSpace nameSpace,
@@ -280,25 +294,33 @@ DoNameWork (enum Command command, enum NameSpace nameSpace,
     int aFamily = 0;
 
     switch (nameSpace) {
-	case NAME_IP:
-	case NAME_IP4:
-	case NAME_IP6:
+	case NS_INET:
+	case NS_INET4:
+	case NS_INET6:
 	    switch (nameSpace) {
-		case NAME_IP:
+		case NS_INET:
 		    aFamily = AF_UNSPEC; break;
-		case NAME_IP4:
+		case NS_INET4:
 		    aFamily = AF_INET; break;
-		case NAME_IP6:
+		case NS_INET6:
 		    aFamily = AF_INET6; break;
 	    }
-	    if (command != NAME_QUERY) {
+	    if (command != CMD_QUERY) {
 		SendProtocolError(600, "The IP namespace only supports the query command");
 		return;
 	    }
 	    Do_IP_Work(aFamily, arg1);
 	    break;
-	case NAME_IRDA:
+	case NS_IRDA:
 	    Do_IrDA_Work(command, arg1, arg2);
+	    break;
+	case NS_BTH:
+	    /* BlueTooth */
+	    Do_Bth_Work(command, arg1, arg2);
+	    break;
+	case NS_IPX:
+	    /* BlueTooth */
+	    Do_Ipx_Work(command, arg1, arg2);
 	    break;
     }
 }
@@ -407,7 +429,7 @@ Do_IrDA_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument)
     Tcl_Obj *answers = NULL;
 
     switch (command) {
-	case NAME_QUERY:
+	case CMD_QUERY:
 	    /* asterix means "get all", aka discovery.. */
 	    if (strcmp(Tcl_GetString(question), "*") == 0) {
 		if (Do_IrDA_Discovery(&answers) != TCL_OK) {
@@ -424,8 +446,8 @@ Do_IrDA_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument)
 		}
 	    }
 	    break;
-	case NAME_REGISTER:
-	case NAME_UNREGISTER:
+	case CMD_REGISTER:
+	case CMD_UNREGISTER:
 	    /* TODO */
 	    break;
     }
@@ -443,8 +465,8 @@ Do_IrDA_Discovery (Tcl_Obj **answers)
     SOCKET sock;
     DEVICELIST *deviceListStruct;
     IRDA_DEVICE_INFO* thisDevice;
-    int code, charSet, nameLen, size, limit;
-    unsigned i, bit;
+    int code, nameLen, size, limit;
+    unsigned int i, charSet, bit;
     char isocharset[] = "iso-8859-?", *nameEnc;
     Tcl_Encoding enc;
     Tcl_Obj* entry[3];
@@ -468,7 +490,8 @@ Do_IrDA_Discovery (Tcl_Obj **answers)
 	    WSA_FLAG_OVERLAPPED);
 
     if (sock == INVALID_SOCKET) {
-	SendWinErrorData(407, "Cannot create IrDA socket", WSAGetLastError());
+	SendWinErrorData(407, "Cannot create IrDA socket",
+		WSAGetLastError());
 	return TCL_ERROR;
     }
 
@@ -645,4 +668,248 @@ Do_IrDA_Query (Tcl_Obj *deviceId, Tcl_Obj *serviceName,
 	    Tcl_Panic("No such arm.");
 	    return TCL_ERROR;  /* makes compiler happy */
     }
+}
+
+#include <ws2bth.h>
+//#include <BluetoothAPIs.h>
+//#pragma comment ( lib, "Irprops.lib")
+
+/* BlueTooth */
+void
+Do_Bth_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument)
+{
+    int result, objc;
+    Tcl_Obj **objv;
+    Tcl_Obj *answers = NULL;
+
+    switch (command) {
+	case CMD_QUERY:
+	    /* asterix means "get all", aka discovery.. */
+	    if (strcmp(Tcl_GetString(question), "*") == 0) {
+		if (Do_Bth_Discovery(&answers) != TCL_OK) {
+		    /* error msg already sent. */
+		    return;
+		}
+	    } else {
+		result = Tcl_ListObjGetElements(NULL, argument, &objc, &objv);
+		if (result == TCL_OK && objc == 2) {
+		    if (Do_Bth_Query(question, objv[0], objv[1], &answers) != TCL_OK) {
+			/* error msg already sent. */
+			return;
+		    }
+		}
+	    }
+	    break;
+	case CMD_REGISTER:
+	case CMD_UNREGISTER:
+	    /* TODO */
+	    break;
+    }
+    /* reply with answers */
+    SendAnswers(question, answers);
+    return;
+}
+
+int
+Do_Bth_Discovery (Tcl_Obj **answers)
+{
+}
+
+//
+// TODO: use inquiry timeout SDP_DEFAULT_INQUIRY_SECONDS
+//
+
+//
+// NameToBthAddr converts a bluetooth device name to a bluetooth address, 
+// if required by performing inquiry with remote name requests.
+// This function demonstrates device inquiry, with optional LUP flags.
+//
+int
+Do_Bth_Query(IN const char * pszRemoteName, OUT BTH_ADDR * pRemoteBtAddr)
+{
+    INT          iResult = 0, iRetryCount = 0;
+    BOOL         bContinueLookup = FALSE, bRemoteDeviceFound = FALSE;
+    ULONG        ulFlags = 0, ulPQSSize = sizeof(WSAQUERYSET);
+    HANDLE       hLookup = 0;
+    PWSAQUERYSET pWSAQuerySet = NULL;
+
+    if ( ( NULL == pszRemoteName ) || ( NULL == pRemoteBtAddr ) )
+    {
+        goto CleanupAndExit;
+    }
+
+    if ( NULL == ( pWSAQuerySet = (PWSAQUERYSET) HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, ulPQSSize) ) )
+    {
+        printf("!ERROR! | Unable to allocate memory for WSAQUERYSET\n");
+        goto CleanupAndExit;
+    }
+
+    //
+    // Search for the device with the correct name
+    //
+    for (iRetryCount = 0; !bRemoteDeviceFound && (iRetryCount < CXN_MAX_INQUIRY_RETRY); iRetryCount++)
+    {
+        //
+        // WSALookupService is used for both service search and device inquiry
+        // LUP_CONTAINERS is the flag which signals that we're doing a device inquiry.  
+        //    
+        ulFlags = LUP_CONTAINERS;
+
+        //
+        // Friendly device name (if available) will be returned in lpszServiceInstanceName
+        //
+        ulFlags |= LUP_RETURN_NAME;
+
+        //
+        // BTH_ADDR will be returned in lpcsaBuffer member of WSAQUERYSET
+        //
+        ulFlags |= LUP_RETURN_ADDR;
+
+        if ( 0 == iRetryCount )
+        {
+            printf("*INFO* | Inquiring device from cache...\n");
+        }
+        else
+        {
+            //
+            // Flush the device cache for all inquiries, except for the first inquiry
+            //
+            // By setting LUP_FLUSHCACHE flag, we're asking the lookup service to do 
+            // a fresh lookup instead of pulling the information from device cache.
+            //
+            ulFlags |= LUP_FLUSHCACHE;
+
+            //
+            // Pause for some time before all the inquiries after the first inquiry
+            //
+            //
+            // BUGBUG why sleep. Try to get rid of this
+            //
+            // Remote Name requests will arrive after device inquiry has
+            // completed.  Without a window to receive IN_RANGE notifications,
+            // we don't have a direct mechanism to determine when remote
+            // name requests have completed.
+            //
+            printf("*INFO* | Unable to find device.  Waiting for %d seconds before re-inquiry...\n", CXN_DELAY_NEXT_INQUIRY);
+            Sleep(CXN_DELAY_NEXT_INQUIRY * 1000);
+
+            printf("*INFO* | Inquiring device ...\n");
+        }
+
+        //
+        // Start the lookup service
+        //
+        iResult = 0;
+        hLookup = 0;
+        bContinueLookup = FALSE;
+        ZeroMemory(pWSAQuerySet, ulPQSSize);
+        pWSAQuerySet->dwNameSpace = NS_BTH;
+        pWSAQuerySet->dwSize = sizeof(WSAQUERYSET);
+        iResult = WSALookupServiceBegin(pWSAQuerySet, ulFlags, &hLookup);
+
+        if ( (NO_ERROR == iResult) && (NULL != hLookup) )
+        {
+            bContinueLookup = TRUE;
+        }
+        else if ( 0 < iRetryCount )
+        {
+            printf("=CRITICAL= | WSALookupServiceBegin() failed with error code %d, WSALastError = %d\n", iResult, WSAGetLastError());
+            goto CleanupAndExit;
+        }
+
+        while ( bContinueLookup )
+        {
+            //
+            // Get information about next bluetooth device
+            // 
+            // Note you may pass the same WSAQUERYSET from LookupBegin
+            // as long as you don't need to modify any of the pointer
+            // members of the structure, etc.
+            //
+            // ZeroMemory(pWSAQuerySet, ulPQSSize);
+            // pWSAQuerySet->dwNameSpace = NS_BTH;
+            // pWSAQuerySet->dwSize = sizeof(WSAQUERYSET);
+            if ( NO_ERROR == WSALookupServiceNext(hLookup, ulFlags, &ulPQSSize, pWSAQuerySet) )
+            {
+                //
+                // Since we're a non-unicode application, the remote
+                // name in lpszServiceInstanceName will have been converted
+                // from CP_UTF8 to CP_ACP, this may cause the name match
+                // to fail unexpectedly.  If the app is to handle this,
+                // the app needs to be unicode.
+                //
+                if ( ( pWSAQuerySet->lpszServiceInstanceName != NULL ) && ( 0 == _stricmp(pWSAQuerySet->lpszServiceInstanceName, pszRemoteName) ) )
+                {
+                    //
+                    // Found a remote bluetooth device with matching name.
+                    // Get the address of the device and exit the lookup.
+                    //
+                    CopyMemory(pRemoteBtAddr, 
+                               &((PSOCKADDR_BTH) pWSAQuerySet->lpcsaBuffer->RemoteAddr.lpSockaddr)->btAddr, 
+                               sizeof(*pRemoteBtAddr));
+                    bRemoteDeviceFound = TRUE;
+                    bContinueLookup = FALSE;
+                }
+            }
+            else
+            {
+                if ( WSA_E_NO_MORE == ( iResult = WSAGetLastError() ) ) //No more data
+                {
+                    //
+                    // No more devices found.  Exit the lookup.
+                    //
+                    bContinueLookup = FALSE;
+                }
+                else if ( WSAEFAULT == iResult )
+                {
+                    //
+                    // The buffer for QUERYSET was insufficient.  
+                    // In such case 3rd parameter "ulPQSSize" of function "WSALookupServiceNext()" receives 
+                    // the required size.  So we can use this parameter to reallocate memory for QUERYSET.
+                    //
+                    HeapFree(GetProcessHeap(), 0, pWSAQuerySet);
+                    pWSAQuerySet = NULL;
+                    if ( NULL == ( pWSAQuerySet = (PWSAQUERYSET) HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, ulPQSSize) ) )
+                    {
+                        printf("!ERROR! | Unable to allocate memory for WSAQERYSET\n");
+                        bContinueLookup = FALSE;
+                    }
+                }
+                else
+                {
+                    printf("=CRITICAL= | WSALookupServiceNext() failed with error code %d\n", iResult);
+                    bContinueLookup = FALSE;
+                }
+            }
+        }
+
+        //
+        // End the lookup service
+        //
+        WSALookupServiceEnd(hLookup);
+    }
+
+CleanupAndExit:
+    if ( NULL != pWSAQuerySet )
+    {
+        HeapFree(GetProcessHeap(), 0, pWSAQuerySet);
+        pWSAQuerySet = NULL;
+    }
+
+    if ( bRemoteDeviceFound )
+    {
+        return(0);
+    }
+    else
+    {
+        return(1);
+    }
+}
+
+
+#include <wsipx.h>
+
+void
+Do_Ipx_Work (enum Command command, Tcl_Obj *question, Tcl_Obj *argument)
+{
 }
