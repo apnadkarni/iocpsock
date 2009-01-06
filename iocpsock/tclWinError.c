@@ -16,15 +16,6 @@
 #endif
 
 
-/* Fix the error in winnt.h */
-#if (_MSC_VER == 1200)
-#   undef DEFAULT_UNREACHABLE
-#   define DEFAULT_UNREACHABLE default: __assume(0)
-#elif !defined(_MSC_VER) || (_MSC_VER < 1200)
-#   undef DEFAULT_UNREACHABLE
-#   define DEFAULT_UNREACHABLE default: return "UNKNOWN"
-#endif
-
 #define ERR_BUF_SIZE	1024
 typedef struct ThreadSpecificData {
     char sysMsgSpace[ERR_BUF_SIZE];
@@ -3432,7 +3423,7 @@ static Tcl_ThreadDataKey dataKey;
  *	I may as well make it complete :)
  *
  * Side Effects:
- *	None.
+ *	Causes large static string storage in our DLL.
  *
  *----------------------------------------------------------------------
  */
@@ -5292,7 +5283,7 @@ Tcl_WinErrId (unsigned int errorCode)
 	CASE(ERROR_IPSEC_IKE_MM_LIMIT)
 	CASE(ERROR_IPSEC_IKE_NEGOTIATION_DISABLED)
 	CASE(ERROR_IPSEC_IKE_NEG_STATUS_END)
-	DEFAULT_UNREACHABLE;
+	default: return "UNKNOWN";
     }
 }
 
@@ -5366,6 +5357,6 @@ Tcl_WinError (Tcl_Interp *interp, unsigned int errorCode, va_list *extra)
     id = Tcl_WinErrId(errorCode);
     msg = Tcl_WinErrMsg(errorCode, extra);
     snprintf(num, TCL_INTEGER_SPACE, "%lu", errorCode);
-    Tcl_SetErrorCode(interp, "WINDOWS", num, id, msg, 0L);
+    Tcl_SetErrorCode(interp, "WINDOWS", num, id, msg, NULL);
     return msg;
 }
