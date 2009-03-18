@@ -183,24 +183,23 @@ PROJECT	= iocpsock
 !message ***    sources.
 !endif
 
-!if [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 10
-DOTVERSION	= 1.0
-!elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 11
-DOTVERSION	= 1.1
-!elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 12
-DOTVERSION	= 1.2
-!elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 2
-DOTVERSION	= 2.0
-!elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 3
-DOTVERSION	= 3.0
-!elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 31
-DOTVERSION	= 3.1
-!elseif [nmakehlp -g iocpsock.h IOCPSOCK_VERSION] == 0
-MSG =^
-Can't get version string from iocpsock.h
-!error $(MSG)
+!if [echo REM = This file is generated from makefile.vc > versions.vc]
 !endif
-VERSION = $(DOTVERSION:.=)
+!if [echo IOCPSOCK_MAJOR_VERSION = \>> versions.vc] \
+   && [nmakehlp -V iocpsock.h IOCPSOCK_MAJOR_VERSION >> versions.vc]
+!endif
+!if [echo IOCPSOCK_MINOR_VERSION = \>> versions.vc] \
+   && [nmakehlp -V iocpsock.h IOCPSOCK_MINOR_VERSION >> versions.vc]
+!endif
+!if [echo IOCPSOCK_PATCH_LEVEL = \>> versions.vc] \
+   && [nmakehlp -V iocpsock.h IOCPSOCK_PATCH_LEVEL >> versions.vc]
+!endif
+!if [echo IOCPSOCK_VERSION = \>> versions.vc] \
+   && [nmakehlp -V iocpsock.h IOCPSOCK_VERSION >> versions.vc]
+!endif
+!include versions.vc
+DOTVERSION	= $(IOCPSOCK_MAJOR_VERSION).$(IOCPSOCK_MINOR_VERSION)
+VERSION		= $(IOCPSOCK_MAJOR_VERSION)$(IOCPSOCK_MINOR_VERSION)
 
 BINROOT		= .
 ROOT		= .
@@ -518,10 +517,6 @@ install-docs:
 # Distribution.
 #---------------------------------------------------------------------
 
-!if !defined(TAG)
-TAG = "3.0a4"
-!endif
-
 !if !defined(ZIP)
 ZIP = "c:\Program Files\zlib1.23\dll32\minizip"
 !endif
@@ -534,7 +529,7 @@ dist:
 	$(MAKECMD) release
 	$(MAKECMD) install INSTALLDIR="$(_INSTALLDIR)"
 	@cd "$(_INSTALLDIR)"
-	-@$(ZIP) -o -9 $(MAKEDIR)\iocpsock-$(TAG).zip \
+	-@$(ZIP) -o -9 $(MAKEDIR)\iocpsock-$(IOCPSOCK_PATCH_LEVEL).zip \
 	    lib\iocpsock$(DOTVERSION)\iocpsock$(VERSION).dll \
 	    lib\iocpsock$(DOTVERSION)\pkgIndex.tcl \
 	    lib\iocpsock$(DOTVERSION)\man.html \
@@ -567,8 +562,8 @@ exp_send "binary\r"
 expect "ftp>"
 exp_send "cd incoming\r"
 expect "ftp>"
-exp_send "send iocpsock-$(TAG).zip\r"
-exp_send_user "uploading iocpsock-$(TAG).zip now... please wait.."
+exp_send "send iocpsock-$(IOCPSOCK_PATCH_LEVEL).zip\r"
+exp_send_user "uploading iocpsock-$(IOCPSOCK_PATCH_LEVEL).zip now... please wait.."
 expect "ftp>"
 exp_send_user "DONE!"
 exp_send "bye\r"

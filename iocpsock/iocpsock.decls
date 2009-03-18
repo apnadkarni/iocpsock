@@ -39,10 +39,12 @@ declare 2 generic {
     CONST char *Tcl_WinErrId (unsigned int errorCode)
 }
 declare 3 generic {
-    CONST char *Tcl_WinErrMsg (unsigned int errorCode)
+    CONST char *Tcl_WinErrMsg (unsigned int errorCode,
+	va_list *extra)
 }
 declare 4 generic {
-    CONST char *Tcl_WinError (unsigned int errorCode, Tcl_Interp *interp)
+    CONST char *Tcl_WinError (Tcl_Interp *interp,
+	unsigned int errorCode, va_list *extra)
 }
 
 ### TCP stuff
