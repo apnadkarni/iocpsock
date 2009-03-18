@@ -948,7 +948,7 @@ DoRecvBufMerge (
 		buffer = bufPtr->buf;
 	    }
 	    memcpy(*bufPos, buffer, bufPtr->used);
-	    bytesRead += bufPtr->used;
+	    *bytesRead += bufPtr->used;
 	    *bufPos += bufPtr->used;
 	}
     }
