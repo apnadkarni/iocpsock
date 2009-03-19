@@ -211,12 +211,14 @@ IOCPLIB		= "$(OUT_DIR)\$(IOCPLIBNAME)"
 IOCPSTUBLIBNAME	= $(STUBPREFIX)$(VERSION).lib
 IOCPSTUBLIB	= "$(OUT_DIR)\$(IOCPSTUBLIBNAME)"
 
-### Make sure we use backslash only.
-LIB_INSTALL_DIR		= $(_INSTALLDIR)\lib
-BIN_INSTALL_DIR		= $(_INSTALLDIR)\bin
-DOC_INSTALL_DIR		= $(_INSTALLDIR)\doc
-SCRIPT_INSTALL_DIR	= $(_INSTALLDIR)\lib\iocpsock$(DOTVERSION)
-INCLUDE_INSTALL_DIR	= $(_INSTALLDIR)\include
+### Make sure we use backslash only.  So who's the bonehead
+### that made $(_INSTALLDIR) point to /lib and not the
+### root?
+LIB_INSTALL_DIR		= $(_INSTALLDIR)
+BIN_INSTALL_DIR		= $(_INSTALLDIR)\..\bin
+DOC_INSTALL_DIR		= $(_INSTALLDIR)\..\doc
+SCRIPT_INSTALL_DIR	= $(_INSTALLDIR)\iocpsock$(DOTVERSION)
+INCLUDE_INSTALL_DIR	= $(_INSTALLDIR)\..\include
 
 
 IOCPOBJS = \
@@ -486,31 +488,32 @@ $<
 
 install-binaries:
 	@echo Installing to '$(SCRIPT_INSTALL_DIR)'
-	@echo installing $(IOCPLIBNAME)
 !if !$(STATIC_BUILD)
+	@echo installing $(IOCPLIBNAME) to '$(SCRIPT_INSTALL_DIR)'
 	@$(CPY) "$(IOCPLIB)" "$(SCRIPT_INSTALL_DIR)\"
 !else
+	@echo installing $(IOCPLIBNAME) to '$(LIB_INSTALL_DIR)'
 	@$(CPY) "$(IOCPLIB)" "$(LIB_INSTALL_DIR)\"
 !endif
-	@echo installing $(IOCPSTUBLIBNAME)
+	@echo installing $(IOCPSTUBLIBNAME) to '$(LIB_INSTALL_DIR)'
 	@$(CPY) "$(IOCPSTUBLIB)" "$(LIB_INSTALL_DIR)\"
 
 install-libraries:
 !if !$(STATIC_BUILD)
 	@echo Creating package index "$(SCRIPT_INSTALL_DIR)\pkgIndex.tcl"
-	@-del "$(SCRIPT_INSTALL_DIR)\pkgIndex.tcl"
+	-@del "$(SCRIPT_INSTALL_DIR)\pkgIndex.tcl"
 	@echo package ifneeded Iocpsock $(DOTVERSION) [list load [file join $$dir $(IOCPLIBNAME)] Iocpsock] >"$(OUT_DIR)\pkgIndex.tcl"
 	@$(CPY) "$(OUT_DIR)\pkgIndex.tcl" "$(SCRIPT_INSTALL_DIR)\"
 !endif
-	@echo installing iocpsock.h
+	@echo installing iocpsock.h to '$(INCLUDE_INSTALL_DIR)'
 	@$(CPY) "$(ROOT)\iocpsock.h" "$(INCLUDE_INSTALL_DIR)"
-	@echo installing iocpDecls.h
+	@echo installing iocpDecls.h to '$(INCLUDE_INSTALL_DIR)'
 	@$(CPY) "$(ROOT)\iocpDecls.h" "$(INCLUDE_INSTALL_DIR)"
 
 install-docs:
-	@echo installing man.html
+	@echo installing man.html to '$(SCRIPT_INSTALL_DIR)'
 	@$(CPY) "$(ROOT)\man.html" "$(SCRIPT_INSTALL_DIR)"
-	@echo installing pb_iocpsock.png
+	@echo installing pb_iocpsock.png to '$(SCRIPT_INSTALL_DIR)'
 	@$(CPY) "$(ROOT)\pb_iocpsock.png" "$(SCRIPT_INSTALL_DIR)"
 
 #---------------------------------------------------------------------
@@ -528,7 +531,7 @@ dist:
 	$(MAKECMD) install OPTS=static INSTALLDIR="$(_INSTALLDIR)"
 	$(MAKECMD) release
 	$(MAKECMD) install INSTALLDIR="$(_INSTALLDIR)"
-	@cd "$(_INSTALLDIR)"
+	@cd "$(_INSTALLDIR)\.."
 	-@$(ZIP) -o -9 $(MAKEDIR)\iocpsock-$(IOCPSOCK_PATCH_LEVEL).zip \
 	    lib\iocpsock$(DOTVERSION)\iocpsock$(VERSION).dll \
 	    lib\iocpsock$(DOTVERSION)\pkgIndex.tcl \
