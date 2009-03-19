@@ -770,7 +770,6 @@ IocpInputProc (
     int *errorCodePtr)		/* Where to store error codes. */
 {
     SocketInfo *infoPtr = (SocketInfo *) instanceData;
-    char *bufPos = buf;
     int bytesRead = 0;
     DWORD timeout;
     BufferInfo *bufPtr;
@@ -793,11 +792,11 @@ IocpInputProc (
 		break;
 	    }
 	    if (FilterPartialRecvBufMerge(infoPtr, bufPtr, &bytesRead,
-		    toRead, bufPos)) {
+		    toRead, buf)) {
 		break;
 	    }
 	    done = DoRecvBufMerge(infoPtr, bufPtr, &bytesRead,
-		    toRead, &bufPos, &gotError);
+		    toRead, &buf, &gotError);
 	    if (gotError) goto error;
 	    if (done) break;
 	    FreeBufferObj(bufPtr);
@@ -879,7 +878,7 @@ DoRecvBufMerge (
     BufferInfo *bufPtr,
     int *bytesRead,
     int toRead,
-    char **bufPos,
+    char **buf,
     int *gotError)
 {
     *gotError = 0;
@@ -905,39 +904,26 @@ DoRecvBufMerge (
 		/*
 		 * Got the zero-byte recv alert. Do a non-blocking
 		 * and non-posting WSARecv using the channel buffer
-		 * directly.
+		 * space directly.
 		 */
 
-		if (infoPtr->lastError != NO_ERROR) {
+		buffer.len = toRead;
+		buffer.buf = *buf;
+		Flags = 0;
 
-		    /*
-		     * A write-side error occured.  Just return EOF,
-		     * ignore this bufPtr error and don't call WSARecv.
-		     */
-		    *bytesRead = 0;
+		if (WSARecv(infoPtr->socket, &buffer, 1,
+			&NumberOfBytesRecvd, &Flags, NULL, NULL)) {
+		    IocpWinConvertWSAError(WSAGetLastError());
+		    *gotError = 1;
+		    FreeBufferObj(bufPtr);
+		    return 1;
+		}
+		*bytesRead = NumberOfBytesRecvd;
+		if (NumberOfBytesRecvd == 0) {
+		    /* got official EOF */
 		    infoPtr->flags |= IOCP_EOF;
 		    FreeBufferObj(bufPtr);
 		    return 1;
-
-		} else {
-		    buffer.len = toRead;
-		    buffer.buf = *bufPos;
-		    Flags = 0;
-
-		    if (WSARecv(infoPtr->socket, &buffer, 1,
-			    &NumberOfBytesRecvd, &Flags, 0L, 0L)) {
-			IocpWinConvertWSAError(WSAGetLastError());
-			*gotError = 1;
-			FreeBufferObj(bufPtr);
-			return 1;
-		    }
-		    *bytesRead = NumberOfBytesRecvd;
-		    if (NumberOfBytesRecvd == 0) {
-			/* got official EOF */
-			infoPtr->flags |= IOCP_EOF;
-			FreeBufferObj(bufPtr);
-			return 1;
-		    }
 		}
 	    }
 	} else {
@@ -947,9 +933,9 @@ DoRecvBufMerge (
 	    } else {
 		buffer = bufPtr->buf;
 	    }
-	    memcpy(*bufPos, buffer, bufPtr->used);
+	    memcpy(*buf, buffer, bufPtr->used);
 	    *bytesRead += bufPtr->used;
-	    *bufPos += bufPtr->used;
+	    *buf += bufPtr->used;
 	}
     }
     return 0;
