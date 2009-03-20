@@ -2,7 +2,7 @@
  *
  * iocpsock_lolevel.c --
  *
- *	Think of this file as being win/tclc
+ *	Think of this file as being win/tclWinSock.c
  *
  *  See http://support.microsoft.com/default.aspx?scid=kb;en-us;Q192800
  *  for some help on the design aspects.
@@ -18,15 +18,11 @@
  * The following declare the winsock loading error codes.
  */
 
-#define TCL_WSE_NOTFOUND		1
-#define TCL_WSE_CANTDOONEPOINTZERO	2
-#define TCL_WSE_NOTALL11FUNCS		3
-#define TCL_WSE_NOTALL2XFUNCS		4
-#define TCL_WSE_CANTSTARTHANDLERTHREAD	5
+#define TCL_WSE_CANTDOLESSTHAN22	1
+#define TCL_WSE_CANTSTARTHANDLERTHREAD	2
 static DWORD winsockLoadErr	= 0;
 
 /* some globals defined. */
-int initialized			= 0;
 CompletionPortInfo IocpSubSystem;
 
 /* Stats being collected */
@@ -37,14 +33,15 @@ LONG StatSpecialBytesInUse	= 0;
 LONG StatFailedReplacementAcceptExCalls	= 0;
 
 /* file-scope globals */
-GUID AcceptExGuid		= WSAID_ACCEPTEX;
-GUID GetAcceptExSockaddrsGuid	= WSAID_GETACCEPTEXSOCKADDRS;
-GUID ConnectExGuid		= WSAID_CONNECTEX;
-GUID DisconnectExGuid		= WSAID_DISCONNECTEX;
-GUID TransmitFileGuid		= WSAID_TRANSMITFILE;
-GUID TransmitPacketsGuid	= WSAID_TRANSMITPACKETS;
-GUID WSARecvMsgGuid		= WSAID_WSARECVMSG;
-Tcl_ThreadDataKey dataKey;
+static LONG initialized		= 0;
+static GUID AcceptExGuid	= WSAID_ACCEPTEX;
+static GUID GetAcceptExSockaddrsGuid	= WSAID_GETACCEPTEXSOCKADDRS;
+static GUID ConnectExGuid	= WSAID_CONNECTEX;
+static GUID DisconnectExGuid	= WSAID_DISCONNECTEX;
+static GUID TransmitFileGuid	= WSAID_TRANSMITFILE;
+static GUID TransmitPacketsGuid	= WSAID_TRANSMITPACKETS;
+static GUID WSARecvMsgGuid	= WSAID_WSARECVMSG;
+static Tcl_ThreadDataKey dataKey;
 
 /* local prototypes */
 static DWORD			InitializeIocpSubSystem();
@@ -163,8 +160,7 @@ InitSockets(void)
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
     /* global/once init */
-    if (!initialized) {
-	initialized = 1;
+    if (InterlockedExchange(&initialized, 1) == 0) {
 
 #ifdef STATIC_BUILD
 	iocpModule = TclWinGetTclInstance();
@@ -176,8 +172,6 @@ InitSockets(void)
 	 * don't accept less than 1.1.
 	 */
 
-#define WSA_VER_MIN_MAJOR   1
-#define WSA_VER_MIN_MINOR   1
 #define WSA_VERSION_REQUESTED    MAKEWORD(2,2)
 
 	if ((winsockLoadErr = WSAStartup(WSA_VERSION_REQUESTED,
@@ -185,24 +179,19 @@ InitSockets(void)
 	    goto unloadLibrary;
 	}
 
-//	wVersionLoaded = wsaData.wVersion;
-
 	/*
 	 * Note the byte positions are swapped for the comparison, so
 	 * that 0x0002 (2.0, MAKEWORD(2,0)) doesn't look less than 0x0101
 	 * (1.1).  We want the comparison to be 0x0200 < 0x0101.
 	 */
 	if (MAKEWORD(HIBYTE(wsaData.wVersion), LOBYTE(wsaData.wVersion))
-		< MAKEWORD(WSA_VER_MIN_MINOR, WSA_VER_MIN_MAJOR)) {
-	    winsockLoadErr = TCL_WSE_CANTDOONEPOINTZERO;
+		< WSA_VERSION_REQUESTED) {
+	    winsockLoadErr = TCL_WSE_CANTDOLESSTHAN22;
 	    WSACleanup();
 	    goto unloadLibrary;
 	}
 
 #undef WSA_VERSION_REQUESTED
-#undef WSA_VER_MIN_MAJOR
-#undef WSA_VER_MIN_MINOR
-
 
 	/*
 	 * Assert our Tcl_ChannelType struct to the true version this core
@@ -290,27 +279,11 @@ HasSockets(Tcl_Interp *interp)
     }
     if (interp != NULL) {
 	switch (winsockLoadErr) {
-	    case TCL_WSE_NOTFOUND:
-		Tcl_AppendResult(interp,
-			"Windows Sockets are not available on this "
-			"system.  A suitable winsock DLL could not be "
-			"located.", NULL);
-		break;
-	    case TCL_WSE_CANTDOONEPOINTZERO:
+	    case TCL_WSE_CANTDOLESSTHAN22:
 		Tcl_AppendResult(interp,
 			"The Windows Sockets version loaded by "
-			"WSAStartup is under 1.1 and is not "
-			"accepatable.", NULL);
-		break;
-	    case TCL_WSE_NOTALL11FUNCS:
-		Tcl_AppendResult(interp,
-			"The Windows Sockets library didn't have all the"
-			" needed exports for the 1.1 interface.", NULL);
-		break;
-	    case TCL_WSE_NOTALL2XFUNCS:
-		Tcl_AppendResult(interp,
-			"The Windows Sockets library didn't have all the"
-			" needed exports for the 2.x interface.", NULL);
+			"WSAStartup is under 2.2 and is not "
+			"acceptable.", NULL);
 		break;
 	    case TCL_WSE_CANTSTARTHANDLERTHREAD:
 		Tcl_AppendResult(interp,
@@ -318,9 +291,9 @@ HasSockets(Tcl_Interp *interp)
 			"was unable to start.", NULL);
 		break;
 	    default:
-		//SetLastError(winsockLoadErr);
+		SetLastError(winsockLoadErr);
 		Tcl_AppendResult(interp, "can't start Iocpsock: ",
-			Tcl_WinError(interp, winsockLoadErr, NULL), NULL);
+			Tcl_WinError(interp), NULL);
 		break;
 	}
     }
@@ -361,7 +334,9 @@ InitializeIocpSubSystem ()
 	goto done;
     }
 
-    /* Create the thread to service the completion port. */
+    /*
+     * Create the one and only thread to service the completion port.
+     */
     IocpSubSystem.thread = CreateThread(NULL, 0, CompletionThreadProc,
 	    &IocpSubSystem, 0, NULL);
     if (IocpSubSystem.thread == NULL) {
@@ -384,11 +359,11 @@ IocpExitHandler (ClientData clientData)
 {
     DWORD wait;
 
-    if (initialized) {
+    if (InterlockedExchange(&initialized, 0) == 1) {
 
 	Tcl_DeleteEvents(IocpRemoveAllPendingEvents, NULL);
 
-	/* Cause the waiting I/O handler threads to exit. */
+	/* Cause the completion thread to exit. */
 	PostQueuedCompletionStatus(IocpSubSystem.port, 0, 0, 0);
 
 	/* Wait for our completion thread to exit. */
@@ -405,7 +380,6 @@ IocpExitHandler (ClientData clientData)
 	HeapDestroy(IocpSubSystem.heap);
 	HeapDestroy(IocpSubSystem.NPPheap);
 
-	initialized = 0;
 	WSACleanup();
     }
 }
@@ -806,7 +780,7 @@ IocpInputProc (
 	RepostRecvs(infoPtr, toRead);
 
     } else {
-	/* If there's nothing to get, return EWOULDBLOCK. */
+	/* When there's nothing to get, return EWOULDBLOCK. */
 	*errorCodePtr = EWOULDBLOCK;
 	bytesRead = -1;
     }
@@ -825,9 +799,9 @@ FilterPartialRecvBufMerge (
     BufferInfo *bufPtr,
     int *bytesRead,
     int toRead,
-    char *bufPos)
+    char *outBuf)
 {
-    BYTE *buffer;
+    BYTE *inBuf;
     SIZE_T howMuch = toRead - *bytesRead;
 
     if ((*bytesRead + (int) bufPtr->used) > toRead) {
@@ -839,13 +813,13 @@ FilterPartialRecvBufMerge (
 	 * operation.
 	 */
 	if (bufPtr->last) {
-	    buffer = bufPtr->last;
+	    inBuf = bufPtr->last;
 	} else {
-	    buffer = bufPtr->buf;
+	    inBuf = bufPtr->buf;
 	}
-	memcpy(bufPos, buffer, howMuch);
+	memcpy(outBuf, inBuf, howMuch);
 	bufPtr->used -= howMuch;
-	bufPtr->last = buffer + howMuch;
+	bufPtr->last = inBuf + howMuch;
 	*bytesRead += howMuch;
 	IocpLLPushFront(infoPtr->llPendingRecv, bufPtr,
 		&bufPtr->node, 0);
@@ -1045,9 +1019,9 @@ IocpSetOptionProc (
 		(const char *) &val, sizeof(BOOL));
 	if (rtn != 0) {
 	    if (interp) {
-		//SetLastError(WSAGetLastError());
+		SetLastError(WSAGetLastError());
 		Tcl_AppendResult(interp, "couldn't set keepalive socket option: ",
-			Tcl_WinError(interp, WSAGetLastError(), NULL), NULL);
+			Tcl_WinError(interp), NULL);
 	    }
 	    return TCL_ERROR;
 	}
@@ -1062,9 +1036,9 @@ IocpSetOptionProc (
 		(const char *) &val, sizeof(BOOL));
 	if (rtn != 0) {
 	    if (interp) {
-		//SetLastError(WSAGetLastError());
+		SetLastError(WSAGetLastError());
 		Tcl_AppendResult(interp, "couldn't set nagle socket option: ",
-			Tcl_WinError(interp, WSAGetLastError(), NULL),	NULL);
+			Tcl_WinError(interp),	NULL);
 	    }
 	    return TCL_ERROR;
 	}
@@ -1145,10 +1119,10 @@ IocpSetOptionProc (
 		if (Tcl_GetInt(interp, argv[2], &bufferCap) != TCL_OK) {
 		    return TCL_ERROR;
 		}
-		if (recvCap < 1) {
+		if (recvCap < 1 || bufferCap < 1) {
 		    if (interp) {
 			Tcl_AppendResult(interp,
-			    "only a positive integer greater than zero is "
+			    "only a positive integers greater than zero are "
 			    "allowed", NULL);
 		    }
 		    return TCL_ERROR;
@@ -1220,8 +1194,17 @@ IocpGetOptionProc (
 	if ((optionName[1] == 'e') &&
 	    (strncmp(optionName, "-error", len) == 0)) {
 	    if (infoPtr->lastError != NO_ERROR) {
-		IocpWinConvertWSAError(infoPtr->lastError);
-		Tcl_DStringAppend(dsPtr, Tcl_ErrnoMsg(Tcl_GetErrno()), -1);
+		const char *id, *msg;
+		char num[TCL_INTEGER_SPACE];
+		
+		SetLastError(infoPtr->lastError);
+		id = Tcl_WinErrId();
+		msg = Tcl_WinErrMsg();
+		SetLastError(NO_ERROR);
+		snprintf(num, TCL_INTEGER_SPACE, "%lu", infoPtr->lastError);
+		Tcl_DStringAppendElement(dsPtr, num);
+		Tcl_DStringAppendElement(dsPtr, id);
+		Tcl_DStringAppendElement(dsPtr, msg);
 	    }
 	    return TCL_OK;
 #if _DEBUG   /* for debugging only */
@@ -1285,9 +1268,9 @@ IocpGetOptionProc (
 		 */
 		if (len) {
 		    if (interp) {
-			//SetLastError(WSAGetLastError());
+			SetLastError(WSAGetLastError());
 			Tcl_AppendResult(interp, "getpeername() failed: ",
-				Tcl_WinError(interp, WSAGetLastError(), NULL), NULL);
+				Tcl_WinError(interp), NULL);
 		    }
 		    return TCL_ERROR;
 		}
@@ -1323,9 +1306,9 @@ IocpGetOptionProc (
 	    if (getsockname(sock, infoPtr->localAddr, &size)
 		    == SOCKET_ERROR) {
 		if (interp) {
-		    //SetLastError(WSAGetLastError());
+		    SetLastError(WSAGetLastError());
 		    Tcl_AppendResult(interp, "getsockname() failed: ",
-			    Tcl_WinError(interp, WSAGetLastError(), NULL), NULL);
+			    Tcl_WinError(interp), NULL);
 		}
 		return TCL_ERROR;
 	    }
@@ -1441,6 +1424,10 @@ IocpGetOptionProc (
 		Tcl_DStringAppendElement(dsPtr, buf);
 		TclFormatInt(buf, infoPtr->outstandingRecvs);
 		Tcl_DStringAppendElement(dsPtr, buf);
+		TclFormatInt(buf, infoPtr->outstandingRecvBufferCap);
+		Tcl_DStringAppendElement(dsPtr, buf);
+		TclFormatInt(buf, IocpLLGetCount(infoPtr->llPendingRecv));
+		Tcl_DStringAppendElement(dsPtr, buf);
 		if (len == 0) {
 		    Tcl_DStringEndSublist(dsPtr);
 		}
@@ -1459,7 +1446,7 @@ IocpGetOptionProc (
 		"peername sockname keepalive nagle backlog sendcap recvmode");
 	} else {
 	    return Tcl_BadChannelOption(interp, optionName,
-		"peername sockname keepalive nagle sendcap recvmode");
+		"peername sockname keepalive nagle error sendcap recvmode");
 	}
     }
 
@@ -2301,14 +2288,14 @@ HandleIo (
 	    newInfoPtr = NewAcceptSockInfo(bufPtr->socket, infoPtr);
 
 	    /*
-	     * Set the socket to invalid in the buffer so it won't be
-	     * closed when the buffer is reclaimed.
+	     * Set the socket to invalid in the completed BufferInfo so it
+	     * won't be closed when the buffer is reclaimed.
 	     */
 
 	    bufPtr->socket = INVALID_SOCKET;
 
 	    /*
-	     * Save the remote and local SOCKADDRs to its SocketInfo
+	     * Save the remote and local SOCKADDRs to its new SocketInfo
 	     * struct.
 	     */
 
@@ -2391,9 +2378,10 @@ replace:
 	if (PostOverlappedAccept(infoPtr, newBufPtr, 0) != NO_ERROR) {
 
 	    /*
-	     * Oh no, the AcceptEx failed.  There is no way to return an
-	     * error for this condition.  Tcl has no failure aspect for
-	     * listening sockets.  This Just shouldn't have happened.
+	     * Oh no, the replacement AcceptEx failed to post.  There is no
+	     * way to return an error for this condition.  Tcl has no failure
+	     * aspect for listening sockets.  This Just shouldn't have
+	     * happened and indicates a serious problem.
 	     */
 	    FreeBufferObj(newBufPtr);
 	    InterlockedIncrement(&StatFailedReplacementAcceptExCalls);
@@ -2445,6 +2433,8 @@ replace:
 	    InterlockedDecrement(&infoPtr->outstandingRecvCap);
 	    FreeBufferObj(bufPtr);
 	    break;
+	} else if (infoPtr->recvMode == IOCP_RECVMODE_BURST_DETECT) {
+	    infoPtr->needRecvRestart = 1;
 	}
 
 	/* Takes buffer ownership. */

@@ -48,7 +48,7 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				AdditionalIncludeDirectories="&quot;C:\Documents and Settings\davygrvy\My Documents\tcl_workspace\tcl\generic&quot;;&quot;C:\Documents and Settings\davygrvy\My Documents\tcl_workspace\tcl\win&quot;"
+				AdditionalIncludeDirectories="C:\tcl_ws\tcl\generic;C:\tcl_ws\tcl\win"
 				PreprocessorDefinitions="WIN32;_DEBUG;TCL_THREADS;USE_TCL_STUBS;BUILD_iocp"
 				MinimalRebuild="true"
 				BasicRuntimeChecks="3"
@@ -76,10 +76,11 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalDependencies="ws2_32.lib"
 				OutputFile="Debug/iocpsock30g.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories="c:\programming\tcl_workspace\tcl_head_stock\win\Release"
+				AdditionalLibraryDirectories="C:\tcl_ws\tcl\win\Release_VC9"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\Debug/iocpsock30g.pdb"
 				RandomizedBaseAddress="1"
@@ -315,7 +316,7 @@
 				<Tool
 					Name="VCResourceCompilerTool"
 					PreprocessorDefinitions=""
-					AdditionalIncludeDirectories=""
+					AdditionalIncludeDirectories="C:\tcl_ws\tcl\generic"
 				/>
 			</FileConfiguration>
 			<FileConfiguration

@@ -3429,8 +3429,10 @@ static Tcl_ThreadDataKey dataKey;
  */
 
 CONST char *
-Tcl_WinErrId (unsigned int errorCode)
+Tcl_WinErrId (void)
 {
+    DWORD errorCode = GetLastError();
+
     /* Use special macro magic to simplify this mess */
 #   define CASE(i) case i: return #i;
 
@@ -5304,10 +5306,11 @@ Tcl_WinErrId (unsigned int errorCode)
  */
 
 CONST char *
-Tcl_WinErrMsg (unsigned int errorCode, va_list *extra)
+Tcl_WinErrMsg (void)
 {
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
     DWORD result;
+    DWORD errorCode = GetLastError();
 
     /*
      * If the "customer" bit is set, this function was called
@@ -5321,12 +5324,12 @@ Tcl_WinErrMsg (unsigned int errorCode, va_list *extra)
     result = FormatMessage (
 	    FORMAT_MESSAGE_FROM_SYSTEM |
 	    FORMAT_MESSAGE_MAX_WIDTH_MASK,
-	    0L,
+	    NULL,
 	    errorCode,
 	    0,		    /* use best guess localization */
 	    tsdPtr->sysMsgSpace,
 	    ERR_BUF_SIZE,
-	    extra);
+	    NULL);
 
     return (result ? tsdPtr->sysMsgSpace : NULL);
 }
@@ -5349,13 +5352,14 @@ Tcl_WinErrMsg (unsigned int errorCode, va_list *extra)
  */
 
 CONST char *
-Tcl_WinError (Tcl_Interp *interp, unsigned int errorCode, va_list *extra)
+Tcl_WinError (Tcl_Interp *interp)
 {
     CONST char *id, *msg;
     char num[TCL_INTEGER_SPACE];
+    DWORD errorCode = GetLastError();
 
-    id = Tcl_WinErrId(errorCode);
-    msg = Tcl_WinErrMsg(errorCode, extra);
+    id = Tcl_WinErrId();
+    msg = Tcl_WinErrMsg();
     snprintf(num, TCL_INTEGER_SPACE, "%lu", errorCode);
     Tcl_SetErrorCode(interp, "WINDOWS", num, id, msg, NULL);
     return msg;

@@ -698,10 +698,10 @@ CreateTcpSocket(
 error2:
     FreeSocketAddress(hostaddr);
 error1:
-    //SetLastError(WSAGetLastError());
+    SetLastError(WSAGetLastError());
     if (interp != NULL) {
 	Tcl_AppendResult(interp, "couldn't open socket: ",
-		Tcl_WinError(interp, WSAGetLastError(), NULL), NULL);
+		Tcl_WinError(interp), NULL);
     }
     FreeSocketInfo(infoPtr);
     return NULL;

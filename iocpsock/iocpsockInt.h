@@ -58,8 +58,6 @@
 #   endif
 #endif
 
-extern int initialized;
-extern HMODULE iocpModule;
 extern LONG StatOpenSockets;
 extern LONG StatFailedAcceptExCalls;
 extern LONG StatGeneralBytesInUse;
