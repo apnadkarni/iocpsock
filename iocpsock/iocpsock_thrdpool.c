@@ -21,6 +21,7 @@ WaitCallback (PVOID lpParameter, BOOLEAN timedOut)
 	info->proc(info->handle, info->userData,
 		(timedOut == TRUE ? 1 : 0));
     } __except (EXCEPTION_EXECUTE_HANDLER) {}
+    ckfree((char *)info);
 }
 
 void
