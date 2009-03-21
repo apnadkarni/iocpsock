@@ -13,18 +13,19 @@ HMODULE iocpModule = NULL;
 #	pragma comment(lib, "tclstub" \
 		STRINGIFY(JOIN(TCL_MAJOR_VERSION,TCL_MINOR_VERSION)) ".lib")
 #	if !defined(_MT) || !defined(_DLL) || defined(_DEBUG)
-	    // This fixes a bug with how the Stubs library was compiled.
-	    // The requirement for msvcrt.lib from tclstubXX.lib should
-	    // be removed.
+	    // This fixes an old bug with how the Stubs library was
+	    // compiled. The requirement for msvcrt.lib from
+	    // tclstubXX.lib should be removed.
 #	    pragma comment(linker, "-nodefaultlib:msvcrt.lib")
 #	endif
 #   elif !defined(STATIC_BUILD)
-	// Mark this .obj needing the import library
+	// Mark this .obj needing the tcl import library
 #	pragma comment(lib, "tcl" \
 		STRINGIFY(JOIN(TCL_MAJOR_VERSION,TCL_MINOR_VERSION)) ".lib")
 #   endif
 #   pragma comment (lib, "user32.lib")
 #   pragma comment (lib, "kernel32.lib")
+#   pragma comment (lib, "ws2_32.lib")
 #endif
 
 
@@ -96,11 +97,9 @@ Iocpsock_Init (Tcl_Interp *interp)
     }
 #endif
 
-    Tcl_MutexLock(&initLock);
     if (HasSockets(interp) != TCL_OK) {
 	return TCL_ERROR;
     }
-    Tcl_MutexUnlock(&initLock);
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
     Tcl_CreateObjCommand(interp, "iocp_stats", Iocp_StatsObjCmd, 0L, 0L);

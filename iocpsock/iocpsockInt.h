@@ -256,9 +256,6 @@ typedef struct CompletionPortInfo {
 } CompletionPortInfo;
 extern CompletionPortInfo IocpSubSystem;
 
-TCL_DECLARE_MUTEX(initLock)
-
-
 extern Tcl_ObjCmdProc	Iocp_SocketObjCmd;
 extern Tcl_ObjCmdProc	Iocp_IrdaDiscoveryCmd;
 extern Tcl_ObjCmdProc	Iocp_IrdaIasQueryCmd;
