@@ -527,18 +527,6 @@ CreateTcpSocket(
 
     SetHandleInformation((HANDLE)sock, HANDLE_FLAG_INHERIT, 0);
 
-    /*
-     * Turn off the internal send buffing.  We get more speed and are
-     * more efficient by reducing memcpy calls as the stack will use
-     * our overlapped buffers directly.
-     */
-
-    i = 0;
-    if (setsockopt(sock, SOL_SOCKET, SO_SNDBUF,
-	    (const char *) &i, sizeof(int)) == SOCKET_ERROR) {
-	goto error2;
-    }
-
     infoPtr = NewSocketInfo(sock);
     infoPtr->proto = pdata;
 

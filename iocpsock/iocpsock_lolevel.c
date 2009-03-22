@@ -1536,6 +1536,7 @@ SocketInfo *
 NewSocketInfo (SOCKET socket)
 {
     SocketInfo *infoPtr;
+    int i;
 
     /* collect stats */
     InterlockedIncrement(&StatOpenSockets);
@@ -1564,6 +1565,16 @@ NewSocketInfo (SOCKET socket)
 
     /* zero-byte is our default mode */
     IocpSetRecvMode(infoPtr, IOCP_RECVMODE_ZERO_BYTE, 1, 1);
+
+    /*
+     * Turn off the internal send buffing.  We get more speed and are
+     * more efficient by reducing memcpy calls as the stack will use
+     * our overlapped buffers directly.
+     */
+
+    i = 0;
+    setsockopt(socket, SOL_SOCKET, SO_SNDBUF, (const char *) &i,
+	    sizeof(int));
 
     return infoPtr;
 }
@@ -1791,7 +1802,7 @@ PostOverlappedAccept (
     addr_storage = infoPtr->proto->addrLen + 16;
 
     /*
-     * Create a ready client socket of the same type for a future
+     * Create a ready client socket of the same type for the future
      * incoming connection.
      */
 
