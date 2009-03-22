@@ -198,6 +198,13 @@ TCL_EXTERN(BOOL)	IocpLLNodeDestroy _ANSI_ARGS_((LPLLNODE node));
 /* 31 */
 TCL_EXTERN(SIZE_T)	IocpLLGetCount _ANSI_ARGS_((LPLLIST ll));
 #endif
+#ifndef IocpSetRecvMode_TCL_DECLARED
+#define IocpSetRecvMode_TCL_DECLARED
+/* 32 */
+TCL_EXTERN(void)	IocpSetRecvMode _ANSI_ARGS_((SocketInfo * infoPtr, 
+				enum IocpRecvMode recvMode, LONG recvCap, 
+				LONG bufferCap));
+#endif
 
 typedef struct IocpIntStubs {
     int magic;
@@ -235,6 +242,7 @@ typedef struct IocpIntStubs {
     BOOL (*iocpLLIsNotEmpty) _ANSI_ARGS_((LPLLIST ll)); /* 29 */
     BOOL (*iocpLLNodeDestroy) _ANSI_ARGS_((LPLLNODE node)); /* 30 */
     SIZE_T (*iocpLLGetCount) _ANSI_ARGS_((LPLLIST ll)); /* 31 */
+    void (*iocpSetRecvMode) _ANSI_ARGS_((SocketInfo * infoPtr, enum IocpRecvMode recvMode, LONG recvCap, LONG bufferCap)); /* 32 */
 } IocpIntStubs;
 TCL_EXTERNC IocpIntStubs *iocpIntStubsPtr;
 
@@ -365,6 +373,10 @@ TCL_EXTERNC IocpIntStubs *iocpIntStubsPtr;
 #ifndef IocpLLGetCount
 #define IocpLLGetCount \
 	(iocpIntStubsPtr->iocpLLGetCount) /* 31 */
+#endif
+#ifndef IocpSetRecvMode
+#define IocpSetRecvMode \
+	(iocpIntStubsPtr->iocpSetRecvMode) /* 32 */
 #endif
 
 #endif /* defined(USE_IOCP_STUBS) && !defined(USE_IOCP_STUB_PROCS) */

@@ -1,18 +1,24 @@
-console show
+catch {console show}
 
 package require Iocpsock
-set server 192.168.0.102
+set server 10.0.2.15
 
 proc TestClientRead {s i} {
     if {[string length [set e [fconfigure $s -error]]]} {
-	#puts "error: $s: $e : closing socket"
+	puts "error: $s: $e"
 	close $s
 	return
     }
     if {![catch {read $s} reply]} {
-        #puts "recieved: $reply"
+        if {$::debug} {
+	    puts "received: $reply"
+	}
 	catch {close $s}
 	return
+    } else {
+	if {$::debug} {
+	    puts "got recv error: $reply"
+	}
     }
     if {[eof $s]} {
 	puts "closing?.. Why?"
@@ -23,7 +29,9 @@ proc TestClientRead {s i} {
 }
 proc TestClientWrite {s i} {
     if {[string length [set e [fconfigure $s -error]]]} {
-	#puts "error: $s: $e at $i: closing socket"
+        if {$::debug} {
+	    puts "error: $s: $e at $i: closing socket"
+	}
 	close $s
 	return
     }
@@ -38,7 +46,7 @@ proc connect {{howmany {1}}} {
 	    return "Barfed at $a with $msg"
 	}
 	fconfigure $s -blocking 0 -buffering none -translation binary
-	fconfigure $s -sendcap 2 -recvburst 2
+	fconfigure $s -sendcap 2 -recvmode {burst-detection 20 30}
 	fileevent $s readable [list TestClientRead $s $a]
 	fileevent $s writable [list TestClientWrite $s $a]
 	if {$a / 20} {update}

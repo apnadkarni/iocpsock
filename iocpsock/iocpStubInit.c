@@ -53,6 +53,7 @@ IocpIntStubs iocpIntStubs = {
     IocpLLIsNotEmpty, /* 29 */
     IocpLLNodeDestroy, /* 30 */
     IocpLLGetCount, /* 31 */
+    IocpSetRecvMode, /* 32 */
 };
 
 static IocpStubHooks iocpStubHooks = {

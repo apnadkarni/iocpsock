@@ -1038,7 +1038,7 @@ IocpSetOptionProc (
 	    if (interp) {
 		SetLastError(WSAGetLastError());
 		Tcl_AppendResult(interp, "couldn't set nagle socket option: ",
-			Tcl_WinError(interp),	NULL);
+			Tcl_WinError(interp), NULL);
 	    }
 	    return TCL_ERROR;
 	}
@@ -1102,15 +1102,10 @@ IocpSetOptionProc (
         if (Tcl_SplitList(interp, value, &argc, &argv) == TCL_ERROR) {
             return TCL_ERROR;
         }
-
 	if (strcmp(argv[0], "zero-byte") == 0) {
-	    infoPtr->recvMode = IOCP_RECVMODE_ZERO_BYTE;
-	    InterlockedExchange(&infoPtr->outstandingRecvCap, 1);
-	    InterlockedExchange(&infoPtr->outstandingRecvBufferCap, 1);
+	    IocpSetRecvMode(infoPtr, IOCP_RECVMODE_ZERO_BYTE, 1, 1);
 	} else if (strcmp(argv[0], "flow-controlled") == 0) {
-	    infoPtr->recvMode = IOCP_RECVMODE_FLOW_CTRL;
-	    InterlockedExchange(&infoPtr->outstandingRecvCap, 1);
-	    InterlockedExchange(&infoPtr->outstandingRecvBufferCap, 1);
+	    IocpSetRecvMode(infoPtr, IOCP_RECVMODE_FLOW_CTRL, 1, 1);
 	} else if (strcmp(argv[0], "burst-detection") == 0) {
 	    if (argc == 3) {
 		if (Tcl_GetInt(interp, argv[1], &recvCap) != TCL_OK) {
@@ -1127,9 +1122,7 @@ IocpSetOptionProc (
 		    }
 		    return TCL_ERROR;
 		}
-		infoPtr->recvMode = IOCP_RECVMODE_BURST_DETECT;
-		InterlockedExchange(&infoPtr->outstandingRecvCap, recvCap);
-		InterlockedExchange(&infoPtr->outstandingRecvBufferCap, bufferCap);
+		IocpSetRecvMode(infoPtr, IOCP_RECVMODE_BURST_DETECT, recvCap, bufferCap);
 	    } else {
 		if (interp) {
 		    Tcl_AppendResult(interp,
@@ -1144,7 +1137,7 @@ IocpSetOptionProc (
 		Tcl_AppendResult(interp,
 		    "unknown option for -recvmode: must be one of "
 		    "zero-byte, flow-controlled or {burst-detection "
-		    "<WSARecv_limit> <buffer_limit>}.", NULL);
+		    "<WSARecv_limit> <unreadbuffer_limit>}.", NULL);
 	    }
 	    return TCL_ERROR;
 	}
@@ -1561,7 +1554,6 @@ NewSocketInfo (SOCKET socket)
     infoPtr->outstandingRecvCap = IOCP_RECV_CAP;
     infoPtr->needRecvRestart = 0;
     InitializeCriticalSectionAndSpinCount(&infoPtr->tsdLock, 400);
-    infoPtr->recvMode = IOCP_RECVMODE_ZERO_BYTE;
     infoPtr->watchMask = 0;
     infoPtr->readyAccepts = NULL;
     infoPtr->acceptProc = NULL;
@@ -1569,6 +1561,10 @@ NewSocketInfo (SOCKET socket)
     infoPtr->remoteAddr = NULL;	    /* Remote sockaddr. */
     infoPtr->lastError = NO_ERROR;
     infoPtr->node.ll = NULL;
+
+    /* zero-byte is our default mode */
+    IocpSetRecvMode(infoPtr, IOCP_RECVMODE_ZERO_BYTE, 1, 1);
+
     return infoPtr;
 }
 
@@ -1672,11 +1668,11 @@ NewAcceptSockInfo (SOCKET socket, SocketInfo *infoPtr)
     newInfoPtr->proto = infoPtr->proto;
     newInfoPtr->tsdHome = infoPtr->tsdHome;
     newInfoPtr->llPendingRecv = IocpLLCreate();
+    IocpSetRecvMode(newInfoPtr, infoPtr->recvMode,
+	    infoPtr->outstandingRecvCap,
+	    infoPtr->outstandingRecvBufferCap);
     InterlockedExchange(&newInfoPtr->outstandingSendCap,
 	    infoPtr->outstandingSendCap);
-    InterlockedExchange(&newInfoPtr->outstandingRecvCap,
-	    infoPtr->outstandingRecvCap);
-    newInfoPtr->recvMode = infoPtr->recvMode;
 
     return newInfoPtr;
 }
@@ -2114,13 +2110,65 @@ PostOverlappedQOS (SocketInfo *infoPtr, BufferInfo *bufPtr)
     return NO_ERROR;
 }
 
+/*
+ * ----------------------------------------------------------------------
+ * IocpSetRecvMode --
+ *
+ *	Prepares the internal winsock receive buffer to match our
+ *	overlapped mode and sets the caps for the different algorithms.
+ *
+ * Results:
+ *	None.
+ *
+ * Side effects:
+ *	Winsock's internal receive buffer for this socket is changed.
+ *
+ * Note:
+ *	The internal buffer changes are currently guestimates
+ *	for best speed.
+ *	
+ * ----------------------------------------------------------------------
+ */
+
+void
+IocpSetRecvMode(
+    SocketInfo *infoPtr,
+    enum IocpRecvMode recvMode,
+    LONG recvCap,
+    LONG bufferCap)
+{
+    int recvBufSize;
+
+    infoPtr->recvMode = recvMode;
+
+    switch (recvMode) {
+    case IOCP_RECVMODE_ZERO_BYTE:
+	if (infoPtr->channel != NULL) {
+	    recvBufSize = Tcl_GetChannelBufferSize(infoPtr->channel);
+	} else {
+	    recvBufSize = 2 * IOCP_RECV_BUFSIZE;
+	}
+	break;
+    case IOCP_RECVMODE_FLOW_CTRL:
+	recvBufSize = 0; break;
+    case IOCP_RECVMODE_BURST_DETECT:
+	recvBufSize = IOCP_RECV_BUFSIZE; break;
+    }
+
+    /* Set the internal read buffers to match our mode. */
+    setsockopt(infoPtr->socket, SOL_SOCKET, SO_RCVBUF,
+	    (const char *) &recvBufSize, sizeof(int));
+
+    InterlockedExchange(&infoPtr->outstandingRecvCap, recvCap);
+    InterlockedExchange(&infoPtr->outstandingRecvBufferCap, bufferCap);
+}
 
 /* =================================================================== */
 /* ================== Lo-level Completion handler ==================== */
 
 
 /*
- *----------------------------------------------------------------------
+ * ----------------------------------------------------------------------
  * CompletionThread --
  *
  *	The "main" for the I/O handling thread.  Only one thread is used.
@@ -2138,7 +2186,7 @@ PostOverlappedQOS (SocketInfo *infoPtr, BufferInfo *bufPtr)
  *	are posted and tcl will service them when the event loop is
  *	ready to.  Winsock is never left "dangling" on operations.
  *
- *----------------------------------------------------------------------
+ * ----------------------------------------------------------------------
  */
 
 static DWORD WINAPI

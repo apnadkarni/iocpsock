@@ -182,3 +182,8 @@ declare 30 generic {
 declare 31 generic {
     SIZE_T IocpLLGetCount (LPLLIST ll)
 }
+declare 32 generic {
+    void IocpSetRecvMode(SocketInfo *infoPtr,
+	enum IocpRecvMode recvMode, LONG recvCap,
+	LONG bufferCap)
+}
