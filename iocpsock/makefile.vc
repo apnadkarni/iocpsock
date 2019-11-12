@@ -227,19 +227,21 @@ IOCPOBJS = \
 	$(TMP_DIR)\iocpsock_lolevel.obj \
 	$(TMP_DIR)\linkedlist.obj \
 	$(TMP_DIR)\tclWinError.obj \
+	$(TMP_DIR)\ws2irda.obj \
+	$(TMP_DIR)\ws2tcp.obj \
+	$(TMP_DIR)\ws2udp.obj \
+!if !$(STATIC_BUILD)
+	$(TMP_DIR)\iocpsock.res
+!endif
+
+IOCP_OBSOLETE_OBJS = \
 	$(TMP_DIR)\ws2apltalk.obj \
 	$(TMP_DIR)\ws2atm.obj \
 	$(TMP_DIR)\ws2decnet.obj \
 	$(TMP_DIR)\ws2ipx.obj \
-	$(TMP_DIR)\ws2irda.obj \
 	$(TMP_DIR)\ws2isotp4.obj \
 	$(TMP_DIR)\ws2netbios.obj \
-	$(TMP_DIR)\ws2tcp.obj \
-	$(TMP_DIR)\ws2udp.obj \
-	$(TMP_DIR)\ws2vines.obj \
-!if !$(STATIC_BUILD)
-	$(TMP_DIR)\iocpsock.res
-!endif
+	$(TMP_DIR)\ws2vines.obj
 
 IOCPSTUBOBJS = \
 	$(TMP_DIR)\iocpStubLib.obj

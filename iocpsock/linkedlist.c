@@ -11,6 +11,7 @@
 
 #include "iocpsockInt.h"
 
+#ifdef NOTNEEDED
 /*
  * compare and swap functions
  */
@@ -83,6 +84,7 @@ static __inline char CAS2 (volatile void * addr, volatile void * v1, volatile lo
 }
 #endif
 
+#endif /* NOTNEEDED */
 
 /* Bitmask macros. */
 #define mask_a( mask, val ) if ( ( mask & val ) != val ) { mask |= val; }

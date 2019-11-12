@@ -14,6 +14,19 @@
 
 #include "iocpsockInt.h"
 
+#ifdef _MSC_VER
+# if _MSC_VER >= 1900
+#  include <intrin.h>
+#  define NOP() __nop()
+# else
+#  if defined(_M_AMD64)
+#   define NOP() (void) 0
+#  else
+#   define NOP() __asm nop
+#  endif
+# endif
+#endif
+
 /*
  * The following declare the winsock loading error codes.
  */
@@ -563,7 +576,7 @@ IocpEventProc (
 	Tcl_NotifyChannel(infoPtr->channel, readyMask);
     } else {
 	/* This was a useless queue.  I want to know why! */
-	__asm nop;
+	NOP();
     }
     return 1;
 }
@@ -2040,7 +2053,7 @@ PostOverlappedSend (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	/*
 	 * The WSASend/To completed now and is queued to the port.
 	 */
-	__asm nop;
+	NOP();
     }
 
     return NO_ERROR;
@@ -2079,7 +2092,7 @@ PostOverlappedDisconnect (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	/*
 	 * The DisconnectEx completed now and is queued to the port.
 	 */
-	__asm nop;
+	NOP();
     }
 
     return NO_ERROR;
@@ -2115,7 +2128,7 @@ PostOverlappedQOS (SocketInfo *infoPtr, BufferInfo *bufPtr)
 	/*
 	 * The WSAIoctl completed now and is queued to the port.
 	 */
-	__asm nop;
+	NOP();
     }
 
     return NO_ERROR;
