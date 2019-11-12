@@ -22,6 +22,9 @@ RCFILE = iocpsock.rc
 DOTVERSION = 4.0a1 
 !include "rules-ext.vc"
 
+# Windows 10 IRDA support is second class citizen. Disable by default.
+IOCPSOCK_IRDA_SUPPORT = 0
+
 PRJ_DEFINES     = -D_CRT_SECURE_NO_WARNINGS
 
 PRJ_OBJS = \
@@ -30,10 +33,14 @@ PRJ_OBJS = \
 	$(TMP_DIR)\iocpsock_lolevel.obj \
 	$(TMP_DIR)\linkedlist.obj \
 	$(TMP_DIR)\tclWinError.obj \
-	$(TMP_DIR)\ws2irda.obj \
 	$(TMP_DIR)\ws2tcp.obj \
 	$(TMP_DIR)\ws2udp.obj
-
+  
+!if $(IOCPSOCK_IRDA_SUPPORT)
+PRJ_OBJS = $(PRJ_OBJS) $(TMP_DIR)\ws2irda.obj
+PRJ_DEFINES = $(PRJ_DEFINES) -DIOCPSOCK_IRDA_SUPPORT
+!endif
+  
 IOCP_OBSOLETE_OBJS = \
 	$(TMP_DIR)\ws2apltalk.obj \
 	$(TMP_DIR)\ws2atm.obj \

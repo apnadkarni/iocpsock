@@ -18,6 +18,8 @@ static void	UnregisterTcpServerInterpCleanupProc (
 		    Tcl_Interp *interp, AcceptCallback *acceptCallbackPtr);
 
 
+#if defined(ICOPSOCK_IRDA_SUPPORT)
+
 int
 Iocp_IrdaDiscoveryCmd (
     ClientData notUsed,			/* Not used. */
@@ -74,7 +76,7 @@ Iocp_IrdaLazyDiscoveryCmd (
 {
     return TCL_ERROR;
 }
-
+#endif /* IOCPSOCK_IRDA_SUPPORT */
 
 /*
  *----------------------------------------------------------------------
