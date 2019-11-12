@@ -47,17 +47,6 @@
 
 #include "iocpsock.h"
 
-#undef TCL_STORAGE_CLASS
-#ifdef BUILD_iocp
-#   define TCL_STORAGE_CLASS DLLEXPORT
-#else
-#   ifdef USE_IOCP_STUBS
-#	define TCL_STORAGE_CLASS
-#   else
-#	define TCL_STORAGE_CLASS DLLIMPORT
-#   endif
-#endif
-
 extern LONG StatOpenSockets;
 extern LONG StatFailedAcceptExCalls;
 extern LONG StatGeneralBytesInUse;

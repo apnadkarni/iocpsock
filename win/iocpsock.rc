@@ -5,49 +5,32 @@
 
 #include <winver.h>
 #define __WIN32__
-#include <tcl.h>
-#include <iocpsock.h>
-
-//
-// build-up the name suffix that defines the type of build this is.
-//
-#if DEBUG && !UNCHECKED
-#define SUFFIX_DEBUG	    "g"
-#else
-#define SUFFIX_DEBUG	    ""
-#endif
-
-#define SUFFIX		    SUFFIX_DEBUG
-
-
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION	IOCPSOCK_MAJOR_VERSION,IOCPSOCK_MINOR_VERSION,IOCPSOCK_RELEASE_LEVEL,IOCPSOCK_RELEASE_SERIAL
- PRODUCTVERSION	IOCPSOCK_MAJOR_VERSION,IOCPSOCK_MINOR_VERSION,IOCPSOCK_RELEASE_LEVEL,IOCPSOCK_RELEASE_SERIAL
+ FILEVERSION	COMMAVERSION
+ PRODUCTVERSION	COMMAVERSION
  FILEFLAGSMASK	0x3fL
 #ifdef DEBUG
  FILEFLAGS 	VS_FF_DEBUG
 #else
  FILEFLAGS 	0x0L
 #endif
- FILEOS 	VOS__WINDOWS32
+ FILEOS 	VOS_NT_WINDOWS32
  FILETYPE 	VFT_DLL
  FILESUBTYPE	0x0L
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-	BLOCK "040904b0"
-	BEGIN
-            VALUE "Comments", "http://sf.net/projects/iocpsock\0"
+	      BLOCK "040904b0"
+	      BEGIN
             VALUE "CompanyName", "Lyris Technologies, Inc.\0"
-            VALUE "FileDescription", "IOCP socket channel driver extension v" IOCPSOCK_VERSION " for Tool Command Language\0"
-            VALUE "FileVersion", IOCPSOCK_PATCH_LEVEL
-            VALUE "InternalName", "iocpsock\0"
+            VALUE "FileDescription", "IOCP socket channel driver extension for Tcl\0"
+            VALUE "FileVersion", DOTVERSION
             VALUE "LegalCopyright", "Copyright © 2003-2004 by David Gravereaux under BSD license\0"
-            VALUE "OriginalFilename", "iocpsock" STRINGIFY(IOCPSOCK_MAJOR_VERSION) STRINGIFY(IOCPSOCK_MINOR_VERSION) SUFFIX ".dll\0"
-	END
+            VALUE "OriginalFilename", PRJLIBNAME
+	      END
     END
     BLOCK "VarFileInfo"
     BEGIN
-	VALUE "Translation", 0x409, 1200
+	      VALUE "Translation", 0x409, 1200
     END
 END

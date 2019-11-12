@@ -5,6 +5,7 @@ Tcl_ObjCmdProc	Iocp_StatsObjCmd;
 /* Globals */
 HMODULE iocpModule = NULL;
 
+#ifdef OBSOLETE
 /* A mess of stuff to make sure we get a good binary. */
 #ifdef _MSC_VER
     // Only do this when MSVC++ is compiling us.
@@ -27,7 +28,7 @@ HMODULE iocpModule = NULL;
 #   pragma comment (lib, "kernel32.lib")
 #   pragma comment (lib, "ws2_32.lib")
 #endif
-
+#endif /* OBSOLETE */
 
 #if !defined(STATIC_BUILD)
 BOOL APIENTRY 
