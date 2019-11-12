@@ -305,8 +305,7 @@ HasSockets(Tcl_Interp *interp)
 		break;
 	    default:
 		SetLastError(winsockLoadErr);
-		Tcl_AppendResult(interp, "can't start Iocpsock: ",
-			Tcl_WinError(interp), NULL);
+    ReportWindowsError(interp, "can't start Iocpsock: ");
 		break;
 	}
     }
@@ -606,7 +605,7 @@ IocpAcceptOne (SocketInfo *infoPtr)
 	return;
     }
 
-    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", acptInfo->clientInfo->socket);
+    snprintf(channelName, sizeof(channelName), "iocp" SOCKET_PRINTF_SPEC, acptInfo->clientInfo->socket);
     acptInfo->clientInfo->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) acptInfo->clientInfo, (TCL_READABLE | TCL_WRITABLE));
     if (Tcl_SetChannelOption(NULL, acptInfo->clientInfo->channel, "-translation",
@@ -1033,8 +1032,7 @@ IocpSetOptionProc (
 	if (rtn != 0) {
 	    if (interp) {
 		SetLastError(WSAGetLastError());
-		Tcl_AppendResult(interp, "couldn't set keepalive socket option: ",
-			Tcl_WinError(interp), NULL);
+		ReportWindowsError(interp, "couldn't set keepalive socket option: ");
 	    }
 	    return TCL_ERROR;
 	}
@@ -1050,8 +1048,7 @@ IocpSetOptionProc (
 	if (rtn != 0) {
 	    if (interp) {
 		SetLastError(WSAGetLastError());
-		Tcl_AppendResult(interp, "couldn't set nagle socket option: ",
-			Tcl_WinError(interp), NULL);
+		ReportWindowsError(interp, "couldn't set nagle socket option: ");
 	    }
 	    return TCL_ERROR;
 	}
@@ -1189,7 +1186,7 @@ IocpGetOptionProc (
     int objc, i;
     Tcl_Obj **objv;
 
-    
+
     infoPtr = (SocketInfo *) instanceData;
     sock = infoPtr->socket;
     if (optionName != (char *) NULL) {
@@ -1200,9 +1197,10 @@ IocpGetOptionProc (
 	if ((optionName[1] == 'e') &&
 	    (strncmp(optionName, "-error", len) == 0)) {
 	    if (infoPtr->lastError != NO_ERROR) {
-		const char *id, *msg;
+		const char *id;
+    const WCHAR *msg;
 		char num[TCL_INTEGER_SPACE];
-		
+
 		SetLastError(infoPtr->lastError);
 		id = Tcl_WinErrId();
 		msg = Tcl_WinErrMsg();
@@ -1210,7 +1208,7 @@ IocpGetOptionProc (
 		snprintf(num, TCL_INTEGER_SPACE, "%lu", infoPtr->lastError);
 		Tcl_DStringAppendElement(dsPtr, num);
 		Tcl_DStringAppendElement(dsPtr, id);
-		Tcl_DStringAppendElement(dsPtr, msg);
+    Tcl_UniCharToUtfDString(msg, lstrlenW(msg), dsPtr);
 	    }
 	    return TCL_OK;
 #if _DEBUG   /* for debugging only */
@@ -1275,8 +1273,7 @@ IocpGetOptionProc (
 		if (len) {
 		    if (interp) {
 			SetLastError(WSAGetLastError());
-			Tcl_AppendResult(interp, "getpeername() failed: ",
-				Tcl_WinError(interp), NULL);
+			ReportWindowsError(interp, "getpeername() failed: ");
 		    }
 		    return TCL_ERROR;
 		}
@@ -1313,8 +1310,7 @@ IocpGetOptionProc (
 		    == SOCKET_ERROR) {
 		if (interp) {
 		    SetLastError(WSAGetLastError());
-		    Tcl_AppendResult(interp, "getsockname() failed: ",
-			    Tcl_WinError(interp), NULL);
+		    ReportWindowsError(interp, "getsockname() failed: ");
 		}
 		return TCL_ERROR;
 	    }

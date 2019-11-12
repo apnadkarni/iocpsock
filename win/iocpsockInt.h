@@ -157,7 +157,7 @@ typedef struct SocketInfo {
     volatile LONG outstandingRecvs; /* Count of overlapped WSARecv() operations. */
     volatile LONG outstandingRecvCap; /* Limit of outstanding overlapped WSARecv
 				     * operations allowed. */
-    SIZE_T outstandingRecvBufferCap; /* limit to how many unread buffers
+    LONG outstandingRecvBufferCap; /* limit to how many unread buffers
 				     * in llPendingRecv are allowed. */
     int needRecvRestart;	    /* When the buffer cap is hit, this is set. */
 
@@ -196,7 +196,7 @@ typedef struct WS2ProtocolData {
     int af;		    /* Address family. */
     int	type;		    /* Address type. */
     int	protocol;	    /* protocol type. */
-    size_t addrLen;	    /* length of protocol specific SOCKADDR */
+    int addrLen;	    /* length of protocol specific SOCKADDR */
     FN_DECODEADDR		*DecodeSockAddr;
 
     /* LSP specific extension functions */
@@ -273,13 +273,21 @@ extern __inline LPVOID	IocpNPPAlloc (SIZE_T size);
 extern __inline LPVOID  IocpNPPReAlloc (LPVOID block, SIZE_T size);
 extern __inline BOOL	IocpNPPFree (LPVOID block);
 
+/* 32/64 bit SOCKET channel naming */
+#if defined(_M_AMD64) || defined(_M_ARM64)
+#define SOCKET_PRINTF_SPEC "%" TCL_LL_MODIFIER "u"
+#else
+#define SOCKET_PRINTF_SPEC "%u"
+#endif
 
-/* 
+/*
  * Thread safe linked-list management state bitmasks.
  */
 #define IOCP_LL_NOLOCK		(1<<0)
 #define IOCP_LL_NODESTROY	(1<<1)
 
+/* Utility to report Windows error through the interpreter */
+int ReportWindowsError (Tcl_Interp *interp, const char *prefix);
 
 /*
  * ----------------------------------------------------------------------
@@ -347,7 +355,9 @@ extern __inline BOOL	IocpNPPFree (LPVOID block);
 
 #include "iocpIntDecls.h"
 
+#ifdef OBSOLETE
 #undef TCL_STORAGE_CLASS
 #define TCL_STORAGE_CLASS DLLIMPORT
+#endif
 
 #endif /* #ifndef INCL_iocpsockInt_h_ */

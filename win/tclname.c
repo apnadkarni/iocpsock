@@ -268,7 +268,7 @@ SendWinErrorData (int protocolCode, CONST char *msg, DWORD errorCode)
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj("WINDOWS", -1));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewIntObj(errorCode));
     Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(Tcl_WinErrId(errorCode), -1));
-    Tcl_ListObjAppendElement(NULL, output, Tcl_NewStringObj(Tcl_WinErrMsg(errorCode, NULL), -1));
+    Tcl_ListObjAppendElement(NULL, output, Tcl_NewUnicodeObj(Tcl_WinErrMsg(errorCode, NULL), -1));
     Tcl_WriteObj(outChan, output);
     Tcl_DecrRefCount(output);
     Tcl_WriteChars(outChan, "\n", -1);

@@ -22,6 +22,8 @@ RCFILE = iocpsock.rc
 DOTVERSION = 4.0a1 
 !include "rules-ext.vc"
 
+PRJ_DEFINES     = -D_CRT_SECURE_NO_WARNINGS
+
 PRJ_OBJS = \
 	$(TMP_DIR)\dllmain.obj \
 	$(TMP_DIR)\iocpsock_hilevel.obj \

@@ -42,12 +42,12 @@ TCL_EXTERN(CONST char *) Tcl_WinErrId _ANSI_ARGS_((void));
 #ifndef Tcl_WinErrMsg_TCL_DECLARED
 #define Tcl_WinErrMsg_TCL_DECLARED
 /* 3 */
-TCL_EXTERN(CONST char *) Tcl_WinErrMsg _ANSI_ARGS_((void));
+TCL_EXTERN(CONST WCHAR *) Tcl_WinErrMsg _ANSI_ARGS_((void));
 #endif
 #ifndef Tcl_WinError_TCL_DECLARED
 #define Tcl_WinError_TCL_DECLARED
 /* 4 */
-TCL_EXTERN(CONST char *) Tcl_WinError _ANSI_ARGS_((Tcl_Interp * interp));
+TCL_EXTERN(CONST WCHAR *) Tcl_WinError _ANSI_ARGS_((Tcl_Interp * interp));
 #endif
 #ifndef Iocp_OpenTcpClient_TCL_DECLARED
 #define Iocp_OpenTcpClient_TCL_DECLARED

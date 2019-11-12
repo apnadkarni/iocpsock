@@ -39,10 +39,10 @@ declare 2 generic {
     CONST char *Tcl_WinErrId (void)
 }
 declare 3 generic {
-    CONST char *Tcl_WinErrMsg (void)
+    CONST WCHAR *Tcl_WinErrMsg (void)
 }
 declare 4 generic {
-    CONST char *Tcl_WinError (Tcl_Interp *interp)
+    CONST WCHAR *Tcl_WinError (Tcl_Interp *interp)
 }
 
 ### TCP stuff

@@ -18,7 +18,7 @@
 
 #define ERR_BUF_SIZE	1024
 typedef struct ThreadSpecificData {
-    char sysMsgSpace[ERR_BUF_SIZE];
+    WCHAR sysMsgSpace[ERR_BUF_SIZE];
 } ThreadSpecificData;
 static Tcl_ThreadDataKey dataKey;
 
@@ -5305,7 +5305,7 @@ Tcl_WinErrId (void)
  *----------------------------------------------------------------------
  */
 
-CONST char *
+CONST WCHAR *
 Tcl_WinErrMsg (void)
 {
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
@@ -5318,10 +5318,10 @@ Tcl_WinErrMsg (void)
      */
 
     if (errorCode & (0x1 << 29)) {
-	return NULL;
+        return NULL;
     }
 
-    result = FormatMessage (
+    result = FormatMessageW (
 	    FORMAT_MESSAGE_FROM_SYSTEM |
 	    FORMAT_MESSAGE_MAX_WIDTH_MASK,
 	    NULL,
@@ -5344,23 +5344,51 @@ Tcl_WinErrMsg (void)
  * Results:
  *      The class, ID and message that is associated with the error
  *	code.
- *    
+ *
  * Side Effects:
  *	sets $errorCode in the specified interpreter.
  *
  *----------------------------------------------------------------------
  */
 
-CONST char *
+CONST WCHAR *
 Tcl_WinError (Tcl_Interp *interp)
 {
-    CONST char *id, *msg;
-    char num[TCL_INTEGER_SPACE];
-    DWORD errorCode = GetLastError();
+    Tcl_Obj *objs[4];
+    const char *id = Tcl_WinErrId(); /* Do this first before any calls change GetLastError() */
+    DWORD errorCode = GetLastError(); /* Likewise */
+    const WCHAR *msg = Tcl_WinErrMsg();
 
-    id = Tcl_WinErrId();
-    msg = Tcl_WinErrMsg();
-    snprintf(num, TCL_INTEGER_SPACE, "%lu", errorCode);
-    Tcl_SetErrorCode(interp, "WINDOWS", num, id, msg, NULL);
+    if (msg == NULL) {
+        msg = L"Unknown Windows error.";
+    }
+    objs[0] = Tcl_NewStringObj("WINDOWS", -1);
+    objs[1] = Tcl_NewWideIntObj(errorCode); /* Wide int because unsigned long */
+    objs[2] = Tcl_NewStringObj(id, -1); /* Stringified #define for error code */
+    objs[3] = Tcl_NewUnicodeObj(msg, -1);
+    Tcl_SetObjErrorCode(interp, Tcl_NewListObj(4, objs));
+
     return msg;
+}
+
+/*
+ * Report a Windows error in the passed Tcl interpreter. Sets the
+ * interpreter result and error code based on GetLastError.
+ * An optional message can be prefixed to the interpreter result.
+ * Always returns the value TCL_ERROR.
+ */
+
+int
+ReportWindowsError (Tcl_Interp *interp, const char *prefix)
+{
+    const WCHAR *msg = Tcl_WinError(interp);
+    Tcl_Obj *resultObj;
+    if (prefix) {
+        resultObj = Tcl_NewStringObj(prefix, -1);
+        Tcl_AppendUnicodeToObj(resultObj, msg, -1);
+    } else {
+        resultObj = Tcl_NewUnicodeObj(msg, -1);
+    }
+    Tcl_SetObjResult(interp, resultObj);
+    return TCL_ERROR;
 }

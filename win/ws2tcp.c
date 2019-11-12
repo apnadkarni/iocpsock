@@ -300,7 +300,7 @@ Iocp_MakeTcpClientChannel (
 	}
     }
 
-    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, sizeof(channelName), "iocp" SOCKET_PRINTF_SPEC, infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     Tcl_SetChannelOption(NULL, infoPtr->channel, "-translation", "auto crlf");
@@ -346,7 +346,7 @@ Iocp_OpenTcpClient(
     if (infoPtr == NULL) {
 	return NULL;
     }
-    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, sizeof(channelName), "iocp" SOCKET_PRINTF_SPEC, infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-translation",
@@ -404,7 +404,7 @@ Iocp_OpenTcpServer(
 
     infoPtr->acceptProc = acceptProc;
     infoPtr->acceptProcData = acceptProcData;
-    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, sizeof(channelName), "iocp" SOCKET_PRINTF_SPEC, infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, 0);
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-eofchar", "")
@@ -688,8 +688,7 @@ error2:
 error1:
     SetLastError(WSAGetLastError());
     if (interp != NULL) {
-	Tcl_AppendResult(interp, "couldn't open socket: ",
-		Tcl_WinError(interp), NULL);
+        ReportWindowsError(interp, "couldn't open socket: ");
     }
     FreeSocketInfo(infoPtr);
     return NULL;

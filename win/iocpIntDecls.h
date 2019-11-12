@@ -196,7 +196,7 @@ TCL_EXTERN(BOOL)	IocpLLNodeDestroy _ANSI_ARGS_((LPLLNODE node));
 #ifndef IocpLLGetCount_TCL_DECLARED
 #define IocpLLGetCount_TCL_DECLARED
 /* 31 */
-TCL_EXTERN(SIZE_T)	IocpLLGetCount _ANSI_ARGS_((LPLLIST ll));
+TCL_EXTERN(LONG)	IocpLLGetCount _ANSI_ARGS_((LPLLIST ll));
 #endif
 #ifndef IocpSetRecvMode_TCL_DECLARED
 #define IocpSetRecvMode_TCL_DECLARED

@@ -159,17 +159,21 @@ Iocp_IrdaIasQuery (Tcl_Interp *interp, Tcl_Obj *deviceId,
     SOCKET sock;
     int code, size = sizeof(IAS_QUERY);
     IAS_QUERY iasQuery;
+    int id[4];
+    int i;
 
     /*
      * Decode irdaDeviceId
      */
     code = sscanf(Tcl_GetString(deviceId), "%02x-%02x-%02x-%02x",
-	&iasQuery.irdaDeviceID[0], &iasQuery.irdaDeviceID[1],
-	&iasQuery.irdaDeviceID[2], &iasQuery.irdaDeviceID[3]);
+                  &id[0], &id[1], &id[2], &id[3]);
     if (code != 4) {
 	Tcl_AppendResult(interp, "Malformed IrDA DeviceID.  Must be in the form \"FF-FF-FF-FF.\"",
 		NULL);
 	return TCL_ERROR;
+    }
+    for (i = 0; i < 4; ++i) {
+        iasQuery.irdaDeviceID[i] = id[i];
     }
 
     /*
@@ -302,7 +306,7 @@ Iocp_OpenIrdaClient (
     if (infoPtr == NULL) {
 	return NULL;
     }
-    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, sizeof(channelName), "iocp" SOCKET_PRINTF_SPEC, infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-translation",
@@ -341,7 +345,7 @@ Iocp_OpenIrdaServer (
     if (infoPtr == NULL) {
 	return NULL;
     }
-    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%lu", infoPtr->socket);
+    snprintf(channelName, sizeof(channelName), "iocp" SOCKET_PRINTF_SPEC, infoPtr->socket);
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
     if (Tcl_SetChannelOption(interp, infoPtr->channel, "-translation",

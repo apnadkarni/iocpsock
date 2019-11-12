@@ -633,10 +633,10 @@ IocpLLIsNotEmpty (LPLLIST ll)
  *----------------------------------------------------------------------
  */
 
-SIZE_T
+LONG
 IocpLLGetCount (LPLLIST ll)
 {
-    SIZE_T c;
+    LONG c;
     if (!ll) {
 	return 0;
     }

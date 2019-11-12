@@ -71,7 +71,7 @@ Iocp_OpenUdpSocket (
 	return NULL;
     }
 
-    snprintf(channelName, 4 + TCL_INTEGER_SPACE, "iocp%d", infoPtr->socket);
+    snprintf(channelName, sizeof(channelName), "iocp" SOCKET_PRINTF_SPEC, infoPtr->socket);
 
     infoPtr->channel = Tcl_CreateChannel(&IocpChannelType, channelName,
 	    (ClientData) infoPtr, (TCL_READABLE | TCL_WRITABLE));
