@@ -56,6 +56,7 @@ PRJ_STUBOBJS = \
 PRJ_LIBS  = ws2_32.lib
 
 # Define the standard targets
+DISABLE_TARGET_test = 1
 !include "$(_RULESDIR)\targets.vc"
 
 #---------------------------------------------------------------------
@@ -65,9 +66,9 @@ PRJ_LIBS  = ws2_32.lib
 install:    install-docs
 pkgindex:   default-pkgindex
 
-test : release
+test: 
 	$(TCLSH) .\tests\all.tcl $(TESTFLAGS) -loadfile <<
-	load [file normalize $(IOCPLIB:\=/)]
+	load [file normalize $(PRJLIB:\=/)]
 <<
 
 run :
@@ -79,8 +80,7 @@ genstubs:
 !if $(TCLINSTALL)
 	@echo Need the source distribution to regenerate the Stubs table.
 !else
-	$(TCLSH) .\tools\genStubs.tcl $(GENERICDIR) \
-        	$(GENERICDIR)\$(PROJECT).decls
+	$(TCLSH) .\tools\genStubs.tcl $(GENERICDIR) $(GENERICDIR)\$(PROJECT).decls
 !endif
 
 

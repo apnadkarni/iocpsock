@@ -48,6 +48,22 @@ static const char *HtmlMiddle = "</td><td>";
 static const char *HtmlEnd = "</td></tr>\n";
 
 int
+Iocp_ModulePathObjCmd (
+    ClientData notUsed,			/* Not used. */
+    Tcl_Interp *interp,			/* Current interpreter. */
+    int objc,				/* Number of arguments. */
+    Tcl_Obj *CONST objv[])		/* Argument objects. */
+{
+    WCHAR path[MAX_PATH+1];
+    DWORD nchars;
+    nchars = GetModuleFileNameW(iocpModule, path, sizeof(path)/sizeof(path[0]));
+    if (nchars == 0 || nchars == sizeof(path)/sizeof(path[0]))
+        return ReportWindowsError(interp, "couldn't retrieve module path: ");
+    Tcl_SetObjResult(interp, Tcl_NewUnicodeObj(path, nchars));
+    return TCL_OK;
+}
+
+int
 Iocp_StatsObjCmd (
     ClientData notUsed,			/* Not used. */
     Tcl_Interp *interp,			/* Current interpreter. */
@@ -104,13 +120,14 @@ Iocpsock_Init (Tcl_Interp *interp)
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
     Tcl_CreateObjCommand(interp, "iocp_stats", Iocp_StatsObjCmd, 0L, 0L);
+    Tcl_CreateObjCommand(interp, "iocp_module_path", Iocp_ModulePathObjCmd, 0L, 0L);
 #ifdef IOCP_IRDA_SUPPORT
     Tcl_CreateObjCommand(interp, "irda::discovery", Iocp_IrdaDiscoveryCmd, 0L, 0L);
     Tcl_CreateObjCommand(interp, "irda::ias_query", Iocp_IrdaIasQueryCmd, 0L, 0L);
     Tcl_CreateObjCommand(interp, "irda::ias_set", Iocp_IrdaIasSetCmd, 0L, 0L);
     Tcl_CreateObjCommand(interp, "irda::lazy_discovery", Iocp_IrdaLazyDiscoveryCmd, 0L, 0L);
 #endif
-    Tcl_PkgProvide(interp, "Iocpsock", IOCPSOCK_VERSION);
+    Tcl_PkgProvide(interp, PACKAGE_NAME, IOCPSOCK_VERSION);
     return TCL_OK;
 }
 
