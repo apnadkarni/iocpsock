@@ -104,10 +104,12 @@ Iocpsock_Init (Tcl_Interp *interp)
 
     Tcl_CreateObjCommand(interp, "socket2", Iocp_SocketObjCmd, 0L, 0L);
     Tcl_CreateObjCommand(interp, "iocp_stats", Iocp_StatsObjCmd, 0L, 0L);
-//    Tcl_CreateObjCommand(interp, "irda::discovery", Iocp_IrdaDiscoveryCmd, 0L, 0L);
-//    Tcl_CreateObjCommand(interp, "irda::ias_query", Iocp_IrdaIasQueryCmd, 0L, 0L);
-//    Tcl_CreateObjCommand(interp, "irda::ias_set", Iocp_IrdaIasSetCmd, 0L, 0L);
-//    Tcl_CreateObjCommand(interp, "irda::lazy_discovery", Iocp_IrdaLazyDiscoveryCmd, 0L, 0L);
+#ifdef IOCP_IRDA_SUPPORT
+    Tcl_CreateObjCommand(interp, "irda::discovery", Iocp_IrdaDiscoveryCmd, 0L, 0L);
+    Tcl_CreateObjCommand(interp, "irda::ias_query", Iocp_IrdaIasQueryCmd, 0L, 0L);
+    Tcl_CreateObjCommand(interp, "irda::ias_set", Iocp_IrdaIasSetCmd, 0L, 0L);
+    Tcl_CreateObjCommand(interp, "irda::lazy_discovery", Iocp_IrdaLazyDiscoveryCmd, 0L, 0L);
+#endif
     Tcl_PkgProvide(interp, "Iocpsock", IOCPSOCK_VERSION);
     return TCL_OK;
 }

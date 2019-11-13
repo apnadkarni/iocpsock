@@ -5308,9 +5308,9 @@ Tcl_WinErrId (void)
 CONST WCHAR *
 Tcl_WinErrMsg (void)
 {
+    DWORD errorCode = GetLastError(); /* Do BEFORE calling TSD_INIT */
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
     DWORD result;
-    DWORD errorCode = GetLastError();
 
     /*
      * If the "customer" bit is set, this function was called
@@ -5357,7 +5357,7 @@ Tcl_WinError (Tcl_Interp *interp)
     Tcl_Obj *objs[4];
     const char *id = Tcl_WinErrId(); /* Do this first before any calls change GetLastError() */
     DWORD errorCode = GetLastError(); /* Likewise */
-    const WCHAR *msg = Tcl_WinErrMsg();
+    const WCHAR *msg = Tcl_WinErrMsg(); /* This changes GetLastError! while init'ing TSD */
 
     if (msg == NULL) {
         msg = L"Unknown Windows error.";

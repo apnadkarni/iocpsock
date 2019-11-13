@@ -2804,9 +2804,8 @@ CreateSocketAddress (
     result = getaddrinfo(addr, port, phints, paddrinfo);
 
     if (result != 0) {
-	/* an older platSDK needed this; the current doesn't.
-	WSASetLastError(result); */
-	return 0;
+        SetLastError(result);
+        return 0;
     }
     return 1;
 }
